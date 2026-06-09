@@ -1,0 +1,41 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# AnimeUnion Docker — docker-compose
+#
+# ATTENZIONE (Settimana 0): questo file è una BOZZA. I Dockerfile di `apps/api`
+# e `apps/web` non esistono ancora (arrivano in Settimana 7), quindi il build
+# NON è ancora funzionante. La struttura è definitiva e verrà attivata in S7.
+#
+# Le credenziali AnimeUnion stanno SOLO nel file `.env` (mai committato).
+# I token API (access + refresh) vengono generati al primo avvio e salvati
+# in SQLite — non vanno mai messi qui.
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  api:
+    build: ./apps/api
+    restart: unless-stopped
+    ports:
+      - '3001:3001'
+    volumes:
+      - ./data:/data # database SQLite + storage token
+      - ${DOWNLOAD_PATH:-./anime}:/anime # libreria download
+    env_file:
+      - .env # ANIMEUNION_EMAIL, ANIMEUNION_PASSWORD (MAI committare!)
+    environment:
+      - NODE_ENV=production
+      - DATABASE_PATH=/data/animeunion.db
+      - DOWNLOAD_PATH=/anime
+      - SOURCE_MODE=api
+      - ANIMEUNION_API_URL=${ANIMEUNION_API_URL:-https://animeunion.tv/api/v1}
+      - TZ=Europe/Rome
+      - LOG_LEVEL=info
+
+  web:
+    build: ./apps/web
+    restart: unless-stopped
+    ports:
+      - '8080:3000'
+    environment:
+      - API_URL=http://api:3001
+    depends_on:
+      - api

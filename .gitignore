@@ -1,0 +1,44 @@
+# Dipendenze
+node_modules/
+.pnp
+.pnp.js
+
+# Build output
+dist/
+build/
+.next/
+out/
+.turbo/
+
+# Segreti e ambiente — MAI committare
+.env
+.env.local
+.env.*.local
+
+# Database SQLite (locale, generato a runtime)
+*.db
+*.db-shm
+*.db-wal
+data/
+
+# Drizzle metadata generata
+drizzle/meta/
+
+# Libreria download (volume runtime)
+anime/
+
+# Log
+*.log
+npm-debug.log*
+
+# Coverage / test
+coverage/
+playwright-report/
+test-results/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea/

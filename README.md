@@ -29,7 +29,9 @@ wget https://raw.githubusercontent.com/iCosiSenpai/animeunion/main/docker-compos
 docker compose up -d
 ```
 
-Apri [http://localhost:8080](http://localhost:8080).
+Apri [http://localhost:7979](http://localhost:7979).
+
+> La porta è configurabile: imposta `WEB_PORT` nel `.env` se `7979` è già occupata.
 
 ### Prerequisiti
 

@@ -88,3 +88,48 @@ GET  /api/v1/episodes/:id/download
 > I tipi `AnimeSummary`, `AnimeDetail`, `EpisodeSummary`, `EpisodeDetail`, `GenreDetail`,
 > `CalendarEntry`, `SiteStats` sono definiti formalmente in
 > `packages/shared/src/anime-source.ts`.
+
+## 5. Estensioni richieste (v3.1) — da concordare con Matteo
+
+Queste aggiunte servono a (a) gestire anime con **sia Sub ITA che Dub ITA** e (b) **raggruppare le
+stagioni** della stessa serie (su AnimeUnion ogni stagione è un'entry/slug distinto).
+
+### 5.1 Lingue per episodio + download per lingua
+
+Oggi `episode.language` è un valore singolo e il download ritorna un solo URL. Servono:
+
+```
+# Nel dettaglio anime, per ogni episodio: quali lingue sono disponibili
+GET /api/v1/anime/:slug
+    -> episodes[].languages: ["SUB_ITA", "DUB_ITA"]   # array, non valore singolo
+
+# Download specifico per lingua
+GET /api/v1/episodes/:id/download?lang=SUB_ITA   # oppure DUB_ITA
+    Header: Authorization: Bearer <token>
+    -> { url, expiresAt, language }
+    # Se ?lang manca: ritorna la lingua di default dell'episodio.
+    # Se la lingua richiesta non esiste: 404.
+```
+
+### 5.2 Raggruppamento in serie/stagioni
+
+Per organizzare le stagioni nella stessa cartella Jellyfin a prescindere dall'ordine di download,
+servirebbe (in ordine di preferenza):
+
+```
+# Opzione A (preferita): identificatore di serie + numero stagione sull'anime
+GET /api/v1/anime/:slug
+    -> seriesId: "naruto"          # stabile, condiviso fra tutte le stagioni della serie
+       seasonNumber: 2             # numero stagione dentro la serie (1, 2, ...)
+
+# Opzione B: endpoint che elenca tutte le stagioni di una serie
+GET /api/v1/anime/:slug/seasons
+    -> [{ slug, seasonNumber, title, episodeCount }]
+```
+
+**Fallback senza supporto API**: l'app ricostruisce la catena con le relazioni già presenti in
+`AnimeDetail.relatedAnime` (`relationType` = PREQUEL/SEQUEL) e ordina per `seasonYear`. Meno affidabile
+(non copre OVA/movie intermedi), per questo è preferibile l'opzione A.
+
+> Lato app, questi dati alimentano le colonne `anime.series_id` / `anime.season_number` e la tabella
+> `episode_file` (vedi `PLAN.md` §5).

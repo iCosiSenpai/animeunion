@@ -1,8 +1,29 @@
 # AnimeUnion Docker — Piano di Sviluppo v3
 
 > **Stato**: Matteo ha accettato di fornire l'API. Lavoriamo direttamente con endpoint ufficiali.  
-> **Repo**: `iCosiSenpai/animeunion` (pubblico)  
+> **Repo**: `iCosiSenpai/animeunion` (privato)  
 > **Licenza**: AGPL-3.0  
+
+---
+
+## 0. Revisioni v3.1 (2026-06-10)
+
+Decisioni prese dopo le prime domande di design. Prevalgono sul testo originale dove in conflitto.
+
+1. **Porta web configurabile**: default `7979` (non più 8080), override via `WEB_PORT` nel `.env`.
+   Anche `API_PORT` (default 3001) è override-abile.
+2. **Download in blocco per-stagione (revisione Regola Ferrea #14)**: su AnimeUnion **ogni stagione è
+   un'entry/link distinto**. Si abilita il download degli **episodi precedenti/mancanti della stessa
+   entry** (= stagione): `download.addMissing(slug)` e `download.addAll(slug)`. NON esiste un bottone
+   "scarica tutte le stagioni" cross-entry. L'engine resta "un episodio alla volta", accoda in blocco.
+3. **Raggruppamento in serie/franchise**: l'app deve capire che entry diverse (es. S1 e S2) sono la
+   stessa serie, per organizzarle nella stessa cartella Jellyfin (`Serie/Season 01`, `Season 02`) a
+   prescindere dall'ordine di download. Serve un identificatore di serie + numero stagione dall'API
+   (vedi `docs/API_ANIMEUNION.md` §5). In mancanza, fallback sulla catena PREQUEL/SEQUEL.
+4. **Doppia lingua (Sub ITA + Dub ITA)**: due cartelle separate sotto `download_path`
+   (`/sub-ita` e `/dub-ita`) → due librerie Jellyfin. Tracking download per **(episodio, lingua)**
+   nella nuova tabella `episode_file`. L'API deve esporre le lingue per episodio e il download per
+   lingua (`?lang=`).
 
 ---
 
@@ -319,10 +340,14 @@ CREATE TABLE anime (
   score           INTEGER,               -- ×10 (es. 76 = 7.6)
   mal_id          INTEGER,               -- MyAnimeList ID
   anilist_id      INTEGER,               -- AniList ID
+  series_id       TEXT,                   -- v3.1: ID serie/franchise (raggruppa le stagioni). Da API o derivato da PREQUEL/SEQUEL
+  season_number   INTEGER,               -- v3.1: numero stagione dentro la serie (1, 2, ...). Usato dal renamer per "Season NN"
   languages       TEXT,                   -- JSON array ["SUB_ITA", "DUB_ITA"]
   created_at      TEXT NOT NULL,         -- ISO 8601
   updated_at      TEXT NOT NULL          -- ISO 8601
 );
+
+CREATE INDEX idx_anime_series ON anime(series_id);
 
 -- ═══ TABELLA GENERI ═══
 CREATE TABLE genre (
@@ -351,19 +376,34 @@ CREATE TABLE episode (
   duration        TEXT,                    -- durata
   air_date        TEXT,                    -- data uscita
   is_filler       INTEGER DEFAULT 0,      -- boolean
-  language        TEXT NOT NULL DEFAULT 'SUB_ITA',  -- SUB_ITA | DUB_ITA
-  download_url    TEXT,                    -- URL video (ottenuto via API)
-  download_status TEXT DEFAULT 'not_downloaded', -- not_downloaded | downloading | downloaded | failed
-  local_path      TEXT,                    -- /anime/Edens Zero/Season 1/S01E01.mp4
-  file_size       INTEGER,                -- byte
-  downloaded_at   TEXT,                   -- ISO 8601 quando scaricato
+  languages       TEXT,                    -- v3.1: JSON array lingue disponibili ["SUB_ITA","DUB_ITA"]
   created_at      TEXT NOT NULL,
   updated_at      TEXT NOT NULL
 );
+-- NOTA v3.1: lo stato di download NON sta più sull'episodio ma su episode_file
+-- (una riga per ogni coppia episodio+lingua), perché un episodio può avere sia SUB che DUB.
 
 CREATE INDEX idx_episode_anime ON episode(anime_id);
-CREATE INDEX idx_episode_status ON episode(download_status);
 CREATE INDEX idx_episode_number ON episode(anime_id, number);
+
+-- ═══ TABELLA FILE EPISODIO (v3.1: una riga per episodio+lingua) ═══
+CREATE TABLE episode_file (
+  id              TEXT PRIMARY KEY,
+  episode_id      TEXT NOT NULL REFERENCES episode(id) ON DELETE CASCADE,
+  language        TEXT NOT NULL,           -- SUB_ITA | DUB_ITA
+  download_url    TEXT,                    -- URL video temporaneo (ottenuto via API ?lang=)
+  url_expires_at  TEXT,                    -- scadenza URL
+  download_status TEXT NOT NULL DEFAULT 'not_downloaded', -- not_downloaded | downloading | downloaded | failed
+  local_path      TEXT,                    -- /anime/sub-ita/Edens Zero/Season 1/S01E01.mp4
+  file_size       INTEGER,                -- byte
+  downloaded_at   TEXT,                   -- ISO 8601 quando scaricato
+  created_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL,
+  UNIQUE (episode_id, language)
+);
+
+CREATE INDEX idx_episode_file_episode ON episode_file(episode_id);
+CREATE INDEX idx_episode_file_status ON episode_file(download_status);
 
 -- ═══ TABELLA FOLLOW (WATCHLIST) ═══
 CREATE TABLE follow (
@@ -383,7 +423,7 @@ CREATE INDEX idx_follow_status ON follow(status);
 -- ═══ TABELLA CODA DOWNLOAD ═══
 CREATE TABLE download_queue (
   id              TEXT PRIMARY KEY,
-  episode_id      TEXT NOT NULL REFERENCES episode(id) ON DELETE CASCADE,
+  episode_file_id TEXT NOT NULL REFERENCES episode_file(id) ON DELETE CASCADE,  -- v3.1: punta al file (episodio+lingua), non all'episodio
   status          TEXT NOT NULL DEFAULT 'queued',
                   -- queued | downloading | processing | completed | failed | cancelled
   progress        REAL DEFAULT 0,       -- 0.0 - 1.0
@@ -407,9 +447,9 @@ CREATE TABLE config (
 );
 
 -- Chiavi predefinite inserite al primo avvio:
---   download_path     → "/anime"
+--   download_path     → "/anime"   (v3.1: SUB in {download_path}/sub-ita, DUB in {download_path}/dub-ita)
 --   cron_schedule     → "0 */6 * * *"
---   language          → "SUB_ITA"
+--   language          → "SUB_ITA"  (v3.1: SUB_ITA | DUB_ITA | BOTH — BOTH scarica entrambe quando disponibili)
 --   naming_format     → "SXXEXX"      (alternativa: "NUMERIC_01")
 --   max_concurrent    → "2"
 --   rate_limit_ms     → "1000"        (ms tra richieste API)

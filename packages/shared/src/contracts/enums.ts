@@ -3,7 +3,15 @@ import { z } from 'zod';
 export const languageSchema = z.enum(['SUB_ITA', 'DUB_ITA']);
 export type Language = z.infer<typeof languageSchema>;
 
-export const animeTypeSchema = z.enum(['TV', 'MOVIE', 'OVA', 'ONA', 'SPECIAL']);
+export const animeTypeSchema = z.enum([
+  'TV',
+  'TV_SHORT',
+  'MOVIE',
+  'OVA',
+  'ONA',
+  'SPECIAL',
+  'MUSIC',
+]);
 export type AnimeType = z.infer<typeof animeTypeSchema>;
 
 export const animeStatusSchema = z.enum(['ONGOING', 'COMPLETED', 'UPCOMING']);

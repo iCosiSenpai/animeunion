@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Db } from '../db';
 import { schema } from '../db';
-import { createHttpClient } from '../lib/http-client';
+import { AuthError, createHttpClient } from '../lib/http-client';
 import type { Logger } from '../lib/logger';
 import { apiLoginResponseSchema } from '../sources/api-schemas';
 
@@ -14,6 +14,11 @@ const loginUserSchema = z.object({
   email: z.string().optional(),
   name: z.string().optional(),
 });
+
+interface Credentials {
+  email: string;
+  password: string;
+}
 
 export interface AuthServiceOptions {
   db: Db;
@@ -33,7 +38,9 @@ export interface AuthStatus {
 
 export interface AuthService {
   getToken(): Promise<string | null>;
+  loginWithCredentials(email: string, password: string): Promise<AuthStatus>;
   invalidateAndRelogin(): Promise<void>;
+  logout(): void;
   status(): AuthStatus;
 }
 
@@ -67,11 +74,33 @@ export function createAuthService(options: AuthServiceOptions): AuthService {
     return options.db.select().from(schema.auth).where(eq(schema.auth.id, AUTH_ROW_ID)).get();
   }
 
-  function persist(token: string, expires: Date, user: unknown): void {
+  function resolveCredentials(): Credentials | null {
+    const row = readRow();
+    if (row?.userEmail && row?.password) {
+      return { email: row.userEmail, password: row.password };
+    }
+    if (options.email && options.password) {
+      return { email: options.email, password: options.password };
+    }
+    return null;
+  }
+
+  function persist(token: string, expires: Date, user: unknown, password?: string): void {
     const timestamp = now().toISOString();
     const parsedUser = loginUserSchema.safeParse(user);
     const userEmail = (parsedUser.success ? parsedUser.data.email : null) ?? options.email ?? null;
     const userName = (parsedUser.success ? parsedUser.data.name : null) ?? null;
+    const set: Record<string, string | null> = {
+      accessToken: token,
+      refreshToken: '',
+      tokenExpires: expires.toISOString(),
+      userEmail,
+      userName,
+      updatedAt: timestamp,
+    };
+    if (password !== undefined) {
+      set.password = password;
+    }
     options.db
       .insert(schema.auth)
       .values({
@@ -81,36 +110,21 @@ export function createAuthService(options: AuthServiceOptions): AuthService {
         tokenExpires: expires.toISOString(),
         userEmail,
         userName,
+        password: password ?? null,
         createdAt: timestamp,
         updatedAt: timestamp,
       })
-      .onConflictDoUpdate({
-        target: schema.auth.id,
-        set: {
-          accessToken: token,
-          refreshToken: '',
-          tokenExpires: expires.toISOString(),
-          userEmail,
-          userName,
-          updatedAt: timestamp,
-        },
-      })
+      .onConflictDoUpdate({ target: schema.auth.id, set })
       .run();
   }
 
-  function login(): Promise<string> {
-    if (loginInFlight) {
-      return loginInFlight;
-    }
+  function doLogin(credentials: Credentials, storePassword: boolean): Promise<string> {
     loginInFlight = (async () => {
-      const raw = await http.post<unknown>('/auth/login', {
-        email: options.email,
-        password: options.password,
-      });
+      const raw = await http.post<unknown>('/auth/login', credentials);
       const parsed = apiLoginResponseSchema.parse(raw);
       const expires =
         decodeJwtExpiry(parsed.token) ?? new Date(now().getTime() + FALLBACK_TOKEN_TTL_MS);
-      persist(parsed.token, expires, parsed.user);
+      persist(parsed.token, expires, parsed.user, storePassword ? credentials.password : undefined);
       cachedToken = parsed.token;
       cachedExpires = expires;
       options.logger.info({ expiresAt: expires.toISOString() }, 'Login AnimeUnion riuscito');
@@ -119,6 +133,27 @@ export function createAuthService(options: AuthServiceOptions): AuthService {
     return loginInFlight.finally(() => {
       loginInFlight = null;
     });
+  }
+
+  function login(): Promise<string> {
+    if (loginInFlight) {
+      return loginInFlight;
+    }
+    const credentials = resolveCredentials();
+    if (!credentials) {
+      return Promise.reject(new AuthError('Credenziali AnimeUnion mancanti'));
+    }
+    return doLogin(credentials, false);
+  }
+
+  function buildStatus(): AuthStatus {
+    const row = readRow();
+    const expires = row?.tokenExpires ? new Date(row.tokenExpires) : null;
+    return {
+      authenticated: Boolean(row?.accessToken && isValid(expires)),
+      expiresAt: row?.tokenExpires ?? null,
+      userEmail: row?.userEmail ?? null,
+    };
   }
 
   return {
@@ -132,10 +167,15 @@ export function createAuthService(options: AuthServiceOptions): AuthService {
         cachedExpires = new Date(row.tokenExpires);
         return cachedToken;
       }
-      if (!options.email || !options.password) {
+      if (!resolveCredentials()) {
         return null;
       }
       return login();
+    },
+
+    async loginWithCredentials(email: string, password: string): Promise<AuthStatus> {
+      await doLogin({ email, password }, true);
+      return buildStatus();
     },
 
     async invalidateAndRelogin(): Promise<void> {
@@ -146,19 +186,28 @@ export function createAuthService(options: AuthServiceOptions): AuthService {
         .set({ accessToken: null, tokenExpires: null, updatedAt: now().toISOString() })
         .where(eq(schema.auth.id, AUTH_ROW_ID))
         .run();
-      if (options.email && options.password) {
+      if (resolveCredentials()) {
         await login();
       }
     },
 
+    logout(): void {
+      cachedToken = null;
+      cachedExpires = null;
+      options.db
+        .update(schema.auth)
+        .set({
+          accessToken: null,
+          tokenExpires: null,
+          password: null,
+          updatedAt: now().toISOString(),
+        })
+        .where(eq(schema.auth.id, AUTH_ROW_ID))
+        .run();
+    },
+
     status(): AuthStatus {
-      const row = readRow();
-      const expires = row?.tokenExpires ? new Date(row.tokenExpires) : null;
-      return {
-        authenticated: Boolean(row?.accessToken && isValid(expires)),
-        expiresAt: row?.tokenExpires ?? null,
-        userEmail: row?.userEmail ?? null,
-      };
+      return buildStatus();
     },
   };
 }

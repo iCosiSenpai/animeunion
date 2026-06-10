@@ -1,4 +1,5 @@
 export * from './enums';
+export * from './auth';
 export * from './anime';
 export * from './episode';
 export * from './follow';

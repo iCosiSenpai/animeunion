@@ -9,13 +9,13 @@
     "./app-router": "./src/app-router.ts"
   },
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "tsx watch --env-file-if-exists=../../.env src/index.ts",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "tsx src/db/migrate.ts",
-    "seed": "tsx src/db/seed.ts"
+    "db:migrate": "tsx --env-file-if-exists=../../.env src/db/migrate.ts",
+    "seed": "tsx --env-file-if-exists=../../.env src/db/seed.ts"
   },
   "dependencies": {
     "@animeunion/shared": "*",

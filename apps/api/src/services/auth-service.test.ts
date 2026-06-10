@@ -154,6 +154,49 @@ describe('AuthService', () => {
     expect(row?.accessToken).toBe(secondJwt);
   });
 
+  it('loginWithCredentials persiste token, email e password e autentica', async () => {
+    const db = createTestDb();
+    const jwt = makeJwt(new Date(Date.now() + 60 * 24 * 60 * 60 * 1000));
+    interceptLogin(jwt);
+
+    const service = makeService(db, { email: undefined, password: undefined });
+    const status = await service.loginWithCredentials('mario@test.it', 'pw');
+
+    expect(status.authenticated).toBe(true);
+    const row = db.select().from(schema.auth).where(eq(schema.auth.id, 'default')).get();
+    expect(row?.accessToken).toBe(jwt);
+    expect(row?.password).toBe('pw');
+  });
+
+  it('usa le credenziali salvate nel DB per il re-login senza env', async () => {
+    const db = createTestDb();
+    const firstJwt = makeJwt(new Date(Date.now() + 60 * 24 * 60 * 60 * 1000));
+    interceptLogin(firstJwt);
+    const service = makeService(db, { email: undefined, password: undefined });
+    await service.loginWithCredentials('mario@test.it', 'pw');
+
+    const secondJwt = makeJwt(new Date(Date.now() + 61 * 24 * 60 * 60 * 1000));
+    interceptLogin(secondJwt);
+    await service.invalidateAndRelogin();
+
+    expect(await service.getToken()).toBe(secondJwt);
+  });
+
+  it('logout azzera token e password', async () => {
+    const db = createTestDb();
+    const jwt = makeJwt(new Date(Date.now() + 60 * 24 * 60 * 60 * 1000));
+    interceptLogin(jwt);
+    const service = makeService(db, { email: undefined, password: undefined });
+    await service.loginWithCredentials('mario@test.it', 'pw');
+
+    service.logout();
+
+    const row = db.select().from(schema.auth).where(eq(schema.auth.id, 'default')).get();
+    expect(row?.accessToken).toBeNull();
+    expect(row?.password).toBeNull();
+    expect(service.status().authenticated).toBe(false);
+  });
+
   it('status riflette lo stato di autenticazione', async () => {
     const db = createTestDb();
     const service = makeService(db);

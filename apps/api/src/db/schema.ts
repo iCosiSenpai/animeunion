@@ -174,6 +174,7 @@ export const auth = sqliteTable('auth', {
   tokenExpires: text('token_expires'),
   userEmail: text('user_email'),
   userName: text('user_name'),
+  password: text('password'),
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
 });

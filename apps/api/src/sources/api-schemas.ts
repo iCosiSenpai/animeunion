@@ -1,4 +1,9 @@
-import { animeStatusSchema, animeTypeSchema, languageSchema, seasonSchema } from '@animeunion/shared';
+import {
+  animeStatusSchema,
+  animeTypeSchema,
+  languageSchema,
+  seasonSchema,
+} from '@animeunion/shared';
 import { z } from 'zod';
 
 const nullableString = z

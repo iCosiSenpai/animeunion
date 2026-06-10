@@ -7,6 +7,7 @@ const envSchema = z.object({
   ANIMEUNION_PASSWORD: z.string().optional(),
   RATE_LIMIT_MS: z.coerce.number().int().positive().default(1000),
   DATABASE_PATH: z.string().default('./data/animeunion.db'),
+  API_PORT: z.coerce.number().int().positive().default(3001),
 });
 
 export type Env = z.infer<typeof envSchema>;

@@ -1,7 +1,5 @@
 'use client';
 
-import { ChevronDown, Plus } from 'lucide-react';
-import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -9,15 +7,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { FOLLOW_STATUSES } from '@/lib/follow';
 import { trpc } from '@/lib/trpc';
-
-const STATUSES = [
-  { value: 'plan_to_watch', label: 'Da guardare' },
-  { value: 'watching', label: 'In corso' },
-  { value: 'on_hold', label: 'In pausa' },
-  { value: 'completed', label: 'Completato' },
-  { value: 'dropped', label: 'Droppato' },
-] as const;
+import { ChevronDown, Plus } from 'lucide-react';
+import { toast } from 'sonner';
 
 export function FollowButton({ animeId }: { animeId: string }) {
   const utils = trpc.useUtils();
@@ -39,7 +32,7 @@ export function FollowButton({ animeId }: { animeId: string }) {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start">
-        {STATUSES.map((status) => (
+        {FOLLOW_STATUSES.map((status) => (
           <DropdownMenuItem
             key={status.value}
             onClick={() => add.mutate({ animeId, status: status.value })}

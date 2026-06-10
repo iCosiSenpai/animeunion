@@ -1,5 +1,5 @@
-import type { AnimeSummary } from '@animeunion/shared';
 import { Skeleton } from '@/components/ui/skeleton';
+import type { AnimeSummary } from '@animeunion/shared';
 import { AnimeCard } from './anime-card';
 
 const GRID_CLASS = 'grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6';

@@ -1,8 +1,8 @@
+import { Badge } from '@/components/ui/badge';
+import { Card } from '@/components/ui/card';
 import type { AnimeSummary } from '@animeunion/shared';
 import { Star } from 'lucide-react';
 import Link from 'next/link';
-import { Badge } from '@/components/ui/badge';
-import { Card } from '@/components/ui/card';
 
 export function AnimeCard({ anime }: { anime: AnimeSummary }) {
   return (

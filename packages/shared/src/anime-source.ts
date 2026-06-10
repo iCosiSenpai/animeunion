@@ -3,7 +3,6 @@ import type {
   AnimeSummary,
   CalendarEntry,
   EpisodeDetail,
-  EpisodeSummary,
   GenreDetail,
   SiteStats,
 } from './contracts';
@@ -29,8 +28,8 @@ export interface AnimeSource {
   getCalendarByDay(day: string): Promise<CalendarEntry>;
   getGenres(): Promise<GenreDetail[]>;
 
-  getEpisodes(animeSlug: string): Promise<EpisodeSummary[]>;
-  getEpisodeDetail(episodeId: string): Promise<EpisodeDetail>;
+  getEpisodes(animeSlug: string): Promise<EpisodeDetail[]>;
+  getEpisodeDetail?(episodeId: string): Promise<EpisodeDetail>;
 
   getStats(): Promise<SiteStats>;
 

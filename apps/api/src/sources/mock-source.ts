@@ -4,7 +4,6 @@ import type {
   AnimeSummary,
   CalendarEntry,
   EpisodeDetail,
-  EpisodeSummary,
   GenreDetail,
   PaginatedResult,
   SiteStats,
@@ -97,9 +96,13 @@ export class MockSource implements AnimeSource {
     return genres;
   }
 
-  async getEpisodes(animeSlug: string): Promise<EpisodeSummary[]> {
+  async getEpisodes(animeSlug: string): Promise<EpisodeDetail[]> {
     const anime = await this.getAnimeBySlug(animeSlug);
-    return anime.episodes;
+    return anime.episodes.map((episode) => ({
+      ...episode,
+      downloadUrl: downloadUrlFor(episode.id),
+      expiresAt: null,
+    }));
   }
 
   async getEpisodeDetail(episodeId: string): Promise<EpisodeDetail> {

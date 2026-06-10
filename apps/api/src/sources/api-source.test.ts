@@ -1,0 +1,184 @@
+import { MockAgent, setGlobalDispatcher } from 'undici';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { createApiSource } from './api-source';
+
+const BASE = 'https://api.test';
+const JSON_HEADERS = { headers: { 'content-type': 'application/json' } };
+
+let agent: MockAgent;
+
+function pool() {
+  return agent.get(BASE);
+}
+
+function createSource() {
+  return createApiSource({ baseUrl: BASE, rateLimitMs: 1 });
+}
+
+beforeEach(() => {
+  agent = new MockAgent();
+  agent.disableNetConnect();
+  setGlobalDispatcher(agent);
+});
+
+afterEach(async () => {
+  await agent.close();
+});
+
+describe('ApiSource', () => {
+  it('getGenres mappa la lista generi', async () => {
+    pool()
+      .intercept({ path: '/genres', method: 'GET' })
+      .reply(
+        200,
+        [{ id: 'g1', slug: 'azione', name: 'Azione', nameEng: 'Action', malId: 1 }],
+        JSON_HEADERS,
+      );
+
+    const genres = await createSource().getGenres();
+    expect(genres).toHaveLength(1);
+    expect(genres[0]).toMatchObject({ id: 'g1', slug: 'azione', nameEng: 'Action' });
+  });
+
+  it('getStats mappa i totali', async () => {
+    pool()
+      .intercept({ path: '/stats', method: 'GET' })
+      .reply(200, { totalAnime: 5829, totalEpisodes: 80309 }, JSON_HEADERS);
+
+    const stats = await createSource().getStats();
+    expect(stats).toEqual({ totalAnime: 5829, totalEpisodes: 80309 });
+  });
+
+  it('searchAnime mappa data e paginazione (perPage da limit)', async () => {
+    pool()
+      .intercept({ path: /^\/anime\?/, method: 'GET' })
+      .reply(
+        200,
+        {
+          data: [
+            {
+              id: 'a1',
+              slug: 'naruto',
+              title: 'Naruto',
+              type: 'TV',
+              status: 'COMPLETED',
+              genres: [{ id: 'g1', slug: 'azione', name: 'Azione' }],
+              availableLanguages: ['SUB_ITA'],
+            },
+          ],
+          meta: { page: 1, limit: 24, perPage: 24, total: 100, totalPages: 5, hasMore: true },
+        },
+        JSON_HEADERS,
+      );
+
+    const result = await createSource().searchAnime('naruto', 1);
+    expect(result.meta).toEqual({ page: 1, perPage: 24, total: 100, hasMore: true });
+    expect(result.data[0]).toMatchObject({
+      id: 'a1',
+      slug: 'naruto',
+      availableLanguages: ['SUB_ITA'],
+    });
+  });
+
+  it('getEpisodes espande un episodio per ogni lingua con downloadUrl', async () => {
+    pool()
+      .intercept({ path: '/anime/edens-zero/episodes', method: 'GET' })
+      .reply(
+        200,
+        {
+          data: [
+            {
+              id: 'ep1',
+              animeId: 'a1',
+              number: 1,
+              languages: ['SUB_ITA', 'DUB_ITA'],
+              sources: [
+                { language: 'SUB_ITA', url: 'https://cdn.test/sub/ep1.mp4', format: 'mp4' },
+                { language: 'DUB_ITA', url: 'https://cdn.test/dub/ep1.mp4', format: 'mp4' },
+              ],
+            },
+          ],
+        },
+        JSON_HEADERS,
+      );
+
+    const episodes = await createSource().getEpisodes('edens-zero');
+    expect(episodes).toHaveLength(2);
+    expect(episodes.map((e) => e.language)).toEqual(['SUB_ITA', 'DUB_ITA']);
+    expect(episodes[0]).toMatchObject({
+      id: 'ep1_SUB_ITA',
+      number: 1,
+      language: 'SUB_ITA',
+      downloadUrl: 'https://cdn.test/sub/ep1.mp4',
+      expiresAt: null,
+    });
+  });
+
+  it('getAnimeBySlug unisce dettaglio + episodi e mappa relationsFrom', async () => {
+    pool()
+      .intercept({ path: '/anime/edens-zero', method: 'GET' })
+      .reply(
+        200,
+        {
+          id: 'a1',
+          slug: 'edens-zero',
+          title: 'Edens Zero',
+          type: 'TV',
+          status: 'COMPLETED',
+          episodeCount: 25,
+          availableLanguages: ['SUB_ITA'],
+          genres: [{ id: 'g1', slug: 'azione', name: 'Azione', nameEng: 'Action', malId: 1 }],
+          relationsFrom: [
+            {
+              id: 'a2',
+              slug: 'edens-zero-2',
+              title: 'Edens Zero 2',
+              type: 'TV',
+              relationType: 'SEQUEL',
+            },
+          ],
+        },
+        JSON_HEADERS,
+      );
+    pool()
+      .intercept({ path: '/anime/edens-zero/episodes', method: 'GET' })
+      .reply(
+        200,
+        {
+          data: [
+            {
+              id: 'ep1',
+              animeId: 'a1',
+              number: 1,
+              languages: ['SUB_ITA'],
+              sources: [
+                { language: 'SUB_ITA', url: 'https://cdn.test/sub/ep1.mp4', format: 'mp4' },
+              ],
+            },
+          ],
+        },
+        JSON_HEADERS,
+      );
+
+    const detail = await createSource().getAnimeBySlug('edens-zero');
+    expect(detail.episodeCount).toBe(25);
+    expect(detail.episodes).toHaveLength(1);
+    expect(detail.relatedAnime[0]).toMatchObject({ slug: 'edens-zero-2', relationType: 'SEQUEL' });
+    expect(detail.recommendations).toEqual([]);
+  });
+
+  it('login restituisce il token e mappa la risposta snake_case', async () => {
+    pool()
+      .intercept({ path: '/auth/login', method: 'POST' })
+      .reply(200, { token: 'jwt-123', expires_in: 5184000, user: { id: 'u1' } }, JSON_HEADERS);
+
+    const source = createSource();
+    const result = await source.login?.('a@b.it', 'pw');
+    expect(result).toMatchObject({ token: 'jwt-123', refreshToken: '' });
+  });
+
+  it('propaga errore su risposta non ok', async () => {
+    pool().intercept({ path: '/stats', method: 'GET' }).reply(500, { error: 'boom' }, JSON_HEADERS);
+    await expect(createSource().getStats()).rejects.toThrow(/API fallita/);
+  });
+});

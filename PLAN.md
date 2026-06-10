@@ -782,18 +782,18 @@ Frontend (Next.js)                   Backend (Fastify)                AnimeUnion
 ---
 
 ### Settimana 1 — Database + AnimeSource
-- [ ] `apps/api/src/db/schema.ts` — Schema Drizzle completo (tutte le tabelle della sezione 5)
-- [ ] `apps/api/drizzle/` — prima migration generata con `drizzle-kit generate`
-- [ ] `apps/api/src/db/index.ts` — `createDb(path)` factory, funzioni helper
-- [ ] `apps/api/src/db/seed.ts` — popola DB da MockSource (50 anime, generi, episodi)
-- [ ] `apps/api/src/sources/types.ts` — re-export di `AnimeSource` da shared
-- [ ] `apps/api/src/sources/mock-source.ts` — MockSource con dataset hardcoded (50 anime italiani realistici, 12-25 ep ciascuno, generi, cover URL fittizie, stagioni varie)
-- [ ] `apps/api/src/sources/api-source.ts` — `createApiSource(baseUrl)` factory, implementa `AnimeSource` chiamando le REST API (undici fetch + JWT header opzionale). **Questa è la source primaria**.
-- [ ] `apps/api/src/sources/scraper-source.ts` — fallback: parsa `__data.json` di SvelteKit. Solo se l'API non è disponibile.
-- [ ] `apps/api/src/lib/rate-limiter.ts` — token bucket: max 1 richiesta ogni `rate_limit_ms` ms, coda FIFO
-- [ ] `apps/api/src/lib/logger.ts` — pino configurato con level da env `LOG_LEVEL`
-- [ ] `apps/api/tsconfig.json`
-- [ ] `scripts/seed.ts` — script standalone: popola DB da MockSource
+- [x] `apps/api/src/db/schema.ts` — Schema Drizzle completo (tutte le tabelle della sezione 5)
+- [x] `apps/api/drizzle/` — prima migration generata con `drizzle-kit generate`
+- [x] `apps/api/src/db/index.ts` — `createDb(path)` factory, funzioni helper
+- [x] `apps/api/src/db/seed.ts` — popola DB da MockSource (50 anime, generi, episodi)
+- [x] `apps/api/src/sources/types.ts` — re-export di `AnimeSource` da shared
+- [x] `apps/api/src/sources/mock-source.ts` — MockSource con dataset hardcoded (50 anime italiani realistici, 12-25 ep ciascuno, generi, cover URL fittizie, stagioni varie)
+- [x] `apps/api/src/sources/api-source.ts` — `createApiSource({baseUrl,getToken})`, implementa `AnimeSource` via REST API ufficiali (`/api/v1/integration/`, undici + JWT Bearer). **Source primaria**. Note: URL video MP4 inline in `/episodes` (`sources[]` per lingua), no refresh (re-login a 60gg), `/stagionali` è indice → uso `/anime?season=&year=`.
+- [ ] `apps/api/src/sources/scraper-source.ts` — fallback: parsa `__data.json` di SvelteKit. Solo se l'API non è disponibile. (Deprioritizzato: API ufficiale pronta.)
+- [x] `apps/api/src/lib/rate-limiter.ts` — token bucket: max 1 richiesta ogni `rate_limit_ms` ms, coda FIFO
+- [x] `apps/api/src/lib/logger.ts` — pino configurato con level da env `LOG_LEVEL`
+- [x] `apps/api/tsconfig.json`
+- [x] `apps/api/src/db/seed.ts` + script root `npm run seed` (al posto di `scripts/seed.ts`)
 
 **Deliverable S1**: `npm run seed` crea un database SQLite con 50 anime, 250+ episodi, 25+ generi. Tests: MockSource restituisce dati consistenti.
 

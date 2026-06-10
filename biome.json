@@ -6,7 +6,15 @@
     "useIgnoreFile": true
   },
   "files": {
-    "ignore": ["node_modules", ".next", "dist", "drizzle/meta", "docs/index.html"]
+    "ignore": [
+      "node_modules",
+      ".next",
+      "dist",
+      "drizzle/meta",
+      "docs/index.html",
+      "**/components/ui",
+      "next-env.d.ts"
+    ]
   },
   "organizeImports": {
     "enabled": true

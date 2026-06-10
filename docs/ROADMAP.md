@@ -27,6 +27,23 @@ Sintesi delle milestone. Il piano completo (schema SQL, contratti, API) è in `P
 - [x] Scheletro `apps/api` e `apps/web` (package.json + tsconfig)
 - [x] `npm install`, CI verde, repo su GitHub, GitHub Pages attivo
 
+## Settimana 1 — Database + AnimeSource (completata)
+
+- [x] Schema Drizzle (10 tabelle) + prima migration, `createDb`/`runMigrations` (WAL, FK on)
+- [x] MockSource deterministica (50 anime, 28 generi) + `npm run seed`
+- [x] ApiSource sulle API ufficiali `/api/v1/integration` (undici + JWT Bearer + rate limiter), validata dal vivo
+- [x] `lib/rate-limiter.ts` (token bucket), `lib/logger.ts` (pino), `config/env.ts`
+- [~] ScraperSource fallback — rimandata post-v1 (l'API ufficiale è operativa)
+
+## Settimana 2 — Backend tRPC, parte lettura (completata)
+
+- [x] Server Fastify + plugin tRPC su `/trpc`, `GET /health`, porta da `API_PORT` (default 3001)
+- [x] Router: catalog (search/bySlug/byGenre/bySeason/byYear/recent/topRated/sync/syncStatus), episode, calendar, follow, config, stats
+- [x] Servizi: catalog (cache 24h + sync background + calendario), follow, config, auth (token JWT persistito, re-login a scadenza)
+- [x] Factory source da `SOURCE_MODE` (mock/api) con retry automatico su 401
+- [x] Mapping errori di dominio → TRPCError (NOT_FOUND, UNAUTHORIZED, BAD_GATEWAY, ...)
+- [x] 48 test Vitest (servizi + integrazione router via createCaller)
+
 ## Post-v1 (orizzonti futuri)
 
 - v0.2.0 — Sync watchlist bidirezionale sito ↔ app

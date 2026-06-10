@@ -800,38 +800,40 @@ Frontend (Next.js)                   Backend (Fastify)                AnimeUnion
 ---
 
 ### Settimana 2 — Backend tRPC (parte 1: lettura)
-- [ ] `apps/api/src/index.ts` — Crea server Fastify, monta plugin tRPC
-- [ ] `apps/api/src/trpc.ts` — `createContext` (DB injection), `router`, `publicProcedure`, `protectedProcedure` (per futuro auth)
-- [ ] `apps/api/src/routers/catalog.ts` — procedure tRPC:
-  - `catalog.search(query, page)` → cerca nel DB locale. Se cache scaduta (>24h), chiama ApiSource e aggiorna cache.
-  - `catalog.bySlug(slug)` → cerca prima nel DB, se non trovato chiama API, salva, restituisci
+- [x] `apps/api/src/index.ts` — Crea server Fastify, monta plugin tRPC (+ `@fastify/cors`, `GET /health`, porta da `API_PORT`)
+- [x] `apps/api/src/trpc.ts` — `Context` (DB + source + services + logger), `router`, `publicProcedure` con middleware di mapping errori (NotFoundError→NOT_FOUND, AuthError→UNAUTHORIZED, ApiError 404/429/5xx, ZodError→BAD_REQUEST), `protectedProcedure` (stub = public, app single-user). Composizione in `apps/api/src/context.ts` (`createAppContext`).
+- [x] `apps/api/src/routers/catalog.ts` — procedure tRPC:
+  - `catalog.search(query, page)` → cache fresca: query DB; cache scaduta (> `catalogSyncHours`): chiama la source e aggiorna il DB incrementalmente, fallback al DB se la source è giù
+  - `catalog.bySlug(slug)` → DB-first se fresco, altrimenti chiama API, salva (anime+generi+episodi+episode_file), restituisce
   - `catalog.byGenre(genreSlug, page)` → query DB
   - `catalog.bySeason(season, year)` → query DB
   - `catalog.byYear(year, page)` → query DB
-  - `catalog.recent(page)` → ordinati per added_at DESC
+  - `catalog.recent(page)` → ordinati per created_at DESC
   - `catalog.topRated(page)` → ordinati per score DESC
-- [ ] `apps/api/src/routers/episode.ts`:
-  - `episode.byAnime(animeSlug)` → lista episodi di un anime
-  - `episode.byId(episodeId)` → dettaglio episodio singolo
-- [ ] `apps/api/src/routers/calendar.ts`:
-  - `calendar.week()` → settimana corrente (lunedì-domenica)
-  - `calendar.day(dayName)` → episodi di un giorno specifico
-- [ ] `apps/api/src/routers/follow.ts`:
+  - `catalog.sync` (mutation) → sync completo del catalogo in background (~244 pagine), `catalog.syncStatus` → `{running, lastSyncedAt}` (timestamp in tabella `stats`, chiave `catalog_synced_at`)
+- [x] `apps/api/src/routers/episode.ts`:
+  - `episode.byAnime(animeSlug)` → lista episodi (lazy-fetch via bySlug se assenti)
+  - `episode.byId(episodeId)` → dettaglio episodio×lingua (id = `episode_file`); se `downloadUrl` manca la risolve dalla source e la persiste
+- [x] `apps/api/src/routers/calendar.ts`:
+  - `calendar.week()` → proxy della source con cache in-memory 30 min
+  - `calendar.day(dayName)` → filtro sulla settimana cacheata
+- [x] `apps/api/src/routers/follow.ts`:
   - `follow.list()` → tutti i follow con dettaglio anime
-  - `follow.add(animeId, status)` → aggiungi
+  - `follow.add(animeId, status)` → aggiungi (idempotente: se già seguito aggiorna lo status)
   - `follow.remove(animeId)` → rimuovi
   - `follow.updateStatus(animeId, status)` → cambia status
-- [ ] `apps/api/src/routers/config.ts`:
-  - `config.getAll()` → tutte le config
+- [x] `apps/api/src/routers/config.ts`:
+  - `config.getAll()` → tutte le config (default dal contratto per chiavi mancanti)
   - `config.get(key)` → singola
-  - `config.set(key, value)` → upsert
-- [ ] `apps/api/src/routers/stats.ts`:
+  - `config.set(key, value)` → upsert validato con `appConfigSchema`
+- [x] `apps/api/src/routers/stats.ts`:
   - `stats.dashboard()` → statistiche aggregate da DB locale
-- [ ] `apps/api/src/services/catalog-service.ts` — logica sync + cache
-- [ ] `apps/api/src/services/follow-service.ts` — CRUD follow
-- [ ] `apps/api/src/services/config-service.ts` — CRUD config con validazione
+- [x] `apps/api/src/services/catalog-service.ts` — logica sync + cache (+ `services/mappers.ts` riga DB → contratti shared)
+- [x] `apps/api/src/services/follow-service.ts` — CRUD follow
+- [x] `apps/api/src/services/config-service.ts` — CRUD config con validazione
+- [x] `apps/api/src/services/auth-service.ts` — login JWT (60gg, no refresh), persistenza in tabella `auth`, re-login a scadenza; `sources/index.ts` factory da `SOURCE_MODE` con retry singolo su 401
 
-**Deliverable S2**: `npm run dev` avvia server Fastify su `localhost:3001`. tRPC funzionante, testabile via `curl` o tRPC panel.
+**Deliverable S2**: `npm run dev` avvia server Fastify su `localhost:3001` (porta configurabile via `API_PORT`). tRPC funzionante, verificato via `curl` (health, query, mutation, errori NOT_FOUND). Note: `relatedAnime`/`recommendations` sono vuoti quando il dettaglio è servito dal DB (persistenza relazioni rimandata a S6); le liste byGenre/bySeason/byYear/recent/topRated leggono solo dal DB e richiedono il primo `catalog.sync`.
 
 ---
 

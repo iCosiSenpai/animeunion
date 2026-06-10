@@ -18,13 +18,21 @@ const nullableInt = z
   .nullish()
   .transform((value) => value ?? null);
 
-export const apiGenreSchema = z.object({
+const apiGenreInnerSchema = z.object({
   id: z.string(),
   slug: z.string(),
   name: z.string(),
   nameEng: nullableString,
   malId: nullableInt,
 });
+
+export const apiGenreSchema = z.preprocess(
+  (value) =>
+    value && typeof value === 'object' && 'genre' in value
+      ? (value as { genre: unknown }).genre
+      : value,
+  apiGenreInnerSchema,
+);
 
 export const apiAnimeSummarySchema = z.object({
   id: z.string(),
@@ -40,16 +48,29 @@ export const apiAnimeSummarySchema = z.object({
   availableLanguages: z.array(languageSchema).default([]),
 });
 
-export const apiRelationSchema = z.object({
-  id: z.string(),
-  slug: z.string(),
-  title: z.string(),
-  titleIta: nullableString,
-  coverImage: nullableString,
-  type: animeTypeSchema,
-  seasonYear: nullableInt,
-  relationType: z.string(),
-});
+export const apiRelationSchema = z
+  .object({
+    relationType: z.string(),
+    toAnime: z.object({
+      id: z.string(),
+      slug: z.string(),
+      title: z.string(),
+      titleIta: nullableString,
+      coverImage: nullableString,
+      type: animeTypeSchema,
+      seasonYear: nullableInt,
+    }),
+  })
+  .transform((relation) => ({
+    id: relation.toAnime.id,
+    slug: relation.toAnime.slug,
+    title: relation.toAnime.title,
+    titleIta: relation.toAnime.titleIta,
+    coverImage: relation.toAnime.coverImage,
+    type: relation.toAnime.type,
+    seasonYear: relation.toAnime.seasonYear,
+    relationType: relation.relationType,
+  }));
 
 export const apiAnimeDetailSchema = apiAnimeSummarySchema.extend({
   titleEng: nullableString,

@@ -130,11 +130,14 @@ describe('ApiSource', () => {
           genres: [{ id: 'g1', slug: 'azione', name: 'Azione', nameEng: 'Action', malId: 1 }],
           relationsFrom: [
             {
-              id: 'a2',
-              slug: 'edens-zero-2',
-              title: 'Edens Zero 2',
-              type: 'TV',
               relationType: 'SEQUEL',
+              toAnime: {
+                id: 'a2',
+                slug: 'edens-zero-2',
+                title: 'Edens Zero 2',
+                type: 'TV',
+                seasonYear: 2023,
+              },
             },
           ],
         },

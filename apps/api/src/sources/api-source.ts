@@ -92,13 +92,11 @@ export function createApiSource(options: ApiSourceOptions): AnimeSource {
     getToken: async () => (options.getToken ? await options.getToken() : null) ?? sessionToken,
   });
 
-  async function fetchEpisodes(slug: string): Promise<EpisodeDetail[]> {
-    const raw = await http.get<unknown>(`/anime/${slug}/episodes`);
+  function expandEpisodes(slug: string, animeId: string, raw: unknown): EpisodeDetail[] {
     const parsed = apiEpisodesResponseSchema.parse(raw);
     const episodes: EpisodeDetail[] = [];
     for (const episode of parsed.data) {
       const baseId = episode.id ?? `${slug}_e${episode.number}`;
-      const animeId = episode.animeId ?? slug;
       for (const source of episode.sources) {
         episodes.push({
           id: `${baseId}_${source.language}`,
@@ -142,11 +140,12 @@ export function createApiSource(options: ApiSourceOptions): AnimeSource {
     },
 
     async getAnimeBySlug(slug: string): Promise<AnimeDetail> {
-      const [raw, episodes] = await Promise.all([
+      const [rawDetail, rawEpisodes] = await Promise.all([
         http.get<unknown>(`/anime/${slug}`),
-        fetchEpisodes(slug),
+        http.get<unknown>(`/anime/${slug}/episodes`),
       ]);
-      return toDetail(apiAnimeDetailSchema.parse(raw), episodes);
+      const detail = apiAnimeDetailSchema.parse(rawDetail);
+      return toDetail(detail, expandEpisodes(slug, detail.id, rawEpisodes));
     },
 
     async getSeasonalAnime(season: string, year: number): Promise<AnimeSummary[]> {
@@ -191,8 +190,9 @@ export function createApiSource(options: ApiSourceOptions): AnimeSource {
       return z.array(apiGenreSchema).parse(raw);
     },
 
-    getEpisodes(animeSlug: string): Promise<EpisodeDetail[]> {
-      return fetchEpisodes(animeSlug);
+    async getEpisodes(animeSlug: string): Promise<EpisodeDetail[]> {
+      const raw = await http.get<unknown>(`/anime/${animeSlug}/episodes`);
+      return expandEpisodes(animeSlug, animeSlug, raw);
     },
 
     async getStats(): Promise<SiteStats> {

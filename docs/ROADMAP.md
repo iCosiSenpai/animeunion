@@ -14,7 +14,7 @@ Sintesi delle milestone. Il piano completo (schema SQL, contratti, API) è in `P
 | 7 | Docker / PWA / Notifiche | Dockerfile multi-arch, compose, PWA, Web Push |
 | 8 | Test E2E + Release | Vitest/Playwright, beta, CHANGELOG, DEPLOYMENT, release v0.1.0 |
 
-## Settimana 0 — Fondazioni (in corso)
+## Settimana 0 — Fondazioni (completata)
 
 - [x] Config root: `package.json` (workspaces), `biome.json`, `tsconfig.base.json`
 - [x] `.gitignore`, `.env.example`, `.nvmrc`, `LICENSE` (AGPL-3.0), `CHANGELOG.md`
@@ -23,9 +23,9 @@ Sintesi delle milestone. Il piano completo (schema SQL, contratti, API) è in `P
 - [x] Issue/PR template
 - [x] Landing page `docs/index.html` (GitHub Pages)
 - [x] `docker-compose.yaml` (bozza)
-- [ ] `packages/shared`: interfaccia `AnimeSource` + contratti zod
-- [ ] Scheletro `apps/api` e `apps/web` (package.json + tsconfig)
-- [ ] `npm install`, CI verde, repo su GitHub, GitHub Pages attivo
+- [x] `packages/shared`: interfaccia `AnimeSource` + contratti zod
+- [x] Scheletro `apps/api` e `apps/web` (package.json + tsconfig)
+- [x] `npm install`, CI verde, repo su GitHub, GitHub Pages attivo
 
 ## Post-v1 (orizzonti futuri)
 

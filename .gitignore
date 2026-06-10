@@ -21,8 +21,6 @@ out/
 *.db-wal
 data/
 
-# Drizzle metadata generata
-drizzle/meta/
 
 # Libreria download (volume runtime)
 anime/

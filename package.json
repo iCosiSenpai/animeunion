@@ -18,7 +18,10 @@
     "lint": "biome check .",
     "format": "biome format --write .",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "seed": "npm run seed -w @animeunion/api",
+    "db:migrate": "npm run db:migrate -w @animeunion/api",
+    "db:generate": "npm run db:generate -w @animeunion/api"
   },
   "devDependencies": {
     "@biomejs/biome": "1.9.4",

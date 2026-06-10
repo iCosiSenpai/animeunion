@@ -24,7 +24,7 @@ data/
 
 
 # Libreria download (volume runtime)
-anime/
+/anime/
 
 # Log
 *.log

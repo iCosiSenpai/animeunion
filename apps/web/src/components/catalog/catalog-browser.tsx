@@ -90,6 +90,10 @@ export function CatalogBrowser() {
           ? yearQuery
           : searchQuery;
 
+  const syncStatus = trpc.catalog.syncStatus.useQuery(undefined, {
+    refetchInterval: (query) => (query.state.data?.running ? 3000 : false),
+  });
+
   const result = active.data;
   const items = result?.data ?? [];
   const hasMore = result?.meta.hasMore ?? false;
@@ -176,6 +180,12 @@ export function CatalogBrowser() {
       {season && !year ? (
         <p className="text-sm text-muted-foreground">
           Seleziona anche un anno per filtrare per stagione.
+        </p>
+      ) : null}
+
+      {syncStatus.data?.running ? (
+        <p className="rounded-md border border-dashed px-3 py-2 text-sm text-muted-foreground">
+          Sincronizzazione del catalogo in corso… i filtri si popoleranno man mano.
         </p>
       ) : null}
 

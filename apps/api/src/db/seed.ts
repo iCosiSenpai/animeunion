@@ -1,6 +1,6 @@
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { EpisodeSummary } from '@animeunion/shared';
+import { type EpisodeSummary, appConfigSchema } from '@animeunion/shared';
 import { env } from '../config/env';
 import { logger } from '../lib/logger';
 import { createMockSource } from '../sources/mock-source';
@@ -9,16 +9,7 @@ import { createDb, runMigrations, schema } from './index';
 const migrationsFolder = resolve(dirname(fileURLToPath(import.meta.url)), '../../drizzle');
 const dbPath = env.DATABASE_PATH;
 
-const DEFAULT_CONFIG: Record<string, string> = {
-  download_path: '/anime',
-  cron_schedule: '0 */6 * * *',
-  language: 'SUB_ITA',
-  naming_format: 'SXXEXX',
-  max_concurrent: '2',
-  rate_limit_ms: '1000',
-  catalog_sync_hours: '24',
-  auto_download: 'true',
-};
+const DEFAULT_CONFIG = appConfigSchema.parse({});
 
 async function seed(): Promise<void> {
   const db = createDb(dbPath);
@@ -130,7 +121,9 @@ async function seed(): Promise<void> {
   }
 
   for (const [key, value] of Object.entries(DEFAULT_CONFIG)) {
-    db.insert(schema.config).values({ key, value, updatedAt: now }).run();
+    db.insert(schema.config)
+      .values({ key, value: JSON.stringify(value), updatedAt: now })
+      .run();
   }
 
   logger.info(

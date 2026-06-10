@@ -8,6 +8,7 @@ import type {
   PaginatedResult,
   SiteStats,
 } from '@animeunion/shared';
+import { NotFoundError } from '../lib/errors';
 import { animeDetails, downloadUrlFor, genres, toSummary } from './mock-data';
 
 const PER_PAGE = 24;
@@ -61,7 +62,7 @@ export class MockSource implements AnimeSource {
   async getAnimeBySlug(slug: string): Promise<AnimeDetail> {
     const anime = animeDetails.find((entry) => entry.slug === slug);
     if (!anime) {
-      throw new Error(`Anime non trovato: ${slug}`);
+      throw new NotFoundError(`Anime non trovato: ${slug}`);
     }
     return anime;
   }
@@ -87,7 +88,7 @@ export class MockSource implements AnimeSource {
     const calendar = await this.getCalendar();
     const entry = calendar.find((item) => item.day === (day as WeekDay));
     if (!entry) {
-      throw new Error(`Giorno non valido: ${day}`);
+      throw new NotFoundError(`Giorno non valido: ${day}`);
     }
     return entry;
   }
@@ -116,7 +117,7 @@ export class MockSource implements AnimeSource {
         };
       }
     }
-    throw new Error(`Episodio non trovato: ${episodeId}`);
+    throw new NotFoundError(`Episodio non trovato: ${episodeId}`);
   }
 
   async getStats(): Promise<SiteStats> {

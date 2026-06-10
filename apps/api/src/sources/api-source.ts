@@ -8,6 +8,7 @@ import type {
   PaginatedResult,
   RelatedAnime,
   SiteStats,
+  WeekDay,
 } from '@animeunion/shared';
 import { z } from 'zod';
 import { type HttpClient, createHttpClient } from '../lib/http-client';
@@ -16,7 +17,7 @@ import {
   type ApiAnimeSummary,
   type ApiRelation,
   apiAnimeDetailSchema,
-  apiCalendarEntrySchema,
+  apiCalendarResponseSchema,
   apiEpisodesResponseSchema,
   apiGenreSchema,
   apiLoginResponseSchema,
@@ -26,6 +27,26 @@ import {
 
 const SEASONAL_LIMIT = 50;
 const SEASONAL_MAX_PAGES = 20;
+
+const WEEK_ORDER: WeekDay[] = [
+  'LUNEDI',
+  'MARTEDI',
+  'MERCOLEDI',
+  'GIOVEDI',
+  'VENERDI',
+  'SABATO',
+  'DOMENICA',
+];
+
+const DAY_INDEX_TO_WEEKDAY: WeekDay[] = [
+  'DOMENICA',
+  'LUNEDI',
+  'MARTEDI',
+  'MERCOLEDI',
+  'GIOVEDI',
+  'VENERDI',
+  'SABATO',
+];
 
 export interface ApiSourceOptions {
   baseUrl: string;
@@ -168,12 +189,32 @@ export function createApiSource(options: ApiSourceOptions): AnimeSource {
 
     async getCalendar(): Promise<CalendarEntry[]> {
       const raw = await http.get<unknown>('/calendario');
-      const entries = z.array(apiCalendarEntrySchema).parse(raw);
-      return entries.map((entry) => ({
-        day: entry.day,
-        date: entry.date,
-        anime: entry.anime.map(toSummary),
-      }));
+      const parsed = apiCalendarResponseSchema.parse(raw);
+      const byDay = new Map<WeekDay, AnimeSummary[]>();
+      for (const items of Object.values(parsed.data)) {
+        for (const item of items) {
+          const day = DAY_INDEX_TO_WEEKDAY[item.dayOfWeek];
+          if (!day) {
+            continue;
+          }
+          const list = byDay.get(day) ?? [];
+          list.push({
+            id: item.anime.id,
+            slug: item.anime.slug,
+            title: item.anime.title,
+            titleIta: item.anime.titleIta,
+            coverImage: item.anime.coverImage,
+            type: item.anime.type,
+            status: item.anime.status,
+            seasonYear: item.anime.seasonYear,
+            score: item.anime.score,
+            genres: [],
+            availableLanguages: [],
+          });
+          byDay.set(day, list);
+        }
+      }
+      return WEEK_ORDER.map((day) => ({ day, date: '', anime: byDay.get(day) ?? [] }));
     },
 
     async getCalendarByDay(day: string): Promise<CalendarEntry> {

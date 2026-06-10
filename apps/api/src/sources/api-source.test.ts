@@ -180,6 +180,51 @@ describe('ApiSource', () => {
     expect(result).toMatchObject({ token: 'jwt-123', refreshToken: '' });
   });
 
+  it('getCalendar raggruppa per giorno (data { "0".."6" } con dayOfWeek)', async () => {
+    pool()
+      .intercept({ path: '/calendario', method: 'GET' })
+      .reply(
+        200,
+        {
+          data: {
+            '1': [
+              {
+                dayOfWeek: 1,
+                anime: {
+                  id: 'a1',
+                  slug: 'lunedi-anime',
+                  title: 'Lunedi Anime',
+                  type: 'TV',
+                  status: 'ONGOING',
+                },
+              },
+            ],
+            '0': [
+              {
+                dayOfWeek: 0,
+                anime: {
+                  id: 'a2',
+                  slug: 'domenica-anime',
+                  title: 'Domenica Anime',
+                  type: 'TV',
+                  status: 'ONGOING',
+                },
+              },
+            ],
+          },
+        },
+        JSON_HEADERS,
+      );
+
+    const week = await createSource().getCalendar();
+    expect(week).toHaveLength(7);
+    const lunedi = week.find((entry) => entry.day === 'LUNEDI');
+    const domenica = week.find((entry) => entry.day === 'DOMENICA');
+    expect(lunedi?.anime[0]?.slug).toBe('lunedi-anime');
+    expect(domenica?.anime[0]?.slug).toBe('domenica-anime');
+    expect(week[0]?.day).toBe('LUNEDI');
+  });
+
   it('propaga errore su risposta non ok', async () => {
     pool().intercept({ path: '/stats', method: 'GET' }).reply(500, { error: 'boom' }, JSON_HEADERS);
     await expect(createSource().getStats()).rejects.toThrow(/API fallita/);

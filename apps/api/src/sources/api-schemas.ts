@@ -1,10 +1,4 @@
-import {
-  animeStatusSchema,
-  animeTypeSchema,
-  languageSchema,
-  seasonSchema,
-  weekDaySchema,
-} from '@animeunion/shared';
+import { animeStatusSchema, animeTypeSchema, languageSchema, seasonSchema } from '@animeunion/shared';
 import { z } from 'zod';
 
 const nullableString = z
@@ -130,10 +124,25 @@ export const apiEpisodesResponseSchema = z.object({
   data: z.array(apiEpisodeSchema).default([]),
 });
 
-export const apiCalendarEntrySchema = z.object({
-  day: weekDaySchema,
-  date: z.string(),
-  anime: z.array(apiAnimeSummarySchema).default([]),
+const apiCalendarAnimeSchema = z.object({
+  id: z.string(),
+  slug: z.string(),
+  title: z.string(),
+  titleIta: nullableString,
+  coverImage: nullableString,
+  type: animeTypeSchema,
+  status: animeStatusSchema,
+  seasonYear: nullableInt,
+  score: nullableInt,
+});
+
+const apiCalendarItemSchema = z.object({
+  dayOfWeek: z.number().int(),
+  anime: apiCalendarAnimeSchema,
+});
+
+export const apiCalendarResponseSchema = z.object({
+  data: z.record(z.string(), z.array(apiCalendarItemSchema)),
 });
 
 export const apiLoginResponseSchema = z.object({

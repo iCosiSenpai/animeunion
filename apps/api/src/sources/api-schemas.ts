@@ -99,7 +99,6 @@ export const apiSourceSchema = z.object({
 
 export const apiEpisodeSchema = z.object({
   id: z.string().nullish(),
-  animeId: z.string().nullish(),
   number: z.number().int(),
   title: nullableString,
   titleIta: nullableString,

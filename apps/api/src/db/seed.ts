@@ -1,12 +1,13 @@
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { EpisodeSummary } from '@animeunion/shared';
+import { env } from '../config/env';
 import { logger } from '../lib/logger';
 import { createMockSource } from '../sources/mock-source';
 import { createDb, runMigrations, schema } from './index';
 
 const migrationsFolder = resolve(dirname(fileURLToPath(import.meta.url)), '../../drizzle');
-const dbPath = process.env.DATABASE_PATH ?? './data/animeunion.db';
+const dbPath = env.DATABASE_PATH;
 
 const DEFAULT_CONFIG: Record<string, string> = {
   download_path: '/anime',

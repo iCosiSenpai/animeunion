@@ -1,10 +1,11 @@
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { env } from '../config/env';
 import { logger } from '../lib/logger';
 import { createDb, runMigrations } from './index';
 
 const migrationsFolder = resolve(dirname(fileURLToPath(import.meta.url)), '../../drizzle');
-const dbPath = process.env.DATABASE_PATH ?? './data/animeunion.db';
+const dbPath = env.DATABASE_PATH;
 
 const db = createDb(dbPath);
 runMigrations(db, migrationsFolder);

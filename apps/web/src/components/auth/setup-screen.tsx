@@ -31,7 +31,12 @@ export function SetupScreen() {
       }
       await utils.auth.status.invalidate();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Accesso fallito');
+      const message = error instanceof Error ? error.message : '';
+      if (!message || /failed to fetch|networkerror|load failed/i.test(message)) {
+        toast.error('Impossibile contattare il server. Verifica che il backend (API) sia avviato.');
+      } else {
+        toast.error(message);
+      }
     }
   });
 

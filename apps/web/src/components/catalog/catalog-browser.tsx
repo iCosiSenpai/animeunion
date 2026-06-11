@@ -117,7 +117,7 @@ export function CatalogBrowser() {
               pushParams({ year: value === ALL ? null : value, genre: null })
             }
           >
-            <SelectTrigger className="w-32">
+            <SelectTrigger className="w-40">
               <SelectValue placeholder="Anno" />
             </SelectTrigger>
             <SelectContent>
@@ -135,7 +135,7 @@ export function CatalogBrowser() {
               pushParams({ season: value === ALL ? null : value, genre: null })
             }
           >
-            <SelectTrigger className="w-36">
+            <SelectTrigger className="w-48">
               <SelectValue placeholder="Stagione" />
             </SelectTrigger>
             <SelectContent>

@@ -12,7 +12,6 @@ import { toast } from 'sonner';
 export function SetupScreen() {
   const utils = trpc.useUtils();
   const login = trpc.auth.login.useMutation();
-  const sync = trpc.catalog.sync.useMutation();
 
   const {
     register,
@@ -24,11 +23,6 @@ export function SetupScreen() {
     try {
       await login.mutateAsync(values);
       toast.success('Benvenuto! Accesso effettuato.');
-      const status = await utils.catalog.syncStatus.fetch();
-      if (!status.lastSyncedAt) {
-        sync.mutate();
-        toast.message('Sincronizzazione del catalogo avviata in background.');
-      }
       await utils.auth.status.invalidate();
     } catch (error) {
       const message = error instanceof Error ? error.message : '';

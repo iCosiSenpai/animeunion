@@ -3,6 +3,7 @@
 import { trpc } from '@/lib/trpc';
 import { Loader2 } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { InitialSync } from './initial-sync';
 import { SetupScreen } from './setup-screen';
 
 export function AuthGate({ children }: { children: ReactNode }) {
@@ -20,5 +21,10 @@ export function AuthGate({ children }: { children: ReactNode }) {
     return <SetupScreen />;
   }
 
-  return <>{children}</>;
+  return (
+    <>
+      {children}
+      <InitialSync />
+    </>
+  );
 }

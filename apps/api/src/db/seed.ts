@@ -12,6 +12,9 @@ const dbPath = env.DATABASE_PATH;
 const DEFAULT_CONFIG = appConfigSchema.parse({});
 
 async function seed(): Promise<void> {
+  logger.warn(
+    "seed: popolamento con dati MOCK (cover fittizie), solo per test/offline. Per l'uso reale usa il sync del catalogo, non questo comando.",
+  );
   const db = createDb(dbPath);
   runMigrations(db, migrationsFolder);
 

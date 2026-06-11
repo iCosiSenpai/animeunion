@@ -22,7 +22,7 @@ export function Navbar() {
   return (
     <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-14 items-center gap-4">
-        <Link href="/catalog" className="shrink-0 font-bold tracking-tight">
+        <Link href="/" className="shrink-0 font-bold tracking-tight">
           AnimeUnion
         </Link>
 

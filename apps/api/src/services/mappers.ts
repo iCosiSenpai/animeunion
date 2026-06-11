@@ -39,6 +39,7 @@ export function toAnimeSummary(row: AnimeRow, genres: GenreSummary[]): AnimeSumm
     coverImage: row.coverImage,
     type: animeTypeSchema.parse(row.type),
     status: animeStatusSchema.parse(row.status),
+    season: row.season as AnimeSummary['season'],
     seasonYear: row.seasonYear,
     score: row.score,
     genres,

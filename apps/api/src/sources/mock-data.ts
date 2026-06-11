@@ -256,6 +256,7 @@ export function toSummary(detail: AnimeDetail): AnimeSummary {
     coverImage: detail.coverImage,
     type: detail.type,
     status: detail.status,
+    season: detail.season,
     seasonYear: detail.seasonYear,
     score: detail.score,
     genres: detail.genres,

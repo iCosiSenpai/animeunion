@@ -41,6 +41,7 @@ export const apiAnimeSummarySchema = z.object({
   coverImage: nullableString,
   type: animeTypeSchema,
   status: animeStatusSchema,
+  season: seasonSchema.nullish().transform((value) => value ?? null),
   seasonYear: nullableInt,
   score: nullableInt,
   genres: z.array(apiGenreSchema).default([]),
@@ -83,7 +84,6 @@ export const apiAnimeDetailSchema = apiAnimeSummarySchema.extend({
   episodeDuration: nullableInt,
   malId: nullableInt,
   anilistId: nullableInt,
-  season: seasonSchema.nullish().transform((value) => value ?? null),
   relationsFrom: z.array(apiRelationSchema).default([]),
   recommendations: z.array(apiAnimeSummarySchema).default([]),
 });

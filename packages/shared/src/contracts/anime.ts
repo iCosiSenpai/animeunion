@@ -23,6 +23,7 @@ export const animeSummarySchema = z.object({
   coverImage: z.string().nullable(),
   type: animeTypeSchema,
   status: animeStatusSchema,
+  season: seasonSchema.nullable(),
   seasonYear: z.number().int().nullable(),
   score: z.number().int().nullable(),
   genres: z.array(genreSummarySchema),

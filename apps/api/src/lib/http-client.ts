@@ -30,7 +30,8 @@ export interface HttpClientOptions {
 
 export interface HttpClient {
   get<T>(path: string, query?: Record<string, QueryValue>): Promise<T>;
-  post<T>(path: string, body: unknown): Promise<T>;
+  post<T>(path: string, body?: unknown): Promise<T>;
+  del(path: string): Promise<void>;
 }
 
 export function createHttpClient(options: HttpClientOptions): HttpClient {
@@ -88,14 +89,26 @@ export function createHttpClient(options: HttpClientOptions): HttpClient {
         return parse<T>(response);
       });
     },
-    post<T>(path: string, body: unknown): Promise<T> {
+    post<T>(path: string, body?: unknown): Promise<T> {
       return limiter.schedule(async () => {
         const response = await fetch(buildUrl(path), {
           method: 'POST',
           headers: await buildHeaders(),
-          body: JSON.stringify(body),
+          body: body === undefined ? undefined : JSON.stringify(body),
         });
         return parse<T>(response);
+      });
+    },
+    del(path: string): Promise<void> {
+      return limiter.schedule(async () => {
+        const response = await fetch(buildUrl(path), {
+          method: 'DELETE',
+          headers: await buildHeaders(),
+        });
+        if (response.ok) {
+          return;
+        }
+        await parse<unknown>(response);
       });
     },
   };

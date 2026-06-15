@@ -5,6 +5,7 @@ import { env } from './config/env';
 import { createAppContext } from './context';
 import { logger } from './lib/logger';
 import { type AppRouter, appRouter } from './routers';
+import { createScheduler } from './scheduler';
 
 async function main(): Promise<void> {
   const ctx = createAppContext();
@@ -20,7 +21,10 @@ async function main(): Promise<void> {
   });
   app.get('/health', async () => ({ status: 'ok' }));
 
+  const scheduler = createScheduler(ctx);
+
   const shutdown = async (): Promise<void> => {
+    scheduler.stop();
     await app.close();
     process.exit(0);
   };
@@ -28,6 +32,7 @@ async function main(): Promise<void> {
   process.on('SIGTERM', shutdown);
 
   await app.listen({ port: env.API_PORT, host: '0.0.0.0' });
+  scheduler.start();
 }
 
 main().catch((error) => {

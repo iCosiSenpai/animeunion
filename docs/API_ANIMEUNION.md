@@ -409,5 +409,47 @@ L'app è progettata per essere "gentile" col server:
 
 ---
 
-*Documento per Matteo — aggiornato il 2026-06-10. Allineato a `PLAN.md` §5–§7 e
-`packages/shared/src/anime-source.ts`.*
+## 12. Endpoint v1.0.3 — dati utente e home (confermati, in attesa deploy)
+
+> Matteo ha confermato le shape finali e li rilascia con la **v1.0.3**. L'app è già integrata
+> (vedi `apps/api/src/sources/api-source.ts` + servizi `favorites`/`home`/`profile`) e tollera i
+> 404 finché l'API non è online. Base path: `…/api/v1/integration`.
+
+### 12.1 Preferiti — fonte di verità per l'app ⭐
+```
+GET    /me/favorites[?updatedSince=ISO8601]
+       200 -> { data: [ { animeId, slug, title, coverImage, addedAt } ] }
+POST   /me/favorites      Body { animeId }
+       201 -> { ok, animeId, addedAt }   |   200 -> { ok, alreadyExists: true }   |   404 anime inesistente
+DELETE /me/favorites/:animeId
+       204 (idempotente)
+```
+L'app importa i preferiti all'avvio + polling `?updatedSince=` (config `favoritesSyncMinutes`, default
+10 min) e li usa come lista di auto-download. Il pulsante "Segui/Rimuovi" propaga via POST/DELETE.
+
+### 12.2 Watchlist e Cronologia (sola lettura)
+```
+GET /me/watchlist[?updatedSince=]  -> { data: [ { animeId, slug, status, updatedAt } ] }
+GET /me/cronologia[?updatedSince=] -> { data: [ { animeId, slug, episodeNumber, watchedAt, completed } ] }  // max 1000
+```
+Status watchlist: `PLAN_TO_WATCH | WATCHING | ON_HOLD | COMPLETED | DROPPED`. La cronologia alimenta
+"Continua a guardare" (arricchita con titolo/cover dalla cache locale).
+
+### 12.3 Profilo
+```
+GET /me -> { id, username, email, avatarUrl, role, createdAt }
+```
+
+### 12.4 Home
+```
+GET /ultimi-episodi?limit=24 -> { data: [ { animeId, slug, title, coverImage, episodeNumber, language, releasedAt } ] }
+GET /in-evidenza             -> { data: AnimeSummary[] }
+GET /news?limit=5            -> { data: [ { title, url, slug, image, excerpt, publishedAt } ] }
+```
+
+Rate-limit: tutti i GET rientrano nei 120 req/min per token.
+
+---
+
+*Documento per Matteo — aggiornato il 2026-06-15. Allineato a `PLAN.md` §5–§7 e
+`packages/shared/src/anime-source.ts`. §12 = endpoint v1.0.3 (dati utente + home).*

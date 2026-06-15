@@ -4,12 +4,37 @@ import { SearchBar } from '@/components/shared/search-bar';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { navLinks } from '@/lib/nav';
+import { trpc } from '@/lib/trpc';
 import { cn } from '@/lib/utils';
 import { Menu } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import { ThemeToggle } from './theme-toggle';
+
+function ProfileBadge() {
+  const profile = trpc.profile.me.useQuery(undefined, { retry: false });
+  const user = profile.data;
+  if (!user) {
+    return null;
+  }
+  return (
+    <div className="hidden items-center gap-2 sm:flex" title={user.username}>
+      {user.avatarUrl ? (
+        <img
+          src={user.avatarUrl}
+          alt={user.username}
+          className="h-7 w-7 rounded-full object-cover"
+        />
+      ) : (
+        <div className="flex h-7 w-7 items-center justify-center rounded-full bg-accent text-xs font-medium uppercase">
+          {user.username.charAt(0)}
+        </div>
+      )}
+      <span className="hidden text-sm font-medium lg:inline">{user.username}</span>
+    </div>
+  );
+}
 
 function isActive(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
@@ -45,6 +70,7 @@ export function Navbar() {
           <div className="hidden w-48 sm:block lg:w-64">
             <SearchBar />
           </div>
+          <ProfileBadge />
           <ThemeToggle />
           <Sheet open={open} onOpenChange={setOpen}>
             <SheetTrigger asChild className="md:hidden">

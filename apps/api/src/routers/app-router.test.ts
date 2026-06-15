@@ -3,7 +3,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { createAuthService } from '../services/auth-service';
 import { createCatalogService } from '../services/catalog-service';
 import { createConfigService } from '../services/config-service';
+import { createFavoritesService } from '../services/favorites-service';
 import { createFollowService } from '../services/follow-service';
+import { createHomeService } from '../services/home-service';
+import { createProfileService } from '../services/profile-service';
 import { createMockSource } from '../sources/mock-source';
 import { createTestDb, testLogger } from '../test/helpers';
 import { type Context, createCallerFactory } from '../trpc';
@@ -14,12 +17,15 @@ function makeCaller() {
   const source = createMockSource();
   const config = createConfigService({ db });
   const catalog = createCatalogService({ db, source, config, logger: testLogger });
-  const follow = createFollowService({ db });
+  const follow = createFollowService({ db, source, logger: testLogger });
+  const favorites = createFavoritesService({ db, source, catalog, config, logger: testLogger });
+  const profile = createProfileService({ source, logger: testLogger });
+  const home = createHomeService({ source, logger: testLogger });
   const auth = createAuthService({ db, baseUrl: 'https://api.test', logger: testLogger });
   const ctx: Context = {
     db,
     source,
-    services: { catalog, follow, config, auth },
+    services: { catalog, follow, favorites, profile, home, config, auth },
     logger: testLogger,
   };
   return { caller: createCallerFactory(appRouter)(ctx), ctx };

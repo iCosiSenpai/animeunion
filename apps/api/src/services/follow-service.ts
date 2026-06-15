@@ -1,4 +1,5 @@
 import {
+  type AnimeSource,
   type Follow,
   type FollowAddInput,
   type FollowUpdateStatusInput,
@@ -9,6 +10,7 @@ import { eq } from 'drizzle-orm';
 import type { Db } from '../db';
 import { schema } from '../db';
 import { NotFoundError } from '../lib/errors';
+import type { Logger } from '../lib/logger';
 import { loadGenresByAnimeIds, toAnimeSummary } from './mappers';
 
 type FollowRow = typeof schema.follow.$inferSelect;
@@ -18,6 +20,13 @@ export interface FollowService {
   add(input: FollowAddInput): Follow;
   remove(animeId: string): void;
   updateStatus(input: FollowUpdateStatusInput): Follow;
+}
+
+export interface FollowServiceDeps {
+  db: Db;
+  /** Source del sito: i Preferiti sono la fonte di verita, quindi add/remove vengono propagati. */
+  source?: AnimeSource;
+  logger?: Logger;
 }
 
 function toFollow(row: FollowRow): Follow {
@@ -32,8 +41,18 @@ function toFollow(row: FollowRow): Follow {
   };
 }
 
-export function createFollowService(deps: { db: Db }): FollowService {
-  const { db } = deps;
+export function createFollowService(deps: FollowServiceDeps): FollowService {
+  const { db, source, logger } = deps;
+
+  /** Propaga al sito in modo best-effort: i 404 (endpoint non ancora deployato) sono tollerati. */
+  function pushToSite(action: () => Promise<unknown> | undefined): void {
+    const result = action();
+    if (result) {
+      result.catch((error) => {
+        logger?.debug({ err: error }, 'Sync preferiti verso il sito fallita (best-effort)');
+      });
+    }
+  }
 
   function findByAnimeId(animeId: string): FollowRow | undefined {
     return db.select().from(schema.follow).where(eq(schema.follow.animeId, animeId)).get();
@@ -89,6 +108,8 @@ export function createFollowService(deps: { db: Db }): FollowService {
         lastCheckAt: null,
       };
       db.insert(schema.follow).values(row).run();
+      // Preferiti = fonte di verita: propaga al sito (best-effort).
+      pushToSite(() => source?.addFavorite?.(input.animeId));
       return toFollow(row);
     },
 
@@ -97,6 +118,7 @@ export function createFollowService(deps: { db: Db }): FollowService {
       if (result.changes === 0) {
         throw new NotFoundError(`Follow non trovato per anime: ${animeId}`);
       }
+      pushToSite(() => source?.removeFavorite?.(animeId));
     },
 
     updateStatus(input: FollowUpdateStatusInput): Follow {

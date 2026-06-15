@@ -10,6 +10,7 @@ export const appConfigSchema = z.object({
   rateLimitMs: z.number().int().positive().default(1000),
   catalogSyncHours: z.number().int().positive().default(24),
   autoDownload: z.boolean().default(true),
+  favoritesSyncMinutes: z.number().int().positive().default(10),
 });
 export type AppConfig = z.infer<typeof appConfigSchema>;
 

@@ -4,10 +4,16 @@ import type {
   AnimeSummary,
   CalendarEntry,
   EpisodeDetail,
+  Favorite,
   GenreDetail,
+  HistoryItem,
+  LatestEpisode,
+  NewsItem,
   PaginatedResult,
   RelatedAnime,
   SiteStats,
+  UserProfile,
+  WatchlistItem,
   WeekDay,
 } from '@animeunion/shared';
 import { z } from 'zod';
@@ -19,10 +25,18 @@ import {
   apiAnimeDetailSchema,
   apiCalendarResponseSchema,
   apiEpisodesResponseSchema,
+  apiFavoriteAddResponseSchema,
+  apiFavoritesResponseSchema,
+  apiFeaturedResponseSchema,
   apiGenreSchema,
+  apiHistoryResponseSchema,
+  apiLatestEpisodesResponseSchema,
   apiLoginResponseSchema,
+  apiMeSchema,
+  apiNewsResponseSchema,
   apiPaginatedAnimeSchema,
   apiStatsSchema,
+  apiWatchlistResponseSchema,
 } from './api-schemas';
 
 const SEASONAL_LIMIT = 50;
@@ -248,6 +262,55 @@ export function createApiSource(options: ApiSourceOptions): AnimeSource {
       const parsed = apiLoginResponseSchema.parse(raw);
       sessionToken = parsed.token;
       return { token: parsed.token, refreshToken: '', user: parsed.user };
+    },
+
+    // --- Dati utente del sito (`/me/*`) — v1.0.3 ---
+
+    async getFavorites(updatedSince?: string): Promise<Favorite[]> {
+      const raw = await http.get<unknown>('/me/favorites', { updatedSince });
+      return apiFavoritesResponseSchema.parse(raw).data;
+    },
+
+    async addFavorite(animeId: string): Promise<{ ok: boolean; alreadyExists: boolean }> {
+      const raw = await http.post<unknown>('/me/favorites', { animeId });
+      const parsed = apiFavoriteAddResponseSchema.parse(raw);
+      return { ok: parsed.ok, alreadyExists: parsed.alreadyExists };
+    },
+
+    async removeFavorite(animeId: string): Promise<void> {
+      await http.del(`/me/favorites/${animeId}`);
+    },
+
+    async getWatchlist(updatedSince?: string): Promise<WatchlistItem[]> {
+      const raw = await http.get<unknown>('/me/watchlist', { updatedSince });
+      return apiWatchlistResponseSchema.parse(raw).data;
+    },
+
+    async getHistory(updatedSince?: string): Promise<HistoryItem[]> {
+      const raw = await http.get<unknown>('/me/cronologia', { updatedSince });
+      return apiHistoryResponseSchema.parse(raw).data;
+    },
+
+    async getMe(): Promise<UserProfile> {
+      const raw = await http.get<unknown>('/me');
+      return apiMeSchema.parse(raw);
+    },
+
+    // --- Home del sito ---
+
+    async getLatestEpisodes(limit = 24): Promise<LatestEpisode[]> {
+      const raw = await http.get<unknown>('/ultimi-episodi', { limit });
+      return apiLatestEpisodesResponseSchema.parse(raw).data;
+    },
+
+    async getFeatured(): Promise<AnimeSummary[]> {
+      const raw = await http.get<unknown>('/in-evidenza');
+      return apiFeaturedResponseSchema.parse(raw).data.map(toSummary);
+    },
+
+    async getNews(limit = 5): Promise<NewsItem[]> {
+      const raw = await http.get<unknown>('/news', { limit });
+      return apiNewsResponseSchema.parse(raw).data;
     },
   };
 }

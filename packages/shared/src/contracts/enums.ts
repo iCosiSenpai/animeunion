@@ -29,6 +29,26 @@ export const followStatusSchema = z.enum([
 ]);
 export type FollowStatus = z.infer<typeof followStatusSchema>;
 
+/** Status della watchlist lato server del sito (UPPER_SNAKE). Sola lettura. */
+export const serverWatchStatusSchema = z.enum([
+  'PLAN_TO_WATCH',
+  'WATCHING',
+  'ON_HOLD',
+  'COMPLETED',
+  'DROPPED',
+]);
+export type ServerWatchStatus = z.infer<typeof serverWatchStatusSchema>;
+
+/** Converte lo status locale (minuscolo) in quello del server (maiuscolo). */
+export function toServerWatchStatus(status: FollowStatus): ServerWatchStatus {
+  return status.toUpperCase() as ServerWatchStatus;
+}
+
+/** Converte lo status del server (maiuscolo) in quello locale (minuscolo). */
+export function fromServerWatchStatus(status: ServerWatchStatus): FollowStatus {
+  return status.toLowerCase() as FollowStatus;
+}
+
 export const downloadStatusSchema = z.enum([
   'queued',
   'downloading',

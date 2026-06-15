@@ -5,6 +5,9 @@ import { Button } from '@/components/ui/button';
 import { trpc } from '@/lib/trpc';
 import type { AnimeSummary, Season } from '@animeunion/shared';
 import Link from 'next/link';
+import { ContinueWatchingGrid } from './continue-watching';
+import { EpisodeGrid } from './episode-card';
+import { NewsCard } from './news-card';
 
 const SEASON_BY_MONTH: Season[] = [
   'WINTER',
@@ -67,6 +70,29 @@ function Section({
   );
 }
 
+/** Wrapper di sezione generico per contenuti non-AnimeSummary (episodi, news, cronologia). */
+function SectionBlock({
+  title,
+  isLoading,
+  isEmpty,
+  children,
+}: {
+  title: string;
+  isLoading: boolean;
+  isEmpty: boolean;
+  children: React.ReactNode;
+}) {
+  if (isLoading || isEmpty) {
+    return null;
+  }
+  return (
+    <section className="space-y-3">
+      <h2 className="text-xl font-semibold">{title}</h2>
+      {children}
+    </section>
+  );
+}
+
 export function HomeView() {
   const now = new Date();
   const season = SEASON_BY_MONTH[now.getMonth()] ?? 'WINTER';
@@ -77,6 +103,10 @@ export function HomeView() {
   const seasonal = trpc.catalog.bySeason.useQuery({ season, year, page: 1 });
   const topRated = trpc.catalog.topRated.useQuery({ page: 1 });
   const recent = trpc.catalog.recent.useQuery({ page: 1 });
+  const latestEpisodes = trpc.home.latestEpisodes.useQuery();
+  const featured = trpc.home.featured.useQuery();
+  const continueWatching = trpc.library.history.useQuery();
+  const news = trpc.home.news.useQuery();
 
   const todayAnime = week.data?.find((entry) => entry.day === todayWeekday)?.anime ?? [];
 
@@ -86,6 +116,24 @@ export function HomeView() {
         <h1 className="text-3xl font-bold tracking-tight">AnimeUnion</h1>
         <p className="text-muted-foreground">Scopri, segui e scarica i tuoi anime preferiti.</p>
       </div>
+
+      <Section title="In evidenza" items={featured.data ?? []} isLoading={featured.isLoading} />
+
+      <SectionBlock
+        title="Ultimi episodi"
+        isLoading={latestEpisodes.isLoading}
+        isEmpty={(latestEpisodes.data ?? []).length === 0}
+      >
+        <EpisodeGrid episodes={(latestEpisodes.data ?? []).slice(0, 12)} />
+      </SectionBlock>
+
+      <SectionBlock
+        title="Continua a guardare"
+        isLoading={continueWatching.isLoading}
+        isEmpty={(continueWatching.data ?? []).length === 0}
+      >
+        <ContinueWatchingGrid entries={(continueWatching.data ?? []).slice(0, 12)} />
+      </SectionBlock>
 
       <Section
         title="In onda oggi"
@@ -109,6 +157,18 @@ export function HomeView() {
         items={recent.data?.data ?? []}
         isLoading={recent.isLoading}
       />
+
+      <SectionBlock
+        title="News"
+        isLoading={news.isLoading}
+        isEmpty={(news.data ?? []).length === 0}
+      >
+        <div className="grid gap-4 sm:grid-cols-2">
+          {(news.data ?? []).map((item) => (
+            <NewsCard key={item.slug} item={item} />
+          ))}
+        </div>
+      </SectionBlock>
 
       <div className="flex justify-center">
         <Button asChild>

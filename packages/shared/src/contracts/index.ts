@@ -3,6 +3,7 @@ export * from './auth';
 export * from './anime';
 export * from './episode';
 export * from './follow';
+export * from './me';
 export * from './download';
 export * from './calendar';
 export * from './config';

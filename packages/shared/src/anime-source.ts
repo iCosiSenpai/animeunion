@@ -3,8 +3,14 @@ import type {
   AnimeSummary,
   CalendarEntry,
   EpisodeDetail,
+  Favorite,
   GenreDetail,
+  HistoryItem,
+  LatestEpisode,
+  NewsItem,
   SiteStats,
+  UserProfile,
+  WatchlistItem,
 } from './contracts';
 
 export interface PaginatedResult<T> {
@@ -38,4 +44,17 @@ export interface AnimeSource {
     password: string,
   ): Promise<{ token: string; refreshToken: string; user: unknown }>;
   refreshToken?(refreshToken: string): Promise<{ token: string; expiresIn: number }>;
+
+  // Dati utente del sito (`/me/*`) — introdotti nella v1.0.3.
+  getFavorites?(updatedSince?: string): Promise<Favorite[]>;
+  addFavorite?(animeId: string): Promise<{ ok: boolean; alreadyExists: boolean }>;
+  removeFavorite?(animeId: string): Promise<void>;
+  getWatchlist?(updatedSince?: string): Promise<WatchlistItem[]>;
+  getHistory?(updatedSince?: string): Promise<HistoryItem[]>;
+  getMe?(): Promise<UserProfile>;
+
+  // Home del sito.
+  getLatestEpisodes?(limit?: number): Promise<LatestEpisode[]>;
+  getFeatured?(): Promise<AnimeSummary[]>;
+  getNews?(limit?: number): Promise<NewsItem[]>;
 }

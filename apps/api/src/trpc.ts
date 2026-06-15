@@ -8,7 +8,10 @@ import type { Logger } from './lib/logger';
 import type { AuthService } from './services/auth-service';
 import type { CatalogService } from './services/catalog-service';
 import type { ConfigService } from './services/config-service';
+import type { FavoritesService } from './services/favorites-service';
 import type { FollowService } from './services/follow-service';
+import type { HomeService } from './services/home-service';
+import type { ProfileService } from './services/profile-service';
 
 export interface Context {
   db: Db;
@@ -16,6 +19,9 @@ export interface Context {
   services: {
     catalog: CatalogService;
     follow: FollowService;
+    favorites: FavoritesService;
+    profile: ProfileService;
+    home: HomeService;
     config: ConfigService;
     auth: AuthService;
   };

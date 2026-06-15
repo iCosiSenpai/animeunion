@@ -1,5 +1,26 @@
 # Richiesta endpoint API — per Matteo (AnimeUnion Docker)
 
+> **Aggiornamento (lato app, in attesa deploy v1.0.3):** Matteo ha confermato le shape finali di
+> tutti gli endpoint qui sotto e li rilascia con la **v1.0.3** (non ancora deployata). L'app è già
+> stata integrata e tollera i 404 finché l'API non è online (le sezioni nuove restano vuote senza
+> errori). Shape finali confermate:
+>
+> - **A.1** `GET/POST /me/favorites`, `DELETE /me/favorites/:animeId` — R/W idempotente; la GET è
+>   arricchita con `slug/title/coverImage/addedAt`. POST→201 (o 200 `{ alreadyExists:true }`),
+>   404 se l'anime non esiste; DELETE→204.
+> - **A.2** Scelto il **polling** `GET /me/favorites?updatedSince=ISO8601` (no webhook, più adatto
+>   al self-hosting dietro NAT). Rate-limit 120 req/min per token.
+> - **A.3** `GET /me/watchlist` e `GET /me/cronologia` — **sola lettura**, con `?updatedSince=`.
+>   watchlist: `{ animeId, slug, status, updatedAt }` (`PLAN_TO_WATCH|WATCHING|ON_HOLD|COMPLETED|DROPPED`).
+>   cronologia: `{ animeId, slug, episodeNumber, watchedAt, completed }` (max 1000). Nota: essendo
+>   sola lettura, i cambi di stato fatti nell'app restano locali e non si propagano al sito.
+> - **A.4** `GET /me` → `{ id, username, email, avatarUrl, role, createdAt }`.
+> - **B.1** `GET /ultimi-episodi?limit=24` → `{ animeId, slug, title, coverImage, episodeNumber, language, releasedAt }`.
+> - **B.2** `GET /in-evidenza` → `{ data: AnimeSummary[] }`.
+> - **B.3** `GET /news?limit=5` → `{ title, url, slug, image, excerpt, publishedAt }`.
+>
+> ---
+
 > Ciao Matteo! L'app ufficiale affiliata (AnimeUnion Docker) sta venendo bene: login,
 > catalogo, dettaglio, episodi con i link video, calendario e generi funzionano già con gli
 > endpoint `integration` che ci hai dato. Grazie davvero.

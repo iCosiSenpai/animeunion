@@ -3,6 +3,7 @@ import {
   animeTypeSchema,
   languageSchema,
   seasonSchema,
+  serverWatchStatusSchema,
 } from '@animeunion/shared';
 import { z } from 'zod';
 
@@ -159,6 +160,91 @@ export const apiLoginResponseSchema = z.object({
 export const apiStatsSchema = z.object({
   totalAnime: z.number().int(),
   totalEpisodes: z.number().int(),
+});
+
+// --- Dati utente del sito (`/me/*`) e home (v1.0.3) ---
+
+export const apiFavoriteSchema = z.object({
+  animeId: z.string(),
+  slug: z.string(),
+  title: z.string(),
+  coverImage: nullableString,
+  addedAt: z.string(),
+});
+
+export const apiFavoritesResponseSchema = z.object({
+  data: z.array(apiFavoriteSchema).default([]),
+});
+
+// POST /me/favorites — 201 { ok, animeId, addedAt } oppure 200 { ok, alreadyExists: true }
+export const apiFavoriteAddResponseSchema = z.object({
+  ok: z.boolean().default(true),
+  alreadyExists: z.boolean().default(false),
+  animeId: z.string().optional(),
+  addedAt: z.string().optional(),
+});
+
+export const apiWatchlistItemSchema = z.object({
+  animeId: z.string(),
+  slug: z.string(),
+  status: serverWatchStatusSchema,
+  updatedAt: z.string(),
+});
+
+export const apiWatchlistResponseSchema = z.object({
+  data: z.array(apiWatchlistItemSchema).default([]),
+});
+
+export const apiHistoryItemSchema = z.object({
+  animeId: z.string(),
+  slug: z.string(),
+  episodeNumber: z.number().int(),
+  watchedAt: z.string(),
+  completed: z.boolean().default(false),
+});
+
+export const apiHistoryResponseSchema = z.object({
+  data: z.array(apiHistoryItemSchema).default([]),
+});
+
+export const apiMeSchema = z.object({
+  id: z.string(),
+  username: z.string(),
+  email: z.string(),
+  avatarUrl: nullableString,
+  role: nullableString,
+  createdAt: z.string(),
+});
+
+export const apiLatestEpisodeSchema = z.object({
+  animeId: z.string(),
+  slug: z.string(),
+  title: z.string(),
+  coverImage: nullableString,
+  episodeNumber: z.number().int(),
+  language: languageSchema,
+  releasedAt: z.string(),
+});
+
+export const apiLatestEpisodesResponseSchema = z.object({
+  data: z.array(apiLatestEpisodeSchema).default([]),
+});
+
+export const apiFeaturedResponseSchema = z.object({
+  data: z.array(apiAnimeSummarySchema).default([]),
+});
+
+export const apiNewsItemSchema = z.object({
+  title: z.string(),
+  url: z.string(),
+  slug: z.string(),
+  image: nullableString,
+  excerpt: nullableString,
+  publishedAt: z.string(),
+});
+
+export const apiNewsResponseSchema = z.object({
+  data: z.array(apiNewsItemSchema).default([]),
 });
 
 export type ApiAnimeSummary = z.infer<typeof apiAnimeSummarySchema>;

@@ -25,4 +25,7 @@ export const followRouter = router({
   updateStatus: publicProcedure
     .input(followUpdateStatusInputSchema)
     .mutation(({ ctx, input }) => ctx.services.follow.updateStatus(input)),
+
+  // Import manuale dei preferiti dal sito (oltre allo scheduler automatico).
+  importFavorites: publicProcedure.mutation(({ ctx }) => ctx.services.favorites.importFromSite()),
 });

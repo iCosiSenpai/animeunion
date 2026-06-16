@@ -4,13 +4,21 @@ import { AnimeGrid } from '@/components/anime/anime-grid';
 import { FollowButton } from '@/components/anime/follow-button';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { trpc } from '@/lib/trpc';
 import type { AnimeDetail as AnimeDetailType, EpisodeSummary, Language } from '@animeunion/shared';
-import { Download, Star } from 'lucide-react';
+import { ChevronDown, Download, Star } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
+import { toast } from 'sonner';
 
 const STATUS_LABELS: Record<string, string> = {
   ONGOING: 'In corso',
@@ -27,6 +35,8 @@ interface GroupedEpisode {
   number: number;
   title: string | null;
   languages: Language[];
+  /** Mappa lingua -> episodeFileId (per il download). */
+  fileIds: Partial<Record<Language, string>>;
 }
 
 function groupEpisodes(episodes: EpisodeSummary[]): GroupedEpisode[] {
@@ -37,11 +47,13 @@ function groupEpisodes(episodes: EpisodeSummary[]): GroupedEpisode[] {
       if (!existing.languages.includes(episode.language)) {
         existing.languages.push(episode.language);
       }
+      existing.fileIds[episode.language] = episode.id;
     } else {
       map.set(episode.number, {
         number: episode.number,
         title: episode.titleIta ?? episode.title,
         languages: [episode.language],
+        fileIds: { [episode.language]: episode.id },
       });
     }
   }
@@ -170,32 +182,110 @@ function Hero({
 
 function EpisodeList({ anime }: { anime: AnimeDetailType }) {
   const grouped = groupEpisodes(anime.episodes);
+  const utils = trpc.useUtils();
+  const addEpisodeMutation = trpc.download.addEpisode.useMutation({
+    onSuccess: (res) => {
+      toast.success(`Ep accodato (#${res.queueId.slice(0, 8)})`);
+      void utils.download.queue.invalidate();
+    },
+    onError: () => toast.error('Impossibile accodare il download'),
+  });
+  const addAllMutation = trpc.download.addAll.useMutation({
+    onSuccess: (res) => {
+      toast.success(`${res.enqueued} episodi accodati`);
+      void utils.download.queue.invalidate();
+    },
+    onError: () => toast.error('Impossibile accodare i download'),
+  });
+
+  function onDownloadEpisode(episodeFileId: string) {
+    addEpisodeMutation.mutate({ episodeFileId });
+  }
+
+  function onDownloadAll(language?: Language) {
+    addAllMutation.mutate({ animeId: anime.id, language });
+  }
+
   if (grouped.length === 0) {
     return <p className="text-sm text-muted-foreground">Nessun episodio disponibile.</p>;
   }
   return (
-    <div className="divide-y rounded-lg border">
-      {grouped.map((episode) => (
-        <div key={episode.number} className="flex items-center gap-3 p-3">
-          <span className="w-10 shrink-0 text-sm font-medium text-muted-foreground">
-            {episode.number}
-          </span>
-          <span className="flex-1 truncate text-sm">
-            {episode.title ?? `Episodio ${episode.number}`}
-          </span>
-          <div className="flex shrink-0 gap-1">
-            {episode.languages.map((language) => (
-              <Badge key={language} variant="secondary">
-                {LANGUAGE_LABELS[language]}
-              </Badge>
-            ))}
+    <div className="space-y-3">
+      <div className="flex justify-end">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1"
+              disabled={addAllMutation.isPending}
+            >
+              <Download className="h-4 w-4" />
+              Scarica tutti mancanti
+              <ChevronDown className="h-3 w-3 opacity-60" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={() => onDownloadAll()}>Qualsiasi lingua</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => onDownloadAll('SUB_ITA')}>
+              Solo SUB ITA
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => onDownloadAll('DUB_ITA')}>
+              Solo DUB ITA
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+      <div className="divide-y rounded-lg border">
+        {grouped.map((episode) => (
+          <div key={episode.number} className="flex items-center gap-3 p-3">
+            <span className="w-10 shrink-0 text-sm font-medium text-muted-foreground">
+              {episode.number}
+            </span>
+            <span className="flex-1 truncate text-sm">
+              {episode.title ?? `Episodio ${episode.number}`}
+            </span>
+            <div className="flex shrink-0 gap-1">
+              {episode.languages.map((language) => (
+                <Badge key={language} variant="secondary">
+                  {LANGUAGE_LABELS[language]}
+                </Badge>
+              ))}
+            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0 gap-1"
+                  disabled={addEpisodeMutation.isPending}
+                >
+                  <Download className="h-4 w-4" />
+                  Scarica
+                  <ChevronDown className="h-3 w-3 opacity-60" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {episode.languages.flatMap((language, idx) => {
+                  const item = (
+                    <DropdownMenuItem
+                      key={`lang-${language}`}
+                      onSelect={() => {
+                        const id = episode.fileIds[language];
+                        if (id) onDownloadEpisode(id);
+                      }}
+                    >
+                      {LANGUAGE_LABELS[language]}
+                    </DropdownMenuItem>
+                  );
+                  if (idx === 0) return [item];
+                  return [<DropdownMenuSeparator key={`sep-${language}`} />, item];
+                })}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
-          <Button variant="outline" size="sm" disabled className="shrink-0 gap-1">
-            <Download className="h-4 w-4" />
-            Scarica
-          </Button>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }

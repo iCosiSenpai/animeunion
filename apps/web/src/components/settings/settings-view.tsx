@@ -121,15 +121,12 @@ export function SettingsView() {
         </p>
       </div>
 
-      <Section title="Download">
+      <Section title="Libreria">
         <Field
-          label="Cartella di download"
-          hint="Percorso dove salvare gli episodi (dentro il container)."
+          label="Cartella della libreria"
+          hint="Percorso dove salvare gli episodi (volume Docker, es. /data/anime montato sul tuo NAS)."
         >
-          <Input
-            value={draft.downloadPath}
-            onChange={(e) => update('downloadPath', e.target.value)}
-          />
+          <Input value={draft.animePath} onChange={(e) => update('animePath', e.target.value)} />
         </Field>
         <Field label="Download simultanei" hint="Quanti episodi scaricare in parallelo (1-5).">
           <Select

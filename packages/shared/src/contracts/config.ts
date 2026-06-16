@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { languageSchema, namingFormatSchema } from './enums';
 
 export const appConfigSchema = z.object({
-  downloadPath: z.string().default('/anime'),
+  animePath: z.string().default('/data/anime'),
   language: languageSchema.default('SUB_ITA'),
   namingFormat: namingFormatSchema.default('SXXEXX'),
   maxConcurrent: z.number().int().min(1).max(5).default(2),

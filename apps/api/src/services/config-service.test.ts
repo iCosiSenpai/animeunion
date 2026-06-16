@@ -44,13 +44,13 @@ describe('ConfigService', () => {
       .values({ key: 'chiave_legacy', value: '"x"', updatedAt: timestamp })
       .run();
     db.insert(schema.config)
-      .values({ key: 'downloadPath', value: 'non-json{', updatedAt: timestamp })
+      .values({ key: 'animePath', value: 'non-json{', updatedAt: timestamp })
       .run();
 
     const service = createConfigService({ db });
     const all = service.getAll();
 
-    expect(all.downloadPath).toBe('/anime');
+    expect(all.animePath).toBe('/data/anime');
     expect('chiave_legacy' in all).toBe(false);
   });
 });

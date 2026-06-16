@@ -66,9 +66,16 @@ export async function downloadToFile(options: DownloadOptions): Promise<Download
     );
   }
 
-  const contentType = response.headers['content-type'] ?? null;
+  const contentType: string | null = (() => {
+    const raw = response.headers['content-type'];
+    if (raw == null) {
+      return null;
+    }
+    return Array.isArray(raw) ? (raw[0] ?? null) : raw;
+  })();
   const totalHeader = response.headers['content-length'];
-  const totalBytes = totalHeader ? Number.parseInt(totalHeader, 10) : null;
+  const totalHeaderValue = Array.isArray(totalHeader) ? totalHeader[0] : totalHeader;
+  const totalBytes = totalHeaderValue ? Number.parseInt(totalHeaderValue, 10) : null;
 
   if (onProgress) {
     onProgress({ bytesDownloaded: 0, totalBytes });

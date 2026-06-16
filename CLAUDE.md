@@ -21,20 +21,33 @@ Shared: `packages/shared` (zod + interfaccia `AnimeSource`). Video: ffmpeg-stati
 Scheduler: setInterval (node-cron non usato). Lint: Biome. Test: Vitest (+ Playwright in futuro).
 Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
 
-## Stato attuale (2026-06-16)
+## Stato attuale (2026-06-16, sera)
 
 **Fatto:**
 - Monorepo, CI (lint+typecheck+test), DB SQLite (10 tabelle), MockSource/ApiSource, rate-limiter.
 - Auth: email/password + **social login device flow** (Google/Discord) — `auth-service`, router `auth`.
 - Router lettura: catalog, episode, calendar, follow, config, stats + **home, library, profile**.
-- Integrazione **7 endpoint v1.0.3** (preferiti R/W + sync, watchlist, cronologia, profilo,
+- Integrazione **endpoint v1.0.3/1.1.x** (preferiti R/W, watchlist, cronologia, profilo,
   ultimi-episodi, in-evidenza, news) con scheduler di polling preferiti e auto-accodamento.
+  **Tutti LIVE al 2026-06-16 sera** (verificati con token reale: 12/13 rispondono, vedi sotto).
 - Frontend scoperta: home (con sezioni nuove), catalogo, dettaglio, follows, calendar, about,
   badge profilo navbar, SocialLogin nella SetupScreen.
 
-**In sospeso / non live:**
-- Endpoint v1.0.3 + social **non ancora deployati** da Matteo (404 al 2026-06-16; shape confermate).
-  Verifica live + merge del branch `feat/integrazione-api-v103-matteo` quando saranno online (STEP 5).
+**Endpoint v1.0.3/1.1.0/1.1.1 verificati live (12/13, base path
+`https://api.animeunion.tv/api/v1/integration`):**
+- `POST /auth/login` → 200 + JWT
+- `POST /auth/social/{start,poll}` → 200, 4 stati (pending/slow_down/denied/expired/approved)
+- `GET /me/favorites?updatedSince=...` → 200 (polling con `?updatedSince=ISO8601` supportato)
+- `POST /me/favorites` (body `{animeId}`) → 200/201 (idempotente, 404 se anime inesistente)
+- `DELETE /me/favorites/{id}` → 204 (idempotente)
+- `GET /me/watchlist?updatedSince=...` → 200
+- `GET /me/cronologia?updatedSince=...` → 200 (max 1000 più recenti)
+- `GET /me` → 200 (profilo: id, username, email, avatarUrl, role, createdAt)
+- `GET /ultimi-episodi?limit=...` → 200
+- `GET /in-evidenza` → 200
+- `GET /news?limit=...` → 200
+- **Non deployato (404)**: `POST /me/favorites/sync` — non serve: GET + delta via `?updatedSince=`
+  coprono già "import iniziale + sync incrementale".
 
 **Manca (il "motore"):** download engine/worker, renamer, library scanner, e 3 pagine sono stub
 (`ComingSoon`): **Download, Libreria, Impostazioni**. `ffmpeg-static`/`node-cron` ancora inutilizzati.
@@ -42,16 +55,17 @@ Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
 ## Roadmap a step (verso v0.1.0)
 
 - [x] **STEP 0** — Questo `CLAUDE.md` come file unico; assorbito `CLAUDE_PROMPT.md`; `ROADMAP.md` → puntatore.
-- [x] **STEP 1** — Pagina **Impostazioni** cablata a `trpc.config` (Download, Pianificazione,
+- [ ] **STEP 1** — Pagina **Impostazioni** cablata a `trpc.config` (Download, Pianificazione,
       Catalogo+sync ora, Nomi file, Lingua, Tema). `language` resta SUB_ITA/DUB_ITA (il valore
       `BOTH` si valuterà nello STEP 2 col download engine).
 - [ ] **STEP 2** — **Download engine** (PLAN §S5): `ffmpeg-bridge`, `download-engine`,
       `download-service`, router `download`, scheduler per follow `watching`, pagina `/downloads`,
-      abilitare bottone Scarica nel dettaglio. Dipende dagli URL video reali di Matteo.
+      abilitare bottone Scarica nel dettaglio.
 - [ ] **STEP 3** — **Renamer + serie/stagione + fix sequel** (PLAN §S6): SXXEXX/NUMERIC, cartelle
       `sub-ita/`+`dub-ita/`, `seriesId`/`seasonNumber`, correzione rinumerazione sequel.
 - [ ] **STEP 4** — **Library scanner** + pagina `/library` (PLAN §S6).
-- [ ] **STEP 5** — Verifica **live** API (7 endpoint + social) con credenziali + **merge** integrazione.
+- [x] **STEP 5** — Verifica **live** API (12/13 endpoint + social) con credenziali reali ✅.
+      Da fare: **merge** del branch `feat/integrazione-api-v103-matteo` → `main` quando decidi.
 - [ ] **STEP 6** — Docker multi-arch + PWA + Web Push (PLAN §S7).
 - [ ] **STEP 7** — Test E2E (Playwright) + CHANGELOG + DEPLOYMENT + release v0.1.0 (PLAN §S8).
 
@@ -59,8 +73,10 @@ Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
 
 - **Workspace shared è una COPIA**, non un symlink: dopo modifiche a `packages/shared` esegui
   `npm install` prima di `npm run typecheck`/dev, altrimenti l'API non vede i nuovi export.
-- **API live**: gli endpoint v1.0.3 + social erano 404 al 2026-06-16. Il codice tollera i 404
-  (degradazione graziosa). Base path: `https://api.animeunion.tv/api/v1/integration`.
+- **API live (al 2026-06-16 sera)**: i 12 endpoint v1.0.3/1.1.x sono tutti dispiegati e rispondono con
+  token reale. Solo `POST /me/favorites/sync` non è deployato (non necessario). La shape dei
+  contratti `packages/shared/src/contracts/me.ts` combacia con le risposte reali. Base path:
+  `https://api.animeunion.tv/api/v1/integration`. Rate limit: 120 req/min per token.
 - **Branch attivo**: `feat/integrazione-api-v103-matteo` (integrazione) → da cui parte
   `feat/settings-e-motore` (lavoro corrente). `main` non ha ancora questo lavoro.
 - **Credenziali**: email/password in `.env` (gitignored); token in SQLite (tabella `auth`). Mai

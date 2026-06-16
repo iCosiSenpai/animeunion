@@ -41,3 +41,6 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 .idea/
+
+# Script di debug e verifica live (es. token catturati, body di test)
+.scratch/

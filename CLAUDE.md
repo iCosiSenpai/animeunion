@@ -42,8 +42,9 @@ Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
 ## Roadmap a step (verso v0.1.0)
 
 - [x] **STEP 0** — Questo `CLAUDE.md` come file unico; assorbito `CLAUDE_PROMPT.md`; `ROADMAP.md` → puntatore.
-- [ ] **STEP 1** — Pagina **Impostazioni** cablata a `trpc.config` (Download, Pianificazione,
-      Catalogo+sync ora, Nomi file, Lingua, Tema). ← in corso
+- [x] **STEP 1** — Pagina **Impostazioni** cablata a `trpc.config` (Download, Pianificazione,
+      Catalogo+sync ora, Nomi file, Lingua, Tema). `language` resta SUB_ITA/DUB_ITA (il valore
+      `BOTH` si valuterà nello STEP 2 col download engine).
 - [ ] **STEP 2** — **Download engine** (PLAN §S5): `ffmpeg-bridge`, `download-engine`,
       `download-service`, router `download`, scheduler per follow `watching`, pagina `/downloads`,
       abilitare bottone Scarica nel dettaglio. Dipende dagli URL video reali di Matteo.

@@ -239,24 +239,6 @@ export function SettingsView() {
         </Field>
       </Section>
 
-      <Section title="Avanzate">
-        <Field label="Rate limit (ms)" hint="Pausa minima tra le richieste all'API di AnimeUnion.">
-          <Input
-            type="number"
-            min={0}
-            className="w-32"
-            value={draft.rateLimitMs}
-            onChange={(e) => update('rateLimitMs', Number(e.target.value))}
-          />
-        </Field>
-        <Field label="Schedule cron" hint="Espressione cron per i job pianificati.">
-          <Input
-            value={draft.cronSchedule}
-            onChange={(e) => update('cronSchedule', e.target.value)}
-          />
-        </Field>
-      </Section>
-
       <Section title="Aspetto">
         <Field label="Tema" hint="Chiaro, scuro o come il sistema.">
           <Select value={theme ?? 'system'} onValueChange={setTheme}>

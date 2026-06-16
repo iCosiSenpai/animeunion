@@ -3,11 +3,9 @@ import { languageSchema, namingFormatSchema } from './enums';
 
 export const appConfigSchema = z.object({
   downloadPath: z.string().default('/anime'),
-  cronSchedule: z.string().default('0 */6 * * *'),
   language: languageSchema.default('SUB_ITA'),
   namingFormat: namingFormatSchema.default('SXXEXX'),
   maxConcurrent: z.number().int().min(1).max(5).default(2),
-  rateLimitMs: z.number().int().positive().default(1000),
   catalogSyncHours: z.number().int().positive().default(24),
   autoDownload: z.boolean().default(true),
   favoritesSyncMinutes: z.number().int().positive().default(10),

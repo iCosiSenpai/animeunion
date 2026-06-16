@@ -49,20 +49,25 @@ Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
 - **Non deployato (404)**: `POST /me/favorites/sync` — non serve: GET + delta via `?updatedSince=`
   coprono già "import iniziale + sync incrementale".
 
-**Manca (il "motore"):** download engine/worker, renamer, library scanner, e 3 pagine sono stub
-(`ComingSoon`): **Download, Libreria, Impostazioni**. `ffmpeg-static`/`node-cron` ancora inutilizzati.
+**Manca:** renamer "full" (seasonNumber, cartelle sub-ita/dub-ita, sanitizzazione avanzata),
+library scanner, e 1 pagina è stub (`ComingSoon`): **Libreria**. `ffmpeg-static`/`node-cron`
+ancora inutilizzati (rinviati: Matteo conferma MP4 diretto, niente HLS; scheduler custom).
 
 ## Roadmap a step (verso v0.1.0)
 
 - [x] **STEP 0** — Questo `CLAUDE.md` come file unico; assorbito `CLAUDE_PROMPT.md`; `ROADMAP.md` → puntatore.
-- [ ] **STEP 1** — Pagina **Impostazioni** cablata a `trpc.config` (Download, Pianificazione,
-      Catalogo+sync ora, Nomi file, Lingua, Tema). `language` resta SUB_ITA/DUB_ITA (il valore
-      `BOTH` si valuterà nello STEP 2 col download engine).
-- [ ] **STEP 2** — **Download engine** (PLAN §S5): `ffmpeg-bridge`, `download-engine`,
-      `download-service`, router `download`, scheduler per follow `watching`, pagina `/downloads`,
-      abilitare bottone Scarica nel dettaglio.
+- [x] **STEP 1** — Pagina **Impostazioni** cablata a `trpc.config` (Download, Pianificazione,
+      Catalogo+sync ora, Nomi file, Lingua, Tema). `animePath` default `/data/anime` (rinominato
+      da `downloadPath`).
+- [x] **STEP 2** — **Download engine completo**: utility FS (`download-fs`), HTTP downloader
+      MP4 (`http-downloader` con undici), worker event-driven con FSM (queued→downloading→
+      processing→completed + failed/cancelled + retry + backoff), service tRPC-friendly,
+      router `download` (7 procedure), scheduler per follow `watching` (auto-enqueue 30min),
+      pagina `/downloads` con polling 1.5s e bottone Scarica per episodio nel dettaglio.
+      `seasonNumber` hardcoded a 1 (la logica sequel/season e' rimandata a STEP 3).
+      Test: 105 verdi (12 file, +38 nuovi per il motore).
 - [ ] **STEP 3** — **Renamer + serie/stagione + fix sequel** (PLAN §S6): SXXEXX/NUMERIC, cartelle
-      `sub-ita/`+`dub-ita/`, `seriesId`/`seasonNumber`, correzione rinumerazione sequel.
+      `sub-ita/`+`dub-ita/`, `seriesId`/`seasonNumber` reale, correzione rinumerazione sequel.
 - [ ] **STEP 4** — **Library scanner** + pagina `/library` (PLAN §S6).
 - [x] **STEP 5** — Verifica **live** API (12/13 endpoint + social) con credenziali reali ✅.
       Da fare: **merge** del branch `feat/integrazione-api-v103-matteo` → `main` quando decidi.
@@ -82,6 +87,11 @@ Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
 - **Credenziali**: email/password in `.env` (gitignored); token in SQLite (tabella `auth`). Mai
   segreti nel codice/compose. L'utente usa l'account `lookatale95@gmail.com`.
 - **Verifica sempre**: `npm run lint` + `npm run typecheck` + `npm run test` verdi prima di committare.
+- **Download engine**: il file MP4 viene scaricato in `<target>.part.<queueId>` e rinominato
+  atomicamente (`fs.rename`) al path finale `SXXEXY.<lang>.mp4` SUBITO dopo il singolo download.
+  Niente finestra `ep_NNN.mp4` esposta a Jellyfin/Plex. `seasonNumber=1` hardcoded (STEP 3).
+- **Worker è event-driven**: `tryStartNext()` su enqueue + tick di sicurezza 60s. `maxConcurrent`
+  letto da config ad ogni decisione (cambio live). `AbortController` per cancel su downloading.
 - Memoria progetto (per Claude): `~/.claude/projects/f--dev-animeunion/memory/` (vedi `MEMORY.md`).
 
 ## Regole Ferree

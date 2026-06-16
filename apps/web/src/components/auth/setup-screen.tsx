@@ -8,6 +8,7 @@ import { type AuthLoginInput, authLoginInputSchema } from '@animeunion/shared';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
+import { SocialLogin } from './social-login';
 
 export function SetupScreen() {
   const utils = trpc.useUtils();
@@ -72,12 +73,14 @@ export function SetupScreen() {
           </Button>
         </form>
 
+        <SocialLogin />
+
         <p className="text-center text-xs text-muted-foreground">
           Non hai un account?{' '}
           <a
             href="https://animeunion.tv/registrati"
             target="_blank"
-            rel="noreferrer"
+            rel="noopener noreferrer"
             className="font-medium underline underline-offset-4"
           >
             Registrati su animeunion.tv

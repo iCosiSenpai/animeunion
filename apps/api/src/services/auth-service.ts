@@ -1,10 +1,15 @@
+import type { SocialPollOutput, SocialProvider, SocialStartOutput } from '@animeunion/shared';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Db } from '../db';
 import { schema } from '../db';
 import { AuthError, createHttpClient } from '../lib/http-client';
 import type { Logger } from '../lib/logger';
-import { apiLoginResponseSchema } from '../sources/api-schemas';
+import {
+  apiLoginResponseSchema,
+  apiSocialPollSchema,
+  apiSocialStartSchema,
+} from '../sources/api-schemas';
 
 const AUTH_ROW_ID = 'default';
 const EXPIRY_MARGIN_MS = 24 * 60 * 60 * 1000;
@@ -39,9 +44,17 @@ export interface AuthStatus {
 export interface AuthService {
   getToken(): Promise<string | null>;
   loginWithCredentials(email: string, password: string): Promise<AuthStatus>;
+  socialStart(provider: SocialProvider): Promise<SocialStartOutput>;
+  socialPoll(): Promise<SocialPollOutput>;
   invalidateAndRelogin(): Promise<void>;
   logout(): void;
   status(): AuthStatus;
+}
+
+interface PendingSocialFlow {
+  deviceCode: string;
+  expiresAt: Date;
+  interval: number;
 }
 
 function decodeJwtExpiry(token: string): Date | null {
@@ -65,6 +78,9 @@ export function createAuthService(options: AuthServiceOptions): AuthService {
   let cachedToken: string | null = null;
   let cachedExpires: Date | null = null;
   let loginInFlight: Promise<string> | null = null;
+  // L'app e mono-utente: un solo device flow social pendente alla volta. Il device_code resta qui
+  // (segreto), non viene mai esposto al client.
+  let pendingSocial: PendingSocialFlow | null = null;
 
   function isValid(expires: Date | null): boolean {
     return expires !== null && expires.getTime() > now().getTime() + EXPIRY_MARGIN_MS;
@@ -176,6 +192,52 @@ export function createAuthService(options: AuthServiceOptions): AuthService {
     async loginWithCredentials(email: string, password: string): Promise<AuthStatus> {
       await doLogin({ email, password }, true);
       return buildStatus();
+    },
+
+    async socialStart(provider: SocialProvider): Promise<SocialStartOutput> {
+      const raw = await http.post<unknown>('/auth/social/start', { provider });
+      const parsed = apiSocialStartSchema.parse(raw);
+      pendingSocial = {
+        deviceCode: parsed.device_code,
+        expiresAt: new Date(now().getTime() + parsed.expires_in * 1000),
+        interval: parsed.interval,
+      };
+      return {
+        userCode: parsed.user_code,
+        verificationUri: parsed.verification_uri,
+        verificationUriComplete: parsed.verification_uri_complete,
+        expiresIn: parsed.expires_in,
+        interval: parsed.interval,
+      };
+    },
+
+    async socialPoll(): Promise<SocialPollOutput> {
+      if (!pendingSocial || pendingSocial.expiresAt.getTime() <= now().getTime()) {
+        pendingSocial = null;
+        return { status: 'expired', auth: null };
+      }
+      const raw = await http.post<unknown>('/auth/social/poll', {
+        device_code: pendingSocial.deviceCode,
+      });
+      const parsed = apiSocialPollSchema.parse(raw);
+      if (parsed.status === 'approved' && parsed.token) {
+        const fallbackMs = parsed.expires_in ? parsed.expires_in * 1000 : FALLBACK_TOKEN_TTL_MS;
+        const expires = decodeJwtExpiry(parsed.token) ?? new Date(now().getTime() + fallbackMs);
+        // Token social: stesso uso di quello email/password, ma niente password da memorizzare.
+        persist(parsed.token, expires, parsed.user);
+        cachedToken = parsed.token;
+        cachedExpires = expires;
+        pendingSocial = null;
+        options.logger.info(
+          { expiresAt: expires.toISOString() },
+          'Login social AnimeUnion riuscito',
+        );
+        return { status: 'approved', auth: buildStatus() };
+      }
+      if (parsed.status === 'denied' || parsed.status === 'expired') {
+        pendingSocial = null;
+      }
+      return { status: parsed.status, auth: null };
     },
 
     async invalidateAndRelogin(): Promise<void> {

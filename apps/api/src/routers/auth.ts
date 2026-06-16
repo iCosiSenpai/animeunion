@@ -1,4 +1,10 @@
-import { authLoginInputSchema, authStatusSchema } from '@animeunion/shared';
+import {
+  authLoginInputSchema,
+  authStatusSchema,
+  socialPollOutputSchema,
+  socialStartInputSchema,
+  socialStartOutputSchema,
+} from '@animeunion/shared';
 import { publicProcedure, router } from '../trpc';
 
 export const authRouter = router({
@@ -17,6 +23,15 @@ export const authRouter = router({
     .mutation(({ ctx, input }) =>
       ctx.services.auth.loginWithCredentials(input.email, input.password),
     ),
+
+  socialStart: publicProcedure
+    .input(socialStartInputSchema)
+    .output(socialStartOutputSchema)
+    .mutation(({ ctx, input }) => ctx.services.auth.socialStart(input.provider)),
+
+  socialPoll: publicProcedure
+    .output(socialPollOutputSchema)
+    .mutation(({ ctx }) => ctx.services.auth.socialPoll()),
 
   logout: publicProcedure.mutation(({ ctx }) => {
     ctx.services.auth.logout();

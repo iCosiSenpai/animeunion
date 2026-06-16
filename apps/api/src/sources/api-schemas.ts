@@ -157,6 +157,24 @@ export const apiLoginResponseSchema = z.object({
   user: z.unknown(),
 });
 
+// --- Social login device flow (v1.1.x) ---
+
+export const apiSocialStartSchema = z.object({
+  device_code: z.string(),
+  user_code: z.string(),
+  verification_uri: z.string(),
+  verification_uri_complete: z.string(),
+  expires_in: z.number().int(),
+  interval: z.number().int(),
+});
+
+export const apiSocialPollSchema = z.object({
+  status: z.enum(['pending', 'slow_down', 'denied', 'expired', 'approved']),
+  token: z.string().optional(),
+  expires_in: z.number().int().optional(),
+  user: z.unknown().optional(),
+});
+
 export const apiStatsSchema = z.object({
   totalAnime: z.number().int(),
   totalEpisodes: z.number().int(),

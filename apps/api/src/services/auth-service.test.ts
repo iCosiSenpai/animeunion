@@ -197,6 +197,62 @@ describe('AuthService', () => {
     expect(service.status().authenticated).toBe(false);
   });
 
+  it('social: start memorizza il flow (senza esporre il device_code) e poll approved persiste il token', async () => {
+    const db = createTestDb();
+    pool().intercept({ path: '/auth/social/start', method: 'POST' }).reply(
+      200,
+      {
+        device_code: 'dev-secret',
+        user_code: 'WXYZ-2345',
+        verification_uri: 'https://api.test/authorize',
+        verification_uri_complete: 'https://api.test/authorize?code=WXYZ-2345',
+        expires_in: 600,
+        interval: 5,
+      },
+      JSON_HEADERS,
+    );
+
+    const service = makeService(db, { email: undefined, password: undefined });
+    const startRes = await service.socialStart('google');
+
+    expect(startRes.userCode).toBe('WXYZ-2345');
+    expect(startRes.verificationUriComplete).toContain('WXYZ-2345');
+    expect(startRes).not.toHaveProperty('deviceCode');
+
+    pool()
+      .intercept({ path: '/auth/social/poll', method: 'POST' })
+      .reply(200, { status: 'pending' }, JSON_HEADERS);
+    expect((await service.socialPoll()).status).toBe('pending');
+
+    const jwt = makeJwt(new Date(Date.now() + 60 * 24 * 60 * 60 * 1000));
+    pool()
+      .intercept({ path: '/auth/social/poll', method: 'POST' })
+      .reply(
+        200,
+        {
+          status: 'approved',
+          token: jwt,
+          expires_in: 5184000,
+          user: { email: 'g@test.it', name: 'Goo' },
+        },
+        JSON_HEADERS,
+      );
+    const approved = await service.socialPoll();
+
+    expect(approved.status).toBe('approved');
+    expect(approved.auth?.authenticated).toBe(true);
+    const row = db.select().from(schema.auth).where(eq(schema.auth.id, 'default')).get();
+    expect(row?.accessToken).toBe(jwt);
+    expect(row?.userEmail).toBe('g@test.it');
+    // token gia in cache: nessuna nuova richiesta
+    expect(await service.getToken()).toBe(jwt);
+  });
+
+  it('social: poll senza flow attivo torna expired', async () => {
+    const service = makeService(createTestDb(), { email: undefined, password: undefined });
+    expect(await service.socialPoll()).toEqual({ status: 'expired', auth: null });
+  });
+
   it('status riflette lo stato di autenticazione', async () => {
     const db = createTestDb();
     const service = makeService(db);

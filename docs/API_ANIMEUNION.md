@@ -451,5 +451,31 @@ Rate-limit: tutti i GET rientrano nei 120 req/min per token.
 
 ---
 
-*Documento per Matteo — aggiornato il 2026-06-15. Allineato a `PLAN.md` §5–§7 e
-`packages/shared/src/anime-source.ts`. §12 = endpoint v1.0.3 (dati utente + home).*
+## 13. Social login — device flow (v1.1.x)
+
+> Per gli utenti registrati con **Google/Discord** (senza password, non possono usare
+> `/integration/auth/login`). Pattern device flow (`gh auth login` / smart-TV). Integrato lato app
+> in `auth-service` + UI `SetupScreen`. Il `device_code` resta segreto sul backend, mai esposto al
+> browser. Base path: `…/api/v1/integration/auth/social`.
+
+```
+POST /auth/social/start   body { provider: "google" | "discord" }
+  200 -> { device_code (segreto), user_code, verification_uri,
+           verification_uri_complete, expires_in, interval }
+  400 -> provider non abilitato
+
+POST /auth/social/poll    body { device_code }   (ogni `interval` secondi)
+  -> { status: "pending" }                         continua
+   | { status: "slow_down" }                       allarga l'intervallo
+   | { status: "denied" } | { status: "expired" }  ricomincia da /start
+   | { status: "approved", token, expires_in: 5184000, user: {...} }
+```
+
+Note: pairing valido 10 min; token **one-time sul poll** (consegnato solo alla prima `approved`);
+il token è identico a quello email/password (Bearer, 60 gg), quindi il resto dell'integrazione non
+cambia — email/password e social sono **alternativi** per ottenere il token.
+
+---
+
+*Documento per Matteo — aggiornato il 2026-06-16. Allineato a `PLAN.md` §5–§7 e
+`packages/shared/src/anime-source.ts`. §12 = endpoint v1.0.3 (dati utente + home); §13 = social login.*

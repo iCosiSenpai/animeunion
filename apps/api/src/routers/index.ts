@@ -3,6 +3,7 @@ import { authRouter } from './auth';
 import { calendarRouter } from './calendar';
 import { catalogRouter } from './catalog';
 import { configRouter } from './config';
+import { downloadRouter } from './download';
 import { episodeRouter } from './episode';
 import { followRouter } from './follow';
 import { homeRouter } from './home';
@@ -20,6 +21,7 @@ export const appRouter = router({
   library: libraryRouter,
   profile: profileRouter,
   config: configRouter,
+  download: downloadRouter,
   stats: statsRouter,
 });
 

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createAuthService } from '../services/auth-service';
 import { createCatalogService } from '../services/catalog-service';
 import { createConfigService } from '../services/config-service';
+import { createDownloadService } from '../services/download-service';
 import { createFavoritesService } from '../services/favorites-service';
 import { createFollowService } from '../services/follow-service';
 import { createHomeService } from '../services/home-service';
@@ -22,10 +23,23 @@ function makeCaller() {
   const profile = createProfileService({ source, logger: testLogger });
   const home = createHomeService({ source, logger: testLogger });
   const auth = createAuthService({ db, baseUrl: 'https://api.test', logger: testLogger });
+  const download = createDownloadService({
+    db,
+    worker: {
+      enqueue: vi.fn().mockReturnValue('q-test-1'),
+      cancel: vi.fn().mockReturnValue(false),
+      retry: vi.fn().mockReturnValue(false),
+      start: vi.fn(),
+      stop: vi.fn(),
+    } as never,
+    catalog,
+    config,
+    logger: testLogger,
+  });
   const ctx: Context = {
     db,
     source,
-    services: { catalog, follow, favorites, profile, home, config, auth },
+    services: { catalog, follow, favorites, profile, home, config, auth, download },
     logger: testLogger,
   };
   return { caller: createCallerFactory(appRouter)(ctx), ctx };
@@ -132,5 +146,34 @@ describe('appRouter (integrazione)', () => {
     expect(stats.totalAnime).toBe(24);
     expect(stats.downloadedEpisodes).toBe(0);
     expect(stats.downloadQueueSize).toBe(0);
+  });
+
+  it('download.queue/addEpisode/cancel passano dal router al service', async () => {
+    const { caller } = makeCaller();
+    const search = await caller.catalog.search({ query: '' });
+    const anime = search.data[0];
+    expect(anime).toBeDefined();
+    if (!anime) return;
+
+    const episodes = await caller.episode.byAnime({ animeSlug: anime.slug });
+    const ep = episodes[0];
+    expect(ep).toBeDefined();
+    if (!ep) return;
+
+    // La queue parte vuota.
+    const empty = await caller.download.queue();
+    expect(empty).toEqual([]);
+
+    // Aggiungo un episodio. Il service delega al worker mock che ritorna un id.
+    const added = await caller.download.addEpisode({ episodeFileId: ep.id });
+    expect(added.queueId).toBe('q-test-1');
+
+    // Cancel su un id non esistente ritorna false.
+    const c = await caller.download.cancel({ queueId: 'non-esiste' });
+    expect(c.cancelled).toBe(false);
+
+    // clearCompleted ritorna il numero di righe terminali rimosse.
+    const cleared = await caller.download.clearCompleted();
+    expect(cleared.removed).toBe(0);
   });
 });

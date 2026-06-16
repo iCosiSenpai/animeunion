@@ -30,6 +30,10 @@ export interface DownloadQueueItem {
 }
 
 export interface DownloadService {
+  /** Accende il worker event-driven (chiamato dallo scheduler all'avvio). */
+  start(): void;
+  /** Ferma il worker: interrompe i job in volo e cancella i tick (chiamato dallo scheduler in shutdown). */
+  stop(): void;
   /** Accoda un singolo episode file. Ritorna l'id del job in coda. */
   addEpisode(input: { episodeFileId: string; priority?: number }): string;
   /** Accoda tutti gli episode file non ancora scaricati di un anime (una sola stagione, Regola #13). */
@@ -83,6 +87,14 @@ export function createDownloadService(deps: DownloadServiceDeps): DownloadServic
   }
 
   return {
+    start(): void {
+      worker.start();
+    },
+
+    stop(): void {
+      worker.stop();
+    },
+
     addEpisode({ episodeFileId, priority }) {
       const existing = alreadyInQueue(episodeFileId);
       if (existing) {

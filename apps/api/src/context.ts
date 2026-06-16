@@ -2,10 +2,12 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { type Env, env } from './config/env';
 import { createDb, runMigrations } from './db';
+import { createDownloadWorker } from './lib/download-worker';
 import { logger } from './lib/logger';
 import { createAuthService } from './services/auth-service';
 import { createCatalogService } from './services/catalog-service';
 import { createConfigService } from './services/config-service';
+import { createDownloadService } from './services/download-service';
 import { createFavoritesService } from './services/favorites-service';
 import { createFollowService } from './services/follow-service';
 import { createHomeService } from './services/home-service';
@@ -38,10 +40,12 @@ export function createAppContext(options: { env?: Env; databasePath?: string } =
   const favorites = createFavoritesService({ db, source, catalog, config, logger });
   const profile = createProfileService({ source, logger });
   const home = createHomeService({ source, logger });
+  const worker = createDownloadWorker({ db, catalog, config, logger });
+  const download = createDownloadService({ db, worker, catalog, config, logger });
   return {
     db,
     source,
-    services: { catalog, follow, favorites, profile, home, config, auth },
+    services: { catalog, follow, favorites, profile, home, config, auth, download },
     logger,
   };
 }

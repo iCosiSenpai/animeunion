@@ -9,6 +9,7 @@ import { createDownloadWorker } from '../lib/download-worker';
 import { testLogger } from '../test/helpers';
 import type { CatalogService } from './catalog-service';
 import { createConfigService } from './config-service';
+import { createRenamerService } from './renamer-service';
 
 function buildStubCatalog(urlByFileId: Map<string, string | null>): CatalogService {
   return {
@@ -36,6 +37,15 @@ function buildMockSource(): AnimeSource {
   return {} as AnimeSource;
 }
 
+function makeWorker(
+  db: ReturnType<typeof import('../test/helpers').createTestDb>,
+  catalog: CatalogService,
+  config: ReturnType<typeof createConfigService>,
+) {
+  const renamer = createRenamerService({ db });
+  return createDownloadWorker({ db, catalog, config, logger: testLogger, renamer });
+}
+
 describe('DownloadWorker (FSM)', () => {
   let db: ReturnType<typeof import('../test/helpers').createTestDb>;
   let animePath: string;
@@ -51,12 +61,7 @@ describe('DownloadWorker (FSM)', () => {
   it('enqueue inserisce in coda e ritorna queueId', () => {
     const config = createConfigService({ db });
     config.set('animePath', animePath);
-    const worker = createDownloadWorker({
-      db,
-      catalog: buildStubCatalog(new Map()),
-      config,
-      logger: testLogger,
-    });
+    const worker = makeWorker(db, buildStubCatalog(new Map()), config);
 
     // Setup minimale: anime + episode + episode_file
     db.insert(schema.anime)
@@ -111,12 +116,7 @@ describe('DownloadWorker (FSM)', () => {
   it('enqueue idempotente: due chiamate per stesso episodeFileId ritornano lo stesso id', () => {
     const config = createConfigService({ db });
     config.set('animePath', animePath);
-    const worker = createDownloadWorker({
-      db,
-      catalog: buildStubCatalog(new Map()),
-      config,
-      logger: testLogger,
-    });
+    const worker = makeWorker(db, buildStubCatalog(new Map()), config);
 
     db.insert(schema.anime)
       .values({
@@ -167,12 +167,7 @@ describe('DownloadWorker (FSM)', () => {
   it('cancel su queued è immediato, su completed rifiuta', () => {
     const config = createConfigService({ db });
     config.set('animePath', animePath);
-    const worker = createDownloadWorker({
-      db,
-      catalog: buildStubCatalog(new Map()),
-      config,
-      logger: testLogger,
-    });
+    const worker = makeWorker(db, buildStubCatalog(new Map()), config);
 
     const timestamp = new Date().toISOString();
     db.insert(schema.anime)
@@ -258,12 +253,7 @@ describe('DownloadWorker (FSM)', () => {
   it('retry su failed rimette in coda e resetta retry_count', () => {
     const config = createConfigService({ db });
     config.set('animePath', animePath);
-    const worker = createDownloadWorker({
-      db,
-      catalog: buildStubCatalog(new Map()),
-      config,
-      logger: testLogger,
-    });
+    const worker = makeWorker(db, buildStubCatalog(new Map()), config);
 
     const timestamp = new Date().toISOString();
     db.insert(schema.anime)
@@ -333,12 +323,7 @@ describe('DownloadWorker (FSM)', () => {
   it('retry su non-failed rifiuta', () => {
     const config = createConfigService({ db });
     config.set('animePath', animePath);
-    const worker = createDownloadWorker({
-      db,
-      catalog: buildStubCatalog(new Map()),
-      config,
-      logger: testLogger,
-    });
+    const worker = makeWorker(db, buildStubCatalog(new Map()), config);
 
     const timestamp = new Date().toISOString();
     db.insert(schema.anime)
@@ -397,12 +382,7 @@ describe('DownloadWorker (FSM)', () => {
   it('start + stop sono idempotenti', () => {
     const config = createConfigService({ db });
     config.set('animePath', animePath);
-    const worker = createDownloadWorker({
-      db,
-      catalog: buildStubCatalog(new Map()),
-      config,
-      logger: testLogger,
-    });
+    const worker = makeWorker(db, buildStubCatalog(new Map()), config);
     worker.start();
     worker.start(); // noop
     worker.stop();

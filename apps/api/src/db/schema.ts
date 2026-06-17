@@ -65,6 +65,24 @@ export const animeGenre = sqliteTable(
   (table) => [primaryKey({ columns: [table.animeId, table.genreId] })],
 );
 
+export const animeRelation = sqliteTable(
+  'anime_relation',
+  {
+    animeId: text('anime_id')
+      .notNull()
+      .references(() => anime.id, { onDelete: 'cascade' }),
+    relatedAnimeId: text('related_anime_id')
+      .notNull()
+      .references(() => anime.id, { onDelete: 'cascade' }),
+    relationType: text('relation_type').notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.animeId, table.relatedAnimeId, table.relationType] }),
+    index('idx_anime_relation_anime').on(table.animeId),
+    index('idx_anime_relation_related').on(table.relatedAnimeId),
+  ],
+);
+
 export const episode = sqliteTable(
   'episode',
   {
@@ -183,6 +201,7 @@ export const schema = {
   anime,
   genre,
   animeGenre,
+  animeRelation,
   episode,
   episodeFile,
   follow,

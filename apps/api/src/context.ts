@@ -12,6 +12,7 @@ import { createFavoritesService } from './services/favorites-service';
 import { createFollowService } from './services/follow-service';
 import { createHomeService } from './services/home-service';
 import { createProfileService } from './services/profile-service';
+import { createRenamerService } from './services/renamer-service';
 import { createSource } from './sources';
 import type { Context } from './trpc';
 
@@ -40,7 +41,8 @@ export function createAppContext(options: { env?: Env; databasePath?: string } =
   const favorites = createFavoritesService({ db, source, catalog, config, logger });
   const profile = createProfileService({ source, logger });
   const home = createHomeService({ source, logger });
-  const worker = createDownloadWorker({ db, catalog, config, logger });
+  const renamer = createRenamerService({ db });
+  const worker = createDownloadWorker({ db, catalog, config, logger, renamer });
   const download = createDownloadService({ db, worker, catalog, config, logger });
   return {
     db,

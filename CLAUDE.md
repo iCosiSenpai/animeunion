@@ -40,7 +40,12 @@ Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
   con widget download (`DownloadStatus`) e badge coda, pagina `/downloads` rifatta a dashboard
   con card poster, progress bar e azioni rapide; pagina follow con i 5 status e hint locali;
   setup screen espone il toggle auto-download.
-- **105 test verdi** (13 file).
+- **Renamer full + serie/stagione + fix sequel (STEP 3)**: campi `seriesId`/`seasonNumber`
+  propagati da shared/API/DB, tabella `anime_relation` per salvare PREQUEL/SEQUEL/SPIN_OFF,
+  `SeriesResolverService` con fallback da dati API, relazioni o slug isolato, `RenamerService`
+  che produce path `sub-ita|dub-ita/<seriesSlug>/Season NN/SXXEXX.mp4` e corregge sia
+  numerazione assoluta che ripartita dei sequel.
+- **114 test verdi** (15 file).
 
 **Endpoint v1.0.3/1.1.0/1.1.1 verificati live (12/13, base path
 `https://api.animeunion.tv/api/v1/integration`):**
@@ -82,8 +87,9 @@ ancora inutilizzati (rinviati: il team di AnimeUnion conferma MP4 diretto, nient
 - [x] **STEP 2.6** — **Frontend polish**: sidebar + bottom bar mobile, navbar con widget
       `DownloadStatus`, `/downloads` dashboard a card poster, status follow locali con hint,
       setup screen con toggle auto-download.
-- [ ] **STEP 3** — **Renamer + serie/stagione + fix sequel** (PLAN §S6): SXXEXX/NUMERIC, cartelle
-      `sub-ita/`+`dub-ita/`, `seriesId`/`seasonNumber` reale, correzione rinumerazione sequel.
+- [x] **STEP 3** — **Renamer + serie/stagione + fix sequel** (PLAN §S6): path
+      `sub-ita|dub-ita/<seriesSlug>/Season NN/SXXEXX.mp4`, `seriesId`/`seasonNumber` reale,
+      fallback da relazioni, correzione rinumerazione sequel.
 - [ ] **STEP 4** — **Library scanner** + pagina `/library` (PLAN §S6).
 - [x] **STEP 5** — Verifica **live** API (12/13 endpoint + social) con credenziali reali ✅.
       Da fare: **merge** del branch `feat/integrazione-api-v103` → `main` quando decidi.

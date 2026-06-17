@@ -44,6 +44,8 @@ export function toAnimeSummary(row: AnimeRow, genres: GenreSummary[]): AnimeSumm
     score: row.score,
     genres,
     availableLanguages: parseLanguages(row.languages),
+    seriesId: row.seriesId,
+    seasonNumber: row.seasonNumber,
   };
 }
 

@@ -82,6 +82,8 @@ function toSummary(api: ApiAnimeSummary): AnimeSummary {
     score: api.score,
     genres: api.genres.map((genre) => ({ id: genre.id, slug: genre.slug, name: genre.name })),
     availableLanguages: api.availableLanguages,
+    seriesId: api.seriesId,
+    seasonNumber: api.seasonNumber,
   };
 }
 
@@ -95,6 +97,8 @@ function toRelated(api: ApiRelation): RelatedAnime {
     type: api.type,
     seasonYear: api.seasonYear,
     relationType: api.relationType,
+    seriesId: api.seriesId,
+    seasonNumber: api.seasonNumber,
   };
 }
 
@@ -226,6 +230,8 @@ export function createApiSource(options: ApiSourceOptions): AnimeSource {
             score: item.anime.score,
             genres: [],
             availableLanguages: [],
+            seriesId: null,
+            seasonNumber: null,
           });
           byDay.set(day, list);
         }

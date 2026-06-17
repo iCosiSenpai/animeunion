@@ -28,6 +28,8 @@ export const animeSummarySchema = z.object({
   score: z.number().int().nullable(),
   genres: z.array(genreSummarySchema),
   availableLanguages: z.array(languageSchema),
+  seriesId: z.string().nullable(),
+  seasonNumber: z.number().int().nullable(),
 });
 export type AnimeSummary = z.infer<typeof animeSummarySchema>;
 
@@ -40,6 +42,8 @@ export const relatedAnimeSchema = z.object({
   type: animeTypeSchema,
   seasonYear: z.number().int().nullable(),
   relationType: z.string(),
+  seriesId: z.string().nullable(),
+  seasonNumber: z.number().int().nullable(),
 });
 export type RelatedAnime = z.infer<typeof relatedAnimeSchema>;
 

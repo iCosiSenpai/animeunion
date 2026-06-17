@@ -1,10 +1,13 @@
 import { EventEmitter } from 'node:events';
+import { dirname } from 'node:path';
+import type { Language } from '@animeunion/shared';
 import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import type { Db } from '../db';
 import { schema } from '../db';
 import type { CatalogService } from '../services/catalog-service';
 import type { ConfigService } from '../services/config-service';
-import { atomicMove, ensureDir, targetPath, tempPath } from './download-fs';
+import type { RenamerService } from '../services/renamer-service';
+import { atomicMove, ensureDir, tempPath } from './download-fs';
 import { DownloadAbortedError, type DownloadProgress, downloadToFile } from './http-downloader';
 import type { Logger } from './logger';
 
@@ -56,10 +59,11 @@ export interface DownloadWorkerDeps {
   catalog: CatalogService;
   config: ConfigService;
   logger: Logger;
+  renamer: RenamerService;
 }
 
 export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
-  const { db, catalog, config, logger } = deps;
+  const { db, catalog, config, logger, renamer } = deps;
   const emitter = new EventEmitter();
   const inFlight = new Map<string, InFlight>();
 
@@ -144,16 +148,14 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
       }
 
       const animePath = config.get('animePath');
-      const finalPath = targetPath({
+      const finalPath = renamer.computeEpisodePath({
         animePath,
-        animeSlug: anime.slug ?? anime.id,
-        seasonNumber: 1,
+        animeId: anime.id,
         episodeNumber: episode.number,
-        language: epFile.language,
-        ext: 'mp4',
+        language: epFile.language as Language,
       });
       const partial = tempPath(finalPath, queueId);
-      await ensureDir(finalPath.substring(0, finalPath.lastIndexOf('/')), logger);
+      await ensureDir(dirname(finalPath), logger);
 
       const onProgress = (p: DownloadProgress): void => {
         updateQueue(queueId, {

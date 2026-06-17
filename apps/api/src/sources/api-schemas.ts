@@ -47,6 +47,8 @@ export const apiAnimeSummarySchema = z.object({
   score: nullableInt,
   genres: z.array(apiGenreSchema).default([]),
   availableLanguages: z.array(languageSchema).default([]),
+  seriesId: nullableString,
+  seasonNumber: nullableInt,
 });
 
 export const apiRelationSchema = z
@@ -60,6 +62,8 @@ export const apiRelationSchema = z
       coverImage: nullableString,
       type: animeTypeSchema,
       seasonYear: nullableInt,
+      seriesId: nullableString,
+      seasonNumber: nullableInt,
     }),
   })
   .transform((relation) => ({
@@ -71,6 +75,8 @@ export const apiRelationSchema = z
     type: relation.toAnime.type,
     seasonYear: relation.toAnime.seasonYear,
     relationType: relation.relationType,
+    seriesId: relation.toAnime.seriesId,
+    seasonNumber: relation.toAnime.seasonNumber,
   }));
 
 export const apiAnimeDetailSchema = apiAnimeSummarySchema.extend({

@@ -5,8 +5,9 @@ import type { Logger } from './logger';
 /**
  * Utility per il download engine: naming FS-safe e atomicità del rename.
  *
- * Convenzione del path finale (immutata in STEP 3 quando aggiungeremo sub-ita/dub-ita e
- * il fix sequel renumbering): `<animePath>/<slug-sanificato>/Season <NN>/<SXXEXX>.mp4`.
+ * Il path finale "full" (sub-ita/dub-ita, serie/stagione, fix sequel) è calcolato da
+ * RenamerService. Questo file resta utility di basso livello per `tempPath`, `ensureDir`
+ * e `atomicMove`.
  */
 
 const UNSAFE_CHARS = /[^\p{L}\p{N}\-_ ]/gu;

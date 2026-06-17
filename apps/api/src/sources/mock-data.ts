@@ -227,6 +227,8 @@ function buildAnime(row: SeedRow, index: number): AnimeDetail {
     malId: 1000 + index,
     anilistId: 2000 + index,
     season,
+    seriesId: id,
+    seasonNumber: 1,
     relatedAnime: [],
     recommendations: [],
     episodes,
@@ -261,6 +263,8 @@ export function toSummary(detail: AnimeDetail): AnimeSummary {
     score: detail.score,
     genres: detail.genres,
     availableLanguages: detail.availableLanguages,
+    seriesId: detail.seriesId,
+    seasonNumber: detail.seasonNumber,
   };
 }
 

@@ -8,6 +8,7 @@ import { testLogger } from '../test/helpers';
 import type { CatalogService } from './catalog-service';
 import { createConfigService } from './config-service';
 import { createDownloadService } from './download-service';
+import { createRenamerService } from './renamer-service';
 
 function buildStubCatalog(): CatalogService {
   return {} as unknown as CatalogService;
@@ -94,11 +95,13 @@ describe('DownloadService', () => {
     const config = createConfigService({ db });
     config.set('animePath', animePath);
     config.set('autoDownload', true);
+    const renamer = createRenamerService({ db });
     const realWorker = createDownloadWorker({
       db,
       catalog: buildStubCatalog(),
       config,
       logger: testLogger,
+      renamer,
     });
     const worker = { ...realWorker, enqueue: enqueueSpy };
     const service = createDownloadService({

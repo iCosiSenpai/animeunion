@@ -7,6 +7,7 @@ import type {
   EpisodeDetail,
   EpisodeSummary,
   PaginatedAnime,
+  RelatedAnime,
   Season,
   WeekDay,
 } from '@animeunion/shared';
@@ -134,6 +135,8 @@ export function createCatalogService(options: CatalogServiceOptions): CatalogSer
         coverImage: summary.coverImage,
         score: summary.score,
         languages: JSON.stringify(summary.availableLanguages),
+        seriesId: summary.seriesId,
+        seasonNumber: summary.seasonNumber,
         createdAt: timestamp,
         updatedAt: timestamp,
       })
@@ -150,6 +153,8 @@ export function createCatalogService(options: CatalogServiceOptions): CatalogSer
           coverImage: summary.coverImage,
           score: summary.score,
           languages: JSON.stringify(summary.availableLanguages),
+          seriesId: summary.seriesId,
+          seasonNumber: summary.seasonNumber,
           updatedAt: timestamp,
         },
       })
@@ -214,6 +219,8 @@ export function createCatalogService(options: CatalogServiceOptions): CatalogSer
         malId: detail.malId,
         anilistId: detail.anilistId,
         languages: JSON.stringify(detail.availableLanguages),
+        seriesId: detail.seriesId,
+        seasonNumber: detail.seasonNumber,
         createdAt: timestamp,
         updatedAt: timestamp,
       })
@@ -241,12 +248,29 @@ export function createCatalogService(options: CatalogServiceOptions): CatalogSer
           malId: detail.malId,
           anilistId: detail.anilistId,
           languages: JSON.stringify(detail.availableLanguages),
+          seriesId: detail.seriesId,
+          seasonNumber: detail.seasonNumber,
           updatedAt: timestamp,
         },
       })
       .run();
     upsertGenres(detail.id, detail.genres);
+    saveRelations(detail.id, detail.relatedAnime);
     saveEpisodes(detail.id, detail.episodes);
+  }
+
+  function saveRelations(animeId: string, relations: RelatedAnime[]): void {
+    db.delete(schema.animeRelation).where(eq(schema.animeRelation.animeId, animeId)).run();
+    for (const relation of relations) {
+      db.insert(schema.animeRelation)
+        .values({
+          animeId,
+          relatedAnimeId: relation.id,
+          relationType: relation.relationType,
+        })
+        .onConflictDoNothing()
+        .run();
+    }
   }
 
   function saveEpisodes(animeId: string, episodes: SourceEpisode[]): void {

@@ -1,4 +1,9 @@
-import { animeDetailSchema, seasonSchema } from '@animeunion/shared';
+import {
+  animeDetailSchema,
+  catalogBrowseInputSchema,
+  catalogFiltersSchema,
+  seasonSchema,
+} from '@animeunion/shared';
 import { z } from 'zod';
 import { publicProcedure, router } from '../trpc';
 
@@ -34,6 +39,14 @@ export const catalogRouter = router({
   topRated: publicProcedure
     .input(pagedInputSchema)
     .query(({ ctx, input }) => ctx.services.catalog.topRated(input?.page ?? 1)),
+
+  browse: publicProcedure
+    .input(catalogBrowseInputSchema)
+    .query(({ ctx, input }) => ctx.services.catalog.browse(input)),
+
+  filters: publicProcedure
+    .output(catalogFiltersSchema)
+    .query(({ ctx }) => ctx.services.catalog.filters()),
 
   sync: publicProcedure.mutation(({ ctx }) => {
     if (ctx.services.catalog.syncStatus().running) {

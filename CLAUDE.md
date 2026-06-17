@@ -49,7 +49,11 @@ Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
   (pausa/ripresa, annulla tutti, riprova falliti, pulisci completati) collegate al backend;
   guard navigazione in Settings con dialog "salva, abbandona o rimani";
   home page restyle premium con hero, header a icone e CTA.
-- **118 test verdi** (15 file).
+- **Catalogo completo e hero dinamica**: procedura `catalog.browse` con filtri combinati
+  (query, genere, tipo, stato, anno, stagione, lingua, ordinamento) + endpoint `catalog.genres`;
+  UI catalogo riscritta con tutti i filtri; home hero convertita in carosello auto-rotante
+  con sfondo cover sfocato + poster nitido e navigazione dots/frecce.
+- **124 test verdi** (15 file).
 
 **Endpoint v1.0.3/1.1.0/1.1.1 verificati live (12/13, base path
 `https://api.animeunion.tv/api/v1/integration`):**

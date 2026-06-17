@@ -4,8 +4,11 @@ import type {
   AnimeSummary,
   CalendarEntry,
   CalendarWeek,
+  CatalogBrowseInput,
+  CatalogFilters,
   EpisodeDetail,
   EpisodeSummary,
+  GenreDetail,
   PaginatedAnime,
   RelatedAnime,
   Season,
@@ -47,6 +50,8 @@ export interface CatalogService {
   byYear(year: number, page: number): Promise<PaginatedAnime>;
   recent(page: number): Promise<PaginatedAnime>;
   topRated(page: number): Promise<PaginatedAnime>;
+  browse(input: CatalogBrowseInput): Promise<PaginatedAnime>;
+  filters(): Promise<CatalogFilters>;
   syncCatalog(): Promise<{ synced: number }>;
   syncStatus(): SyncStatus;
   listEpisodes(animeSlug: string): Promise<EpisodeSummary[]>;
@@ -430,6 +435,54 @@ export function createCatalogService(options: CatalogServiceOptions): CatalogSer
     return queryAnime(where, page);
   }
 
+  function buildBrowseWhere(input: CatalogBrowseInput): SQL | undefined {
+    const conditions: SQL[] = [];
+    const needle = input.query?.trim();
+    if (needle) {
+      conditions.push(
+        or(
+          like(schema.anime.title, `%${needle}%`),
+          like(schema.anime.titleIta, `%${needle}%`),
+        ) as SQL,
+      );
+    }
+    if (input.genre) {
+      const matching = db
+        .select({ animeId: schema.animeGenre.animeId })
+        .from(schema.animeGenre)
+        .innerJoin(schema.genre, eq(schema.animeGenre.genreId, schema.genre.id))
+        .where(eq(schema.genre.slug, input.genre));
+      conditions.push(inArray(schema.anime.id, matching));
+    }
+    if (input.type) {
+      conditions.push(eq(schema.anime.type, input.type));
+    }
+    if (input.status) {
+      conditions.push(eq(schema.anime.status, input.status));
+    }
+    if (input.year) {
+      conditions.push(eq(schema.anime.seasonYear, input.year));
+    }
+    if (input.season) {
+      conditions.push(eq(schema.anime.season, input.season));
+    }
+    if (input.language) {
+      conditions.push(like(schema.anime.languages, `%${input.language}%`));
+    }
+    return conditions.length > 0 ? and(...conditions) : undefined;
+  }
+
+  function orderByForSort(sort: CatalogBrowseInput['sort']): SQL {
+    const effective = sort ?? 'recent';
+    if (effective === 'score') {
+      return sql`${schema.anime.score} IS NULL, ${schema.anime.score} DESC`;
+    }
+    if (effective === 'title') {
+      return asc(schema.anime.title);
+    }
+    return desc(schema.anime.createdAt);
+  }
+
   return {
     async search(input): Promise<PaginatedAnime> {
       if (isCacheFresh()) {
@@ -512,6 +565,39 @@ export function createCatalogService(options: CatalogServiceOptions): CatalogSer
         page,
         sql`${schema.anime.score} IS NULL, ${schema.anime.score} DESC`,
       );
+    },
+
+    async browse(input): Promise<PaginatedAnime> {
+      return queryAnime(buildBrowseWhere(input), input.page, orderByForSort(input.sort));
+    },
+
+    async filters(): Promise<CatalogFilters> {
+      const genreRows = db
+        .select({
+          id: schema.genre.id,
+          slug: schema.genre.slug,
+          name: schema.genre.name,
+          nameEng: schema.genre.nameEng,
+          malId: schema.genre.malId,
+        })
+        .from(schema.genre)
+        .orderBy(asc(schema.genre.name))
+        .all();
+      const yearRows = db
+        .select({ year: schema.anime.seasonYear })
+        .from(schema.anime)
+        .where(sql`${schema.anime.seasonYear} IS NOT NULL`)
+        .orderBy(desc(schema.anime.seasonYear))
+        .all();
+      const years = [...new Set(yearRows.map((r) => r.year).filter((y): y is number => y != null))];
+      const genres: GenreDetail[] = genreRows.map((g) => ({
+        id: g.id,
+        slug: g.slug,
+        name: g.name,
+        nameEng: g.nameEng ?? null,
+        malId: g.malId ?? null,
+      }));
+      return { genres, years };
     },
 
     async syncCatalog(): Promise<{ synced: number }> {

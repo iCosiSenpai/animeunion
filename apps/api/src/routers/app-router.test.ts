@@ -148,6 +148,28 @@ describe('appRouter (integrazione)', () => {
     expect(stats.downloadQueueSize).toBe(0);
   });
 
+  it('catalog.browse filtra e ordina i risultati', async () => {
+    const { caller } = makeCaller();
+    await caller.catalog.sync();
+
+    const movies = await caller.catalog.browse({ query: '', type: 'MOVIE' });
+    expect(movies.data.every((a) => a.type === 'MOVIE')).toBe(true);
+
+    const byScore = await caller.catalog.browse({ query: '', sort: 'score' });
+    const scores = byScore.data.map((a) => a.score ?? -1);
+    expect(scores).toEqual([...scores].sort((a, b) => b - a));
+  });
+
+  it('catalog.filters restituisce generi e anni', async () => {
+    const { caller } = makeCaller();
+    await caller.catalog.sync();
+
+    const filters = await caller.catalog.filters();
+
+    expect(filters.genres.length).toBeGreaterThan(0);
+    expect(filters.years.length).toBeGreaterThan(0);
+  });
+
   it('download.queue/addEpisode/cancel passano dal router al service', async () => {
     const { caller } = makeCaller();
     const search = await caller.catalog.search({ query: '' });

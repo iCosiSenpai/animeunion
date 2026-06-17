@@ -12,10 +12,10 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { trpc } from '@/lib/trpc';
-import type { Season } from '@animeunion/shared';
+import type { AnimeStatus, AnimeType, Language, Season } from '@animeunion/shared';
 import { X } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { type FormEvent, useEffect, useState } from 'react';
+import { type FormEvent, useEffect, useMemo, useState } from 'react';
 
 const SEASONS: { value: Season; label: string }[] = [
   { value: 'WINTER', label: 'Inverno' },
@@ -24,8 +24,32 @@ const SEASONS: { value: Season; label: string }[] = [
   { value: 'FALL', label: 'Autunno' },
 ];
 
-const CURRENT_YEAR = new Date().getFullYear();
-const YEARS = Array.from({ length: CURRENT_YEAR - 1989 }, (_, i) => String(CURRENT_YEAR - i));
+const TYPES: { value: AnimeType; label: string }[] = [
+  { value: 'TV', label: 'TV' },
+  { value: 'TV_SHORT', label: 'TV Short' },
+  { value: 'MOVIE', label: 'Film' },
+  { value: 'OVA', label: 'OVA' },
+  { value: 'ONA', label: 'ONA' },
+  { value: 'SPECIAL', label: 'Special' },
+  { value: 'MUSIC', label: 'Music' },
+];
+
+const STATUSES: { value: AnimeStatus; label: string }[] = [
+  { value: 'ONGOING', label: 'In corso' },
+  { value: 'COMPLETED', label: 'Completato' },
+  { value: 'UPCOMING', label: 'In arrivo' },
+];
+
+const LANGUAGES: { value: Language; label: string }[] = [
+  { value: 'SUB_ITA', label: 'Sub ITA' },
+  { value: 'DUB_ITA', label: 'Dub ITA' },
+];
+
+const SORTS: { value: 'recent' | 'score' | 'title'; label: string }[] = [
+  { value: 'recent', label: 'Più recenti' },
+  { value: 'score', label: 'Più votati' },
+  { value: 'title', label: 'Titolo A-Z' },
+];
 
 const ALL = '__all__';
 
@@ -35,8 +59,12 @@ export function CatalogBrowser() {
 
   const q = searchParams.get('q') ?? '';
   const genre = searchParams.get('genre') ?? '';
+  const type = searchParams.get('type') ?? '';
+  const status = searchParams.get('status') ?? '';
   const year = searchParams.get('year') ?? '';
   const season = searchParams.get('season') ?? '';
+  const language = searchParams.get('language') ?? '';
+  const sort = searchParams.get('sort') ?? 'recent';
   const page = Math.max(1, Number(searchParams.get('page') ?? '1'));
 
   const [queryInput, setQueryInput] = useState(q);
@@ -59,137 +87,241 @@ export function CatalogBrowser() {
 
   function onSearchSubmit(event: FormEvent): void {
     event.preventDefault();
-    pushParams({ q: queryInput, genre: null, year: null, season: null });
+    pushParams({ q: queryInput });
   }
 
-  const mode = genre ? 'genre' : season && year ? 'season' : year ? 'year' : 'search';
+  function onReset(): void {
+    router.push('/catalog');
+  }
 
-  const searchQuery = trpc.catalog.search.useQuery(
-    { query: q, page },
-    { enabled: mode === 'search' },
-  );
-  const genreQuery = trpc.catalog.byGenre.useQuery(
-    { genreSlug: genre, page },
-    { enabled: mode === 'genre' },
-  );
-  const seasonQuery = trpc.catalog.bySeason.useQuery(
-    { season: season as Season, year: Number(year), page },
-    { enabled: mode === 'season' },
-  );
-  const yearQuery = trpc.catalog.byYear.useQuery(
-    { year: Number(year), page },
-    { enabled: mode === 'year' },
-  );
-
-  const active =
-    mode === 'genre'
-      ? genreQuery
-      : mode === 'season'
-        ? seasonQuery
-        : mode === 'year'
-          ? yearQuery
-          : searchQuery;
-
-  const syncStatus = trpc.catalog.syncStatus.useQuery(undefined, {
-    refetchInterval: (query) => (query.state.data?.running ? 3000 : false),
+  const filtersQuery = trpc.catalog.filters.useQuery();
+  const browseQuery = trpc.catalog.browse.useQuery({
+    query: q,
+    page,
+    genre: genre || undefined,
+    type: (type as AnimeType) || undefined,
+    status: (status as AnimeStatus) || undefined,
+    year: year ? Number(year) : undefined,
+    season: (season as Season) || undefined,
+    language: (language as Language) || undefined,
+    sort: (sort as 'recent' | 'score' | 'title') || 'recent',
   });
 
-  const result = active.data;
-  const items = result?.data ?? [];
-  const hasMore = result?.meta.hasMore ?? false;
-  const hasActiveFilters = Boolean(q || genre || year || season);
+  const items = browseQuery.data?.data ?? [];
+  const hasMore = browseQuery.data?.meta.hasMore ?? false;
+  const total = browseQuery.data?.meta.total ?? 0;
+
+  const activeFilters = useMemo(
+    () =>
+      [
+        q ? { key: 'q', label: `“${q}”` } : null,
+        genre ? { key: 'genre', label: `Genere: ${genre}` } : null,
+        type
+          ? { key: 'type', label: `Tipo: ${TYPES.find((t) => t.value === type)?.label ?? type}` }
+          : null,
+        status
+          ? {
+              key: 'status',
+              label: `Stato: ${STATUSES.find((s) => s.value === status)?.label ?? status}`,
+            }
+          : null,
+        year ? { key: 'year', label: `Anno: ${year}` } : null,
+        season
+          ? {
+              key: 'season',
+              label: `Stagione: ${SEASONS.find((s) => s.value === season)?.label ?? season}`,
+            }
+          : null,
+        language
+          ? {
+              key: 'language',
+              label: `Lingua: ${LANGUAGES.find((l) => l.value === language)?.label ?? language}`,
+            }
+          : null,
+        sort !== 'recent'
+          ? {
+              key: 'sort',
+              label: `Ordine: ${SORTS.find((s) => s.value === sort)?.label ?? sort}`,
+            }
+          : null,
+      ].filter((f): f is { key: string; label: string } => f !== null),
+    [q, genre, type, status, year, season, language, sort],
+  );
+
+  const years = useMemo(() => filtersQuery.data?.years ?? [], [filtersQuery.data]);
+  const genres = useMemo(() => filtersQuery.data?.genres ?? [], [filtersQuery.data]);
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <div className="space-y-1">
         <h1 className="text-2xl font-bold tracking-tight">Catalogo</h1>
-        <div className="flex flex-wrap items-center gap-2">
-          <form onSubmit={onSearchSubmit} className="w-full sm:w-56">
-            <Input
-              value={queryInput}
-              onChange={(event) => setQueryInput(event.target.value)}
-              placeholder="Cerca per titolo..."
-            />
-          </form>
+        <p className="text-sm text-muted-foreground">Esplora e filtra gli anime di AnimeUnion.</p>
+      </div>
+
+      <div className="flex flex-col gap-3 rounded-lg border bg-card p-4 shadow-sm">
+        <form onSubmit={onSearchSubmit} className="flex gap-2">
+          <Input
+            value={queryInput}
+            onChange={(event) => setQueryInput(event.target.value)}
+            placeholder="Cerca per titolo..."
+            className="flex-1"
+          />
+          <Button type="submit" variant="secondary">
+            Cerca
+          </Button>
+        </form>
+
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Select
+            value={genre || ALL}
+            onValueChange={(value) => pushParams({ genre: value === ALL ? null : value })}
+            disabled={filtersQuery.isLoading}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Genere" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL}>Tutti i generi</SelectItem>
+              {genres.map((g) => (
+                <SelectItem key={g.slug} value={g.slug}>
+                  {g.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select
+            value={type || ALL}
+            onValueChange={(value) => pushParams({ type: value === ALL ? null : value })}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Tipo" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL}>Tutti i tipi</SelectItem>
+              {TYPES.map((t) => (
+                <SelectItem key={t.value} value={t.value}>
+                  {t.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select
+            value={status || ALL}
+            onValueChange={(value) => pushParams({ status: value === ALL ? null : value })}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Stato" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL}>Tutti gli stati</SelectItem>
+              {STATUSES.map((s) => (
+                <SelectItem key={s.value} value={s.value}>
+                  {s.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
           <Select
             value={year || ALL}
-            onValueChange={(value) =>
-              pushParams({ year: value === ALL ? null : value, genre: null })
-            }
+            onValueChange={(value) => pushParams({ year: value === ALL ? null : value })}
+            disabled={filtersQuery.isLoading || years.length === 0}
           >
-            <SelectTrigger className="w-40">
+            <SelectTrigger>
               <SelectValue placeholder="Anno" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value={ALL}>Tutti gli anni</SelectItem>
-              {YEARS.map((value) => (
-                <SelectItem key={value} value={value}>
-                  {value}
+              {years.map((y) => (
+                <SelectItem key={y} value={String(y)}>
+                  {y}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
+
           <Select
             value={season || ALL}
-            onValueChange={(value) =>
-              pushParams({ season: value === ALL ? null : value, genre: null })
-            }
+            onValueChange={(value) => pushParams({ season: value === ALL ? null : value })}
           >
-            <SelectTrigger className="w-48">
+            <SelectTrigger>
               <SelectValue placeholder="Stagione" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value={ALL}>Tutte le stagioni</SelectItem>
-              {SEASONS.map((item) => (
-                <SelectItem key={item.value} value={item.value}>
-                  {item.label}
+              {SEASONS.map((s) => (
+                <SelectItem key={s.value} value={s.value}>
+                  {s.label}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
-          {hasActiveFilters ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => router.push('/catalog')}
-              className="gap-1"
-            >
-              <X className="h-4 w-4" />
-              Azzera
-            </Button>
-          ) : null}
+
+          <Select
+            value={language || ALL}
+            onValueChange={(value) => pushParams({ language: value === ALL ? null : value })}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Lingua" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL}>Tutte le lingue</SelectItem>
+              {LANGUAGES.map((l) => (
+                <SelectItem key={l.value} value={l.value}>
+                  {l.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={sort || 'recent'} onValueChange={(value) => pushParams({ sort: value })}>
+            <SelectTrigger>
+              <SelectValue placeholder="Ordina per" />
+            </SelectTrigger>
+            <SelectContent>
+              {SORTS.map((s) => (
+                <SelectItem key={s.value} value={s.value}>
+                  {s.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
+
+        {activeFilters.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm text-muted-foreground">Filtri attivi:</span>
+            {activeFilters.map((filter) => (
+              <Badge key={filter.key} variant="secondary" className="gap-1">
+                {filter.label}
+                <button
+                  type="button"
+                  onClick={() => pushParams({ [filter.key]: null })}
+                  aria-label={`Rimuovi ${filter.label}`}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </Badge>
+            ))}
+            <Button variant="ghost" size="sm" onClick={onReset} className="gap-1">
+              <X className="h-4 w-4" />
+              Azzera tutto
+            </Button>
+          </div>
+        ) : null}
       </div>
 
-      {genre ? (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <span>Genere:</span>
-          <Badge variant="secondary" className="gap-1">
-            {genre}
-            <button
-              type="button"
-              onClick={() => pushParams({ genre: null })}
-              aria-label="Rimuovi genere"
-            >
-              <X className="h-3 w-3" />
-            </button>
-          </Badge>
-        </div>
-      ) : null}
+      <div className="flex items-center justify-between text-sm text-muted-foreground">
+        <span>
+          {browseQuery.isLoading && items.length === 0
+            ? 'Caricamento...'
+            : `${total} risultat${total === 1 ? 'o' : 'i'}`}
+        </span>
+      </div>
 
-      {season && !year ? (
-        <p className="text-sm text-muted-foreground">
-          Seleziona anche un anno per filtrare per stagione.
-        </p>
-      ) : null}
-
-      {syncStatus.data?.running ? (
-        <p className="rounded-md border border-dashed px-3 py-2 text-sm text-muted-foreground">
-          Sincronizzazione del catalogo in corso… i filtri si popoleranno man mano.
-        </p>
-      ) : null}
-
-      {active.isFetching && items.length === 0 ? (
+      {browseQuery.isLoading && items.length === 0 ? (
         <AnimeGridSkeleton />
       ) : items.length === 0 ? (
         <div className="py-24 text-center text-muted-foreground">Nessun anime trovato.</div>

@@ -2,6 +2,7 @@ export * from './enums';
 export * from './auth';
 export * from './anime';
 export * from './episode';
+export * from './catalog';
 export * from './follow';
 export * from './me';
 export * from './download';

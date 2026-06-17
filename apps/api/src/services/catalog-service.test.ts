@@ -195,4 +195,65 @@ describe('CatalogService', () => {
     const entry = await service.getCalendarDay('LUNEDI');
     expect(entry.day).toBe('LUNEDI');
   });
+
+  it('browse filtra per tipo, status, stagione, anno e lingua', async () => {
+    const { service } = makeService();
+    await service.syncCatalog();
+
+    const movies = await service.browse({ query: '', page: 1, type: 'MOVIE' });
+    expect(movies.data.every((a) => a.type === 'MOVIE')).toBe(true);
+
+    const ongoing = await service.browse({ query: '', page: 1, status: 'ONGOING' });
+    expect(ongoing.data.every((a) => a.status === 'ONGOING')).toBe(true);
+
+    const spring2022 = await service.browse({
+      query: '',
+      page: 1,
+      season: 'SPRING',
+      year: 2022,
+    });
+    expect(spring2022.data.every((a) => a.season === 'SPRING' && a.seasonYear === 2022)).toBe(true);
+
+    const dub = await service.browse({ query: '', page: 1, language: 'DUB_ITA' });
+    expect(dub.data.every((a) => a.availableLanguages.includes('DUB_ITA'))).toBe(true);
+  });
+
+  it('browse combina query testuale e genere', async () => {
+    const { service } = makeService();
+    await service.syncCatalog();
+
+    const genre = (await service.filters()).genres[0];
+    if (!genre) {
+      throw new Error('nessun genere mock');
+    }
+    const byGenre = await service.browse({ query: '', page: 1, genre: genre.slug });
+    expect(byGenre.data.length).toBeGreaterThan(0);
+
+    const byQuery = await service.browse({ query: 'Jujutsu', page: 1 });
+    expect(byQuery.data.some((a) => a.title.toLowerCase().includes('jujutsu'))).toBe(true);
+  });
+
+  it('browse ordina per score e title', async () => {
+    const { service } = makeService();
+    await service.syncCatalog();
+
+    const byScore = await service.browse({ query: '', page: 1, sort: 'score' });
+    const scores = byScore.data.map((a) => a.score ?? -1);
+    expect(scores).toEqual([...scores].sort((a, b) => b - a));
+
+    const byTitle = await service.browse({ query: '', page: 1, sort: 'title' });
+    const titles = byTitle.data.map((a) => a.title);
+    expect(titles).toEqual([...titles].sort((a, b) => a.localeCompare(b)));
+  });
+
+  it('filters restituisce generi e anni dal DB locale', async () => {
+    const { service } = makeService();
+    await service.syncCatalog();
+
+    const result = await service.filters();
+
+    expect(result.genres.length).toBeGreaterThan(0);
+    expect(result.years.length).toBeGreaterThan(0);
+    expect(result.years).toEqual([...result.years].sort((a, b) => b - a));
+  });
 });

@@ -7,14 +7,14 @@ import Link from 'next/link';
 export function AnimeCard({ anime }: { anime: AnimeSummary }) {
   return (
     <Link href={`/catalog/${anime.slug}`} className="group">
-      <Card className="overflow-hidden transition-shadow group-hover:shadow-md">
+      <Card className="group overflow-hidden border border-border/50 shadow-sm transition-all duration-300 hover:border-primary/30 hover:shadow-lg">
         <div className="relative aspect-[2/3] bg-muted">
           {anime.coverImage ? (
             <img
               src={anime.coverImage}
               alt={anime.title}
               loading="lazy"
-              className="h-full w-full object-cover transition-transform group-hover:scale-105"
+              className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
             />
           ) : null}
           <Badge variant="secondary" className="absolute left-2 top-2">

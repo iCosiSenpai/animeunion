@@ -17,6 +17,7 @@ export const downloadQueueItemSchema = z.object({
   animeId: z.string(),
   animeTitle: z.string(),
   animeSlug: z.string(),
+  animeCoverImage: z.string().nullable(),
   episodeId: z.string(),
   episodeNumber: z.number().int(),
   episodeTitle: z.string().nullable(),

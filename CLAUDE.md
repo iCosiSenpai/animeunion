@@ -21,7 +21,7 @@ Shared: `packages/shared` (zod + interfaccia `AnimeSource`). Video: ffmpeg-stati
 Scheduler: setInterval (node-cron non usato). Lint: Biome. Test: Vitest (+ Playwright in futuro).
 Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
 
-## Stato attuale (2026-06-16, sera)
+## Stato attuale (2026-06-17)
 
 **Fatto:**
 - Monorepo, CI (lint+typecheck+test), DB SQLite (10 tabelle), MockSource/ApiSource, rate-limiter.
@@ -32,6 +32,15 @@ Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
   **Tutti LIVE al 2026-06-16 sera** (verificati con token reale: 12/13 rispondono, vedi sotto).
 - Frontend scoperta: home (con sezioni nuove), catalogo, dettaglio, follows, calendar, about,
   badge profilo navbar, SocialLogin nella SetupScreen.
+- **Configurazione conservativa e brand (STEP 2.5)**: `autoDownload` default `false`, `maxConcurrent`
+  default 1 / max 3, formato file forzato a `SXXEXX`, nuovi settings `languageFallback`,
+  `queueRetentionDays`, notifiche (toast in-app + card per provider futuri: Telegram/Discord/Web Push),
+  logo/favicon/icon ufficiali da animeunion.tv, rimozione di ogni riferimento personale.
+- **Frontend polish (STEP 2.6)**: layout sidebar collassabile + bottom bar mobile, navbar ridotta
+  con widget download (`DownloadStatus`) e badge coda, pagina `/downloads` rifatta a dashboard
+  con card poster, progress bar e azioni rapide; pagina follow con i 5 status e hint locali;
+  setup screen espone il toggle auto-download.
+- **105 test verdi** (13 file).
 
 **Endpoint v1.0.3/1.1.0/1.1.1 verificati live (12/13, base path
 `https://api.animeunion.tv/api/v1/integration`):**
@@ -57,7 +66,7 @@ ancora inutilizzati (rinviati: il team di AnimeUnion conferma MP4 diretto, nient
 
 - [x] **STEP 0** — Questo `CLAUDE.md` come file unico; assorbito `CLAUDE_PROMPT.md`; `ROADMAP.md` → puntatore.
 - [x] **STEP 1** — Pagina **Impostazioni** cablata a `trpc.config` (Download, Pianificazione,
-      Catalogo+sync ora, Nomi file, Lingua, Tema). `animePath` default `/data/anime` (rinominato
+      Catalogo+sync ora, Lingua, Tema). `animePath` default `/data/anime` (rinominato
       da `downloadPath`).
 - [x] **STEP 2** — **Download engine completo**: utility FS (`download-fs`), HTTP downloader
       MP4 (`http-downloader` con undici), worker event-driven con FSM (queued→downloading→
@@ -66,6 +75,13 @@ ancora inutilizzati (rinviati: il team di AnimeUnion conferma MP4 diretto, nient
       pagina `/downloads` con polling 1.5s e bottone Scarica per episodio nel dettaglio.
       `seasonNumber` hardcoded a 1 (la logica sequel/season e' rimandata a STEP 3).
       Test: 105 verdi (12 file, +38 nuovi per il motore).
+- [x] **STEP 2.5** — **Configurazione conservativa e brand cleanup**: schema `AppConfig`
+      (`autoDownload=false`, `maxConcurrent` 1..3 default 1, `languageFallback`,
+      `queueRetentionDays`), notifiche (toast + card provider futuri), formato rinome
+      forzato `SXXEXX`, rimozione riferimenti personali da docs/code, asset brand ufficiali.
+- [x] **STEP 2.6** — **Frontend polish**: sidebar + bottom bar mobile, navbar con widget
+      `DownloadStatus`, `/downloads` dashboard a card poster, status follow locali con hint,
+      setup screen con toggle auto-download.
 - [ ] **STEP 3** — **Renamer + serie/stagione + fix sequel** (PLAN §S6): SXXEXX/NUMERIC, cartelle
       `sub-ita/`+`dub-ita/`, `seriesId`/`seasonNumber` reale, correzione rinumerazione sequel.
 - [ ] **STEP 4** — **Library scanner** + pagina `/library` (PLAN §S6).

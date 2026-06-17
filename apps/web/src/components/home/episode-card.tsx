@@ -11,14 +11,14 @@ const LANGUAGE_LABELS: Record<LatestEpisode['language'], string> = {
 export function EpisodeCard({ episode }: { episode: LatestEpisode }) {
   return (
     <Link href={`/catalog/${episode.slug}`} className="group">
-      <Card className="overflow-hidden transition-shadow group-hover:shadow-md">
+      <Card className="overflow-hidden border border-border/50 shadow-sm transition-all duration-300 group-hover:border-primary/30 group-hover:shadow-lg">
         <div className="relative aspect-[2/3] bg-muted">
           {episode.coverImage ? (
             <img
               src={episode.coverImage}
               alt={episode.title}
               loading="lazy"
-              className="h-full w-full object-cover transition-transform group-hover:scale-105"
+              className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
             />
           ) : null}
           <Badge className="absolute left-2 top-2">Ep. {episode.episodeNumber}</Badge>
@@ -36,7 +36,7 @@ export function EpisodeCard({ episode }: { episode: LatestEpisode }) {
 
 export function EpisodeGrid({ episodes }: { episodes: LatestEpisode[] }) {
   return (
-    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
       {episodes.map((episode) => (
         <EpisodeCard
           key={`${episode.animeId}_${episode.episodeNumber}_${episode.language}`}

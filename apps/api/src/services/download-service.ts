@@ -23,6 +23,7 @@ export interface DownloadQueueItem {
   animeId: string;
   animeTitle: string;
   animeSlug: string;
+  animeCoverImage: string | null;
   episodeId: string;
   episodeNumber: number;
   episodeTitle: string | null;
@@ -156,6 +157,7 @@ export function createDownloadService(deps: DownloadServiceDeps): DownloadServic
           animeId: schema.anime.id,
           animeTitle: schema.anime.title,
           animeSlug: schema.anime.slug,
+          animeCoverImage: schema.anime.coverImage,
         })
         .from(schema.downloadQueue)
         .innerJoin(
@@ -181,6 +183,7 @@ export function createDownloadService(deps: DownloadServiceDeps): DownloadServic
         animeId: r.animeId,
         animeTitle: r.animeTitle,
         animeSlug: r.animeSlug,
+        animeCoverImage: r.animeCoverImage,
         episodeId: r.episodeId,
         episodeNumber: r.episodeNumber,
         episodeTitle: r.episodeTitle,

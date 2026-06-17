@@ -1,5 +1,6 @@
 'use client';
 
+import { DownloadStatus } from '@/components/downloads/download-status';
 import { SearchBar } from '@/components/shared/search-bar';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
@@ -7,6 +8,7 @@ import { navLinks } from '@/lib/nav';
 import { trpc } from '@/lib/trpc';
 import { cn } from '@/lib/utils';
 import { Menu } from 'lucide-react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
@@ -45,33 +47,29 @@ export function Navbar() {
   const [open, setOpen] = useState(false);
 
   return (
-    <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <header className="sticky top-0 z-40 border-b bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/60">
       <div className="container flex h-14 items-center gap-4">
-        <Link href="/" className="shrink-0 font-bold tracking-tight">
-          AnimeUnion
+        <Link href="/" className="flex shrink-0 items-center gap-2">
+          <Image
+            src="/logo.png"
+            alt="AnimeUnion"
+            width={140}
+            height={30}
+            className="h-7 w-auto object-contain"
+            priority
+          />
         </Link>
-
-        <nav className="hidden items-center gap-1 md:flex">
-          {navLinks.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className={cn(
-                'rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground',
-                isActive(pathname, link.href) && 'bg-accent text-foreground',
-              )}
-            >
-              {link.label}
-            </Link>
-          ))}
-        </nav>
 
         <div className="ml-auto flex items-center gap-2">
           <div className="hidden w-48 sm:block lg:w-64">
             <SearchBar />
           </div>
+
+          <DownloadStatus />
+
           <ProfileBadge />
           <ThemeToggle />
+
           <Sheet open={open} onOpenChange={setOpen}>
             <SheetTrigger asChild className="md:hidden">
               <Button variant="ghost" size="icon" aria-label="Apri menu">

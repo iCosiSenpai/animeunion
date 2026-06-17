@@ -43,7 +43,7 @@ export function FollowCard({ follow }: { follow: FollowWithAnime }) {
   const anime = follow.anime;
 
   return (
-    <Card className="overflow-hidden">
+    <Card className="group overflow-hidden border border-border/50 shadow-sm transition-all duration-300 hover:border-primary/30 hover:shadow-lg">
       <div className="relative aspect-[2/3] bg-muted">
         <Link href={`/catalog/${anime.slug}`}>
           {anime.coverImage ? (
@@ -51,7 +51,7 @@ export function FollowCard({ follow }: { follow: FollowWithAnime }) {
               src={anime.coverImage}
               alt={anime.title}
               loading="lazy"
-              className="h-full w-full object-cover"
+              className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
             />
           ) : null}
         </Link>

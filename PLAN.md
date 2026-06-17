@@ -1,6 +1,6 @@
 # AnimeUnion Docker — Piano di Sviluppo v3
 
-> **Stato**: Matteo ha accettato di fornire l'API. Lavoriamo direttamente con endpoint ufficiali.  
+> **Stato**: Il team di AnimeUnion ha accettato di fornire l'API. Lavoriamo direttamente con endpoint ufficiali.  
 > **Repo**: `iCosiSenpai/animeunion` (privato)  
 > **Licenza**: AGPL-3.0  
 
@@ -33,7 +33,7 @@ Creare un **"Radarr/Sonarr italiano per gli anime"**: un'applicazione Docker sel
 
 **Il container serve principalmente ad automatizzare il download**: l'utente cerca un anime, clicca "Segui", e da quel momento ogni nuovo episodio viene scaricato automaticamente. Niente interazione manuale, niente browser aperto sul sito per scaricare. Tutto in casa, tutto automatico.
 
-Sviluppata in collaborazione ufficiale con l'amministratore di AnimeUnion (Matteo). **App ufficiale affiliata ad AnimeUnion**.
+Sviluppata in collaborazione ufficiale con il team di AnimeUnion. **App ufficiale affiliata ad AnimeUnion**.
 
 ---
 
@@ -254,7 +254,7 @@ animeunion/                          # Root monorepo npm
 ├── CHANGELOG.md
 └── docs/
     ├── ARCHITECTURE.md
-    ├── API_ANIMEUNION.md             # Specifica API per Matteo
+    ├── API_ANIMEUNION.md             # Specifica API ufficiali AnimeUnion
     ├── DEPLOYMENT.md
     └── ROADMAP.md
 ```
@@ -681,7 +681,7 @@ GET  /api/v1/episodes/:id/download
 
 ### 7.3 Rate Limiting (da rispettare)
 
-Matteo ha menzionato rate-limiting. L'app deve:
+Il team di AnimeUnion ha menzionato rate-limiting. L'app deve:
 - **Cache locale SQLite**: ogni richiesta di catalogo viene cachata. Richieste successive colpiscono il DB locale.
 - **Throttle**: max 1 richiesta API al secondo (configurabile in `rate_limit_ms`).
 - **Sync periodico**: catalogo sincronizzato ogni 24 ore (non a ogni richiesta utente).
@@ -870,7 +870,7 @@ Frontend (Next.js)                   Backend (Fastify)                AnimeUnion
 - [ ] Pagina `/about`:
   - Cos'è AnimeUnion Docker
   - Disclaimer legale (contenuti appartengono ai proprietari)
-  - Crediti: sviluppatore (iCosiSenpai), AnimeUnion (Matteo + team)
+  - Crediti: sviluppatore (iCosiSenpai), AnimeUnion team
   - Link: GitHub repo, sito AnimeUnion
   - Licenza AGPL-3.0
 
@@ -1129,7 +1129,7 @@ Frontend (Next.js)                   Backend (Fastify)                AnimeUnion
 
 ## 11. Post-v1 (Orizzonti futuri)
 
-Dopo il rilascio v0.1.0 e l'integrazione con l'API ufficiale di Matteo:
+Dopo il rilascio v0.1.0 e l'integrazione con l'API ufficiale di AnimeUnion:
 
 - v0.2.0: Sync watchlist bidirezionale sito ↔ app
 - v0.3.0: Supporto sottotitoli (scarica .ass/.srt insieme al video)
@@ -1194,7 +1194,7 @@ Sviluppata con ❤️ da iCosiSenpai — https://github.com/iCosiSenpai/animeuni
 > **Disclaimer**: I contenuti video, le immagini e i metadati sono forniti da AnimeUnion e appartengono ai rispettivi proprietari e ai fansub che hanno curato le traduzioni. Questa applicazione non ospita né ridistribuisce contenuti protetti da copyright. Per richieste DMCA: contact@animeunion.tv.
 >
 > **Sviluppatore**: [iCosiSenpai](https://github.com/iCosiSenpai)  
-> **Team AnimeUnion**: Matteo e contributori  
+> **Team AnimeUnion**: team e contributori  
 > **Licenza**: [AGPL-3.0](https://github.com/iCosiSenpai/animeunion/blob/main/LICENSE)
 
 ### README.md (GitHub)
@@ -1304,4 +1304,63 @@ Se non lo conosci ancora: [animeunion.tv](https://animeunion.tv).
 ---
 
 *Piano v3 — Ultimo aggiornamento: 2026-06-09*  
-*Dopo chiamata con Matteo: API ufficiali confermate*
+*Dopo chiamata con il team di AnimeUnion: API ufficiali confermate*
+
+---
+
+## Appendice A — Plan di polish post-STEP 2 (v0.1.0-polish)
+
+Questa appendice è stata aggiunta dopo il completamento di STEP 2 (download engine) per
+raffinare configurazione, brand e frontend prima di procedere a STEP 3 (renamer + serie/stagione).
+**Non modifica le decisioni architetturali in §0–§4**: le integra.
+
+---
+
+### STEP 2.5 — Configurazione, brand e follow
+
+Obiettivo: rendere l’app più gentile col provider, più chiara per l’utente, e rimuovere ogni
+riferimento personale dai file tracciati.
+
+| # | Task | Dettaglio | File coinvolti |
+|---|---|---|---|
+| 2.5.1 | `autoDownload` opt-in | Default `false`. Toggle aggiunto anche nello `SetupScreen` con hint che spiega il rischio di riscaricare file già presenti manualmente. | `packages/shared/src/contracts/config.ts`, `apps/web/src/components/auth/setup-screen.tsx`, `apps/web/src/components/settings/settings-view.tsx` |
+| 2.5.2 | `maxConcurrent` conservativo | Default `1`, range `1-3`. Hint che spiega perché 1 è il più sicuro. | `packages/shared/src/contracts/config.ts`, `apps/web/src/components/settings/settings-view.tsx`, `apps/api/src/services/config-service.test.ts` |
+| 2.5.3 | Rimuovere formato rinomina configurabile | `namingFormat` esce da `AppConfig`, dalle impostazioni e dai test. Il renamer forza `SXXEXX` (standard Jellyfin/Plex). | `packages/shared/src/contracts/config.ts`, `apps/web/src/components/settings/settings-view.tsx`, `apps/api/src/lib/download-fs.ts` e relativi test, README/CHANGELOG |
+| 2.5.4 | Nuove impostazioni utili | Aggiungere: `languageFallback` (boolean, default false), `queueRetentionDays` (integer default 7), sezione Notifiche con toggle in-app e card config per provider futuri (Web Push, Telegram, Discord). Implementare subito solo il toast in-app; provider esterni rimangono stub UI pronti per STEP 6. | `packages/shared/src/contracts/config.ts`, `apps/api/src/services/config-service.*`, `apps/web/src/components/settings/settings-view.tsx` |
+| 2.5.5 | Brand cleanup | Rimuovere ogni riferimento personale da codice, docs, crediti, commit futuri. Rinominare `docs/RICHIESTA_MATTEO.md` → `docs/API_REQUEST.md` e pulirne intestazione. Aggiornare `PLAN.md`, `CLAUDE.md`, `docs/API_ANIMEUNION.md`, `docs/CREDITS.md`, `apps/web/src/app/(app)/about/page.tsx`. | Tutti i file sopra |
+| 2.5.6 | Follow status documentati ed espansi | Pagina `/follows` mostra tab per tutti e 5 gli stati. Aggiungere hint/empty-state che spiegano: `watching` → auto-download; `plan_to_watch` → riceve novità; `completed/on_hold/dropped` → esclusi. I preferiti (add/remove) restano sincronizzati col sito; gli stati locali sono solo dell’app. | `apps/web/src/components/follows/follows-view.tsx`, `apps/web/src/lib/follow.ts`, `apps/api/src/services/follow-service.ts` |
+| 2.5.7 | Test e verifica | Aggiornare test per i nuovi default; copertura per `queueRetentionDays` e `languageFallback`; `npm run lint/typecheck/test` verdi. | `apps/api/src/services/config-service.test.ts`, `apps/api/src/services/download-service.test.ts` |
+
+**Deliverable 2.5**: configurazione più conservativa, brand pulito, pagina Seguiti completa.
+
+---
+
+### STEP 2.6 — Restauro frontend: logo, sidebar, widget download e palette
+
+Obiettivo: dare all’app Docker un’identità visiva propria, affinita col sito AnimeUnion ma
+compatta e adatta a self-hosting.
+
+| # | Task | Dettaglio | File coinvolti |
+|---|---|---|---|
+| 2.6.1 | Asset brand | Scaricare `/logo.png`, `/favicon.ico`, `/icons/icon-192.png`, `/icons/icon-512.png` da `animeunion.tv` e copiarli in `apps/web/public/`. Usare logo ufficiale in navbar, setup screen e about. Mantenere placeholder pronto per logo HQ custom. | `apps/web/public/*`, `apps/web/src/components/layout/navbar.tsx`, `apps/web/src/components/auth/setup-screen.tsx`, `apps/web/src/app/(app)/about/page.tsx` |
+| 2.6.2 | Palette ufficiale | Applicare i colori del sito: sfondo scuro `#242424`, accento verde `#6EC567`, testo chiaro. Configurare in Tailwind (`tailwind.config.ts`) e shadcn (`globals.css`). | `apps/web/tailwind.config.ts`, `apps/web/src/styles/globals.css` |
+| 2.6.3 | Sidebar laterale | Sostituire la navbar top con una sidebar laterale fissa su desktop, collassabile a icon-only su tablet/mobile. Voci: Home, Catalogo, Seguiti, Libreria, Calendario, Impostazioni, About. La voce “Download” viene rimossa dal menu. | `apps/web/src/app/(app)/layout.tsx`, nuovo `apps/web/src/components/layout/sidebar.tsx`, `apps/web/src/lib/nav.ts` |
+| 2.6.4 | Navbar ridotta | In alto restano solo: logo/wordmark, search bar, `DownloadStatus` widget, badge profilo, theme toggle. | `apps/web/src/components/layout/navbar.tsx` |
+| 2.6.5 | Widget download | Componente `DownloadStatus` nella navbar: icona `Download`, badge con **numero totale** di job in coda (queued + downloading + processing + failed), animazione quando ci sono attivi. Al click apre un Popover con: lista rapida in-progress/queued, ultimi completati, pulsante “Vai alla coda completa”. Polling 1.5s. | `apps/web/src/components/downloads/download-status.tsx`, `apps/web/src/components/layout/navbar.tsx` |
+| 2.6.6 | Rework pagina `/downloads` | Trasformarla in dashboard a sezioni (In corso, In coda, Completati, Errori). Card per episodio con poster anime, titolo, numero episodio, lingua, progress bar, azioni. Empty state illustrata. | `apps/web/src/components/downloads/downloads-view.tsx`, `apps/web/src/app/(app)/downloads/page.tsx` |
+| 2.6.7 | Poster grandi e card | Aumentare dimensione poster nelle griglie, ombre soft, bordi leggeri, hover scale. Applicare a `AnimeCard`, `FollowCard`, `EpisodeCard`. | `apps/web/src/components/anime/anime-card.tsx`, `apps/web/src/components/follows/follow-card.tsx`, `apps/web/src/components/home/episode-card.tsx` |
+| 2.6.8 | Test e verifica | Verificare responsive mobile, lint, typecheck, test. | Tutto il workspace |
+
+**Deliverable 2.6**: frontend con sidebar, widget download nella navbar, palette AnimeUnion, asset brand ufficiali.
+
+---
+
+### Decisioni confermate dall’utente
+
+1. **Notifiche**: in questo STEP implementiamo solo il toast in-app (Sonner) e prepariamo la UI di
+   configurazione per provider futuri (Web Push, Telegram, Discord). I provider esterni saranno
+   attivati in STEP 6 (PWA / Docker multi-arch).
+2. **Logo**: usiamo il logo ufficiale `/logo.png` di `animeunion.tv` (con payoff) copiato in
+   `apps/web/public/`, in attesa di un asset HQ custom.
+3. **Sidebar su desktop**: collassabile a icon-only con toggle per espandere.
+

@@ -58,6 +58,3 @@ export const downloadStatusSchema = z.enum([
   'cancelled',
 ]);
 export type DownloadStatus = z.infer<typeof downloadStatusSchema>;
-
-export const namingFormatSchema = z.enum(['SXXEXX', 'NUMERIC']);
-export type NamingFormat = z.infer<typeof namingFormatSchema>;

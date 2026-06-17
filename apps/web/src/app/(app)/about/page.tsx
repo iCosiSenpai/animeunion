@@ -54,8 +54,7 @@ export default function AboutPage() {
               className="font-medium text-foreground underline-offset-4 hover:underline"
             >
               AnimeUnion
-            </a>{' '}
-            (Matteo e il team)
+            </a>
           </li>
         </ul>
       </section>

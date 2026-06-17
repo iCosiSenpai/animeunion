@@ -1,14 +1,16 @@
 import { z } from 'zod';
-import { languageSchema, namingFormatSchema } from './enums';
+import { languageSchema } from './enums';
 
 export const appConfigSchema = z.object({
   animePath: z.string().default('/data/anime'),
   language: languageSchema.default('SUB_ITA'),
-  namingFormat: namingFormatSchema.default('SXXEXX'),
-  maxConcurrent: z.number().int().min(1).max(5).default(2),
+  maxConcurrent: z.number().int().min(1).max(3).default(1),
   catalogSyncHours: z.number().int().positive().default(24),
-  autoDownload: z.boolean().default(true),
+  autoDownload: z.boolean().default(false),
   favoritesSyncMinutes: z.number().int().positive().default(10),
+  languageFallback: z.boolean().default(false),
+  queueRetentionDays: z.number().int().positive().default(7),
+  notifyOnComplete: z.boolean().default(true),
 });
 export type AppConfig = z.infer<typeof appConfigSchema>;
 

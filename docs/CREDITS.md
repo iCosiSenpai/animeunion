@@ -17,7 +17,7 @@ Windows, macOS o Linux — di creare la propria libreria anime personale, con do
 automatici e file organizzati per Jellyfin e Plex.
 
 - **Sviluppatore**: [iCosiSenpai](https://github.com/iCosiSenpai)
-- **Team AnimeUnion**: Matteo e contributori
+- **Team AnimeUnion**: team e contributori
 - **Licenza**: [AGPL-3.0](../LICENSE)
 
 ## Disclaimer

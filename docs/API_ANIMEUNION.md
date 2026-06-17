@@ -1,9 +1,8 @@
-# Specifica API AnimeUnion — per Matteo
+# Specifica API AnimeUnion — per il team di AnimeUnion
 
-> **Scopo**: documento di riferimento per l'amministratore di AnimeUnion (Matteo) con
-> l'elenco completo di **endpoint** e **token/autenticazione** necessari affinché
-> *AnimeUnion Docker* (l'app ufficiale affiliata) possa funzionare in modo nativo,
-> senza scraping.
+> **Scopo**: documento di riferimento per il team di AnimeUnion con l'elenco completo di
+> **endpoint** e **token/autenticazione** necessari affinché *AnimeUnion Docker* (l'app ufficiale
+> affiliata) possa funzionare in modo nativo, senza scraping.
 >
 > **Host API**: `https://api.animeunion.tv/api/v1` (configurabile lato app via `ANIMEUNION_API_URL`).
 > **Formato**: JSON (`Content-Type: application/json; charset=utf-8`) per ogni risposta.
@@ -63,12 +62,12 @@ Authorization: Bearer <accessToken>
 4. Su `401` → `POST /auth/refresh` con il `refreshToken`.
 5. Se anche il refresh è scaduto → ri-login con le credenziali del `.env`.
 
-### 1.3 Da concordare con Matteo
+### 1.3 Da concordare con il team di AnimeUnion
 
 - **Durata token**: proposta `accessToken` 15 min, `refreshToken` lungo (≥ 30 giorni).
 - **Token applicativo dedicato (opzionale ma preferito)**: trattandosi di un'app
   *ufficiale affiliata*, sarebbe ideale un **API key / service token per-app** rilasciato
-  da te, da affiancare (o sostituire) al login email/password. Permette di revocare
+  dal team, da affiancare (o sostituire) al login email/password. Permette di revocare
   l'accesso dell'app senza toccare gli account utente e di applicare un rate-limit dedicato.
 - **Quali endpoint richiedono auth**: vedi colonna "Auth" nelle tabelle seguenti. Va bene
   anche rendere autenticato *tutto* (catalogo incluso), basta saperlo.
@@ -180,7 +179,7 @@ GET /api/v1/anime/:slug/episodes/:number/source?lang=SUB_ITA       🆕 ⭐
     401 -> non autenticato
 ```
 
-Note per Matteo:
+Note per il team di AnimeUnion:
 - L'app converte l'HLS in MP4 con ffmpeg, quindi un **`.m3u8` va benissimo** (anzi è
   preferito a un MP4 monolitico).
 - Se gli URL sono **firmati e a scadenza**, indicare `expiresAt`: l'app rigenera l'URL
@@ -355,7 +354,7 @@ L'app è progettata per essere "gentile" col server:
 
 ---
 
-## 10. Checklist sintetica per Matteo
+## 10. Checklist sintetica per il team di AnimeUnion
 
 **Da creare (bloccanti per la v0.1):**
 - [ ] 🆕 ⭐ `POST /auth/login` + `POST /auth/refresh` (token Bearer) — §1
@@ -386,7 +385,7 @@ L'app è progettata per essere "gentile" col server:
 ## 11. Stato attuale verificato dal vivo (2026-06-10)
 
 > Verifica fatta interrogando `https://api.animeunion.tv/api/v1` con uno User-Agent
-> browser. Serve solo a Matteo come fotografia di cosa già risponde, **non** è una richiesta.
+> browser. Serve al team di AnimeUnion come fotografia di cosa già risponde, **non** è una richiesta.
 
 | Endpoint | Stato | Note |
 |---|---|---|
@@ -411,7 +410,7 @@ L'app è progettata per essere "gentile" col server:
 
 ## 12. Endpoint v1.0.3 — dati utente e home (confermati, in attesa deploy)
 
-> Matteo ha confermato le shape finali e li rilascia con la **v1.0.3**. L'app è già integrata
+> Il team di AnimeUnion ha confermato le shape finali e li rilascia con la **v1.0.3**. L'app è già integrata
 > (vedi `apps/api/src/sources/api-source.ts` + servizi `favorites`/`home`/`profile`) e tollera i
 > 404 finché l'API non è online. Base path: `…/api/v1/integration`.
 
@@ -477,5 +476,5 @@ cambia — email/password e social sono **alternativi** per ottenere il token.
 
 ---
 
-*Documento per Matteo — aggiornato il 2026-06-16. Allineato a `PLAN.md` §5–§7 e
+*Documento per il team di AnimeUnion — aggiornato il 2026-06-16. Allineato a `PLAN.md` §5–§7 e
 `packages/shared/src/anime-source.ts`. §12 = endpoint v1.0.3 (dati utente + home); §13 = social login.*

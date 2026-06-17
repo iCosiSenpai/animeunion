@@ -26,7 +26,7 @@ async function setup(overrides: Partial<AnimeSource> = {}) {
 
 describe('FavoritesService', () => {
   it('importFromSite crea i follow locali e accoda i download (autoDownload on)', async () => {
-    const { db, favorites, first } = await setup({
+    const { db, favorites, config, first } = await setup({
       getFavorites: async (): Promise<Favorite[]> => [
         {
           animeId: first.id,
@@ -37,6 +37,8 @@ describe('FavoritesService', () => {
         },
       ],
     });
+
+    config.set('autoDownload', true);
 
     const result = await favorites.importFromSite();
 

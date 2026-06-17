@@ -51,7 +51,7 @@ Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
 
 **Manca:** renamer "full" (seasonNumber, cartelle sub-ita/dub-ita, sanitizzazione avanzata),
 library scanner, e 1 pagina è stub (`ComingSoon`): **Libreria**. `ffmpeg-static`/`node-cron`
-ancora inutilizzati (rinviati: Matteo conferma MP4 diretto, niente HLS; scheduler custom).
+ancora inutilizzati (rinviati: il team di AnimeUnion conferma MP4 diretto, niente HLS; scheduler custom).
 
 ## Roadmap a step (verso v0.1.0)
 
@@ -70,7 +70,7 @@ ancora inutilizzati (rinviati: Matteo conferma MP4 diretto, niente HLS; schedule
       `sub-ita/`+`dub-ita/`, `seriesId`/`seasonNumber` reale, correzione rinumerazione sequel.
 - [ ] **STEP 4** — **Library scanner** + pagina `/library` (PLAN §S6).
 - [x] **STEP 5** — Verifica **live** API (12/13 endpoint + social) con credenziali reali ✅.
-      Da fare: **merge** del branch `feat/integrazione-api-v103-matteo` → `main` quando decidi.
+      Da fare: **merge** del branch `feat/integrazione-api-v103` → `main` quando decidi.
 - [ ] **STEP 6** — Docker multi-arch + PWA + Web Push (PLAN §S7).
 - [ ] **STEP 7** — Test E2E (Playwright) + CHANGELOG + DEPLOYMENT + release v0.1.0 (PLAN §S8).
 
@@ -82,7 +82,7 @@ ancora inutilizzati (rinviati: Matteo conferma MP4 diretto, niente HLS; schedule
   token reale. Solo `POST /me/favorites/sync` non è deployato (non necessario). La shape dei
   contratti `packages/shared/src/contracts/me.ts` combacia con le risposte reali. Base path:
   `https://api.animeunion.tv/api/v1/integration`. Rate limit: 120 req/min per token.
-- **Branch attivo**: `feat/integrazione-api-v103-matteo` (integrazione) → da cui parte
+- **Branch attivo**: `feat/integrazione-api-v103` (integrazione) → da cui parte
   `feat/settings-e-motore` (lavoro corrente). `main` non ha ancora questo lavoro.
 - **Credenziali**: email/password in `.env` (gitignored); token in SQLite (tabella `auth`). Mai
   segreti nel codice/compose. L'utente usa l'account `lookatale95@gmail.com`.

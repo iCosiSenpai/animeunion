@@ -1,9 +1,8 @@
-# Richiesta endpoint API — per Matteo (AnimeUnion Docker)
+# Richiesta endpoint API — AnimeUnion Docker
 
-> **Aggiornamento (lato app, in attesa deploy v1.0.3):** Matteo ha confermato le shape finali di
-> tutti gli endpoint qui sotto e li rilascia con la **v1.0.3** (non ancora deployata). L'app è già
-> stata integrata e tollera i 404 finché l'API non è online (le sezioni nuove restano vuote senza
-> errori). Shape finali confermate:
+> **Aggiornamento:** le shape finali degli endpoint qui sotto sono state confermate dal team di
+> AnimeUnion e rilasciate con la **v1.0.3**. L'app è già stata integrata e tollera i 404 finché
+> l'API non è online (le sezioni nuove restano vuote senza errori). Shape finali confermate:
 >
 > - **A.1** `GET/POST /me/favorites`, `DELETE /me/favorites/:animeId` — R/W idempotente; la GET è
 >   arricchita con `slug/title/coverImage/addedAt`. POST→201 (o 200 `{ alreadyExists:true }`),
@@ -21,14 +20,13 @@
 >
 > ---
 
-> Ciao Matteo! L'app ufficiale affiliata (AnimeUnion Docker) sta venendo bene: login,
-> catalogo, dettaglio, episodi con i link video, calendario e generi funzionano già con gli
-> endpoint `integration` che ci hai dato. Grazie davvero.
+> L'app ufficiale affiliata (AnimeUnion Docker) sta venendo bene: login, catalogo, dettaglio,
+> episodi con i link video, calendario e generi funzionano già con gli endpoint `integration` forniti.
 >
-> Per fare il salto di qualità e **unire davvero il sito e l'app**, ci servirebbero alcuni
-> endpoint in più. Te li elenco in ordine di priorità, ognuno con il **perché** e una **forma
-> JSON suggerita** (puoi adattarla). Tutti autenticati con `Authorization: Bearer <token>` come
-> gli altri. Host base: `https://api.animeunion.tv/api/v1/integration`.
+> Per fare il salto di qualità e **unire davvero il sito e l'app**, ci servirebbero alcuni endpoint
+> in più. Li elenchiamo in ordine di priorità, ognuno con il **perché** e una **forma JSON suggerita**
+> (adattabile). Tutti autenticati con `Authorization: Bearer <token>` come gli altri. Host base:
+> `https://api.animeunion.tv/api/v1/integration`.
 
 ---
 

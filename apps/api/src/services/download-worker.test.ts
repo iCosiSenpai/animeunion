@@ -13,7 +13,7 @@ import { createConfigService } from './config-service';
 function buildStubCatalog(urlByFileId: Map<string, string | null>): CatalogService {
   return {
     getEpisodeFile: async (episodeFileId: string) => {
-      const url = urlByFileId.get(episodeFileId) ?? null;
+      const url = urlByFileId.get(episodeFileId) ?? 'https://example.com/fake.mp4';
       return {
         id: episodeFileId,
         animeId: 'a-1',
@@ -24,7 +24,7 @@ function buildStubCatalog(urlByFileId: Map<string, string | null>): CatalogServi
         thumbnail: null,
         airDate: null,
         isFiller: false,
-        availableLanguages: [],
+        language: 'SUB_ITA',
         downloadUrl: url,
         expiresAt: null,
       } satisfies EpisodeDetail;

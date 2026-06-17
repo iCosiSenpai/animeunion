@@ -127,10 +127,10 @@ describe('appRouter (integrazione)', () => {
 
   it('config.set valida e config.getAll riflette il cambiamento', async () => {
     const { caller } = makeCaller();
-    await caller.config.set({ key: 'maxConcurrent', value: 4 });
+    await caller.config.set({ key: 'maxConcurrent', value: 3 });
 
     const all = await caller.config.getAll();
-    expect(all.maxConcurrent).toBe(4);
+    expect(all.maxConcurrent).toBe(3);
 
     await expect(caller.config.set({ key: 'maxConcurrent', value: 99 })).rejects.toMatchObject({
       code: 'BAD_REQUEST',

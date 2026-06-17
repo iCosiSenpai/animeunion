@@ -34,7 +34,7 @@ describe('ConfigService', () => {
   it('set con valore invalido lancia ZodError e non persiste', () => {
     const service = createConfigService({ db: createTestDb() });
     expect(() => service.set('maxConcurrent', 99)).toThrow(ZodError);
-    expect(service.get('maxConcurrent')).toBe(2);
+    expect(service.get('maxConcurrent')).toBe(1);
   });
 
   it('getAll ignora chiavi sconosciute e valori corrotti', () => {

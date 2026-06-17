@@ -174,6 +174,18 @@ export function SettingsView() {
             onChange={(e) => update('favoritesSyncMinutes', Number(e.target.value))}
           />
         </Field>
+        <Field
+          label="Pulizia automatica coda"
+          hint="Dopo quanti giorni rimuovere i download completati, cancellati o falliti."
+        >
+          <Input
+            type="number"
+            min={1}
+            className="w-32"
+            value={draft.queueRetentionDays}
+            onChange={(e) => update('queueRetentionDays', Number(e.target.value))}
+          />
+        </Field>
       </Section>
 
       <Section title="Catalogo">
@@ -202,23 +214,6 @@ export function SettingsView() {
         </Field>
       </Section>
 
-      <Section title="Nomi file">
-        <Field label="Formato rinomina" hint="SXXEXX (es. S01E01) oppure numerico (es. 01).">
-          <Select
-            value={draft.namingFormat}
-            onValueChange={(v) => update('namingFormat', v as AppConfig['namingFormat'])}
-          >
-            <SelectTrigger className="w-44">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="SXXEXX">SXXEXX</SelectItem>
-              <SelectItem value="NUMERIC">Numerico</SelectItem>
-            </SelectContent>
-          </Select>
-        </Field>
-      </Section>
-
       <Section title="Lingua">
         <Field label="Lingua preferita" hint="Lingua da scaricare quando disponibile.">
           <Select
@@ -233,6 +228,58 @@ export function SettingsView() {
               <SelectItem value="DUB_ITA">Dub ITA</SelectItem>
             </SelectContent>
           </Select>
+        </Field>
+        <Field
+          label="Fallback lingua"
+          hint="Se l'episodio non è disponibile nella lingua preferita, prova con l'altra."
+        >
+          <Select
+            value={draft.languageFallback ? 'on' : 'off'}
+            onValueChange={(v) => update('languageFallback', v === 'on')}
+          >
+            <SelectTrigger className="w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="on">Attivo</SelectItem>
+              <SelectItem value="off">Disattivo</SelectItem>
+            </SelectContent>
+          </Select>
+        </Field>
+      </Section>
+
+      <Section title="Notifiche">
+        <Field
+          label="Notifica completamento"
+          hint="Mostra un toast quando un episodio finisce di scaricarsi."
+        >
+          <Select
+            value={draft.notifyOnComplete ? 'on' : 'off'}
+            onValueChange={(v) => update('notifyOnComplete', v === 'on')}
+          >
+            <SelectTrigger className="w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="on">Attivo</SelectItem>
+              <SelectItem value="off">Disattivo</SelectItem>
+            </SelectContent>
+          </Select>
+        </Field>
+        <Field
+          label="Provider futuri"
+          hint="Web Push, Telegram e Discord saranno disponibili in una prossima release."
+        >
+          <div className="flex flex-wrap gap-2">
+            {['Web Push', 'Telegram', 'Discord'].map((name) => (
+              <span
+                key={name}
+                className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs text-muted-foreground"
+              >
+                {name}
+              </span>
+            ))}
+          </div>
         </Field>
       </Section>
 

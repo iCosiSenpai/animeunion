@@ -7,7 +7,7 @@ import { languageSchema, serverWatchStatusSchema } from './enums';
  * `/in-evidenza`, `/news`) introdotti nella v1.0.3 dell'API AnimeUnion.
  */
 
-// A.1 — Preferiti del sito (lettura). Arricchito da Matteo con slug/title/coverImage.
+// A.1 — Preferiti del sito (lettura). Include slug/title/coverImage.
 export const favoriteSchema = z.object({
   animeId: z.string(),
   slug: z.string(),

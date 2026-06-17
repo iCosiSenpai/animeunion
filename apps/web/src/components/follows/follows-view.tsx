@@ -14,7 +14,13 @@ export function FollowsView() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold tracking-tight">Seguiti</h1>
+      <div className="space-y-1">
+        <h1 className="text-2xl font-bold tracking-tight">Seguiti</h1>
+        <p className="text-sm text-muted-foreground">
+          Gli anime che segui sono sincronizzati con i Preferiti del sito. Lo stato (in corso,
+          completato, ecc.) è locale e decide chi viene scaricato automaticamente.
+        </p>
+      </div>
 
       {isLoading ? (
         <AnimeGridSkeleton />
@@ -24,7 +30,7 @@ export function FollowsView() {
             {FOLLOW_STATUSES.map((status) => {
               const count = follows.filter((follow) => follow.status === status.value).length;
               return (
-                <TabsTrigger key={status.value} value={status.value}>
+                <TabsTrigger key={status.value} value={status.value} title={status.hint}>
                   {status.label} ({count})
                 </TabsTrigger>
               );
@@ -35,6 +41,7 @@ export function FollowsView() {
             const items = follows.filter((follow) => follow.status === status.value);
             return (
               <TabsContent key={status.value} value={status.value} className="mt-4">
+                <p className="mb-4 text-sm text-muted-foreground">{status.hint}</p>
                 {items.length === 0 ? (
                   <p className="py-16 text-center text-muted-foreground">
                     Nessun anime in questa categoria.

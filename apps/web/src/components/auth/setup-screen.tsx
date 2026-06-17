@@ -3,9 +3,17 @@
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { trpc } from '@/lib/trpc';
 import { type AuthLoginInput, authLoginInputSchema } from '@animeunion/shared';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { SocialLogin } from './social-login';
@@ -13,6 +21,8 @@ import { SocialLogin } from './social-login';
 export function SetupScreen() {
   const utils = trpc.useUtils();
   const login = trpc.auth.login.useMutation();
+  const setConfig = trpc.config.set.useMutation();
+  const [autoDownload, setAutoDownload] = useState(false);
 
   const {
     register,
@@ -23,6 +33,15 @@ export function SetupScreen() {
   const onSubmit = handleSubmit(async (values) => {
     try {
       await login.mutateAsync(values);
+      try {
+        await setConfig.mutateAsync({ key: 'autoDownload', value: autoDownload });
+      } catch (configError) {
+        toast.error(
+          configError instanceof Error
+            ? configError.message
+            : 'Impossibile salvare la preferenza di auto-download.',
+        );
+      }
       toast.success('Benvenuto! Accesso effettuato.');
       await utils.auth.status.invalidate();
     } catch (error) {
@@ -68,6 +87,31 @@ export function SetupScreen() {
               <p className="text-xs text-destructive">La password e richiesta.</p>
             ) : null}
           </div>
+          <div className="space-y-1">
+            <label className="text-sm font-medium" htmlFor="auto-download">
+              Download automatico
+            </label>
+            <Select
+              value={autoDownload ? 'on' : 'off'}
+              onValueChange={(v) => setAutoDownload(v === 'on')}
+            >
+              <SelectTrigger id="auto-download" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="off">
+                  Disattivo (consigliato se hai già scaricato episodi manualmente)
+                </SelectItem>
+                <SelectItem value="on">
+                  Attivo (scarica automaticamente i nuovi episodi dei preferiti)
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Puoi cambiare questa scelta in qualsiasi momento dalle impostazioni.
+            </p>
+          </div>
+
           <Button type="submit" className="w-full" disabled={isSubmitting || login.isPending}>
             {isSubmitting || login.isPending ? 'Accesso in corso...' : 'Accedi'}
           </Button>

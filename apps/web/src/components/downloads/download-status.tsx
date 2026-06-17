@@ -5,8 +5,9 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { trpc } from '@/lib/trpc';
 import { cn } from '@/lib/utils';
-import { CheckCircle2, Download, Loader2, XCircle } from 'lucide-react';
+import { CheckCircle2, Download, Loader2, Pause, Play, Trash2, XCircle } from 'lucide-react';
 import Link from 'next/link';
+import { toast } from 'sonner';
 
 const STATUS_ICONS: Record<string, React.ReactNode> = {
   queued: <Download className="h-4 w-4 text-muted-foreground" />,
@@ -29,9 +30,36 @@ function ProgressBar({ progress }: { progress: number }) {
 }
 
 export function DownloadStatus() {
+  const utils = trpc.useUtils();
   const queue = trpc.download.queue.useQuery(undefined, {
     refetchInterval: 1500,
   });
+  const pausedQuery = trpc.download.isPaused.useQuery(undefined, {
+    refetchInterval: 5000,
+  });
+
+  const pauseMutation = trpc.download.pauseQueue.useMutation({
+    onSuccess: () => {
+      toast.success('Coda in pausa');
+      void utils.download.isPaused.invalidate();
+    },
+  });
+
+  const resumeMutation = trpc.download.resumeQueue.useMutation({
+    onSuccess: () => {
+      toast.success('Coda ripresa');
+      void utils.download.isPaused.invalidate();
+      void utils.download.queue.invalidate();
+    },
+  });
+
+  const clearMutation = trpc.download.clearCompleted.useMutation({
+    onSuccess: (res) => {
+      toast.success(`Rimossi ${res.removed} job dalla coda`);
+      void utils.download.queue.invalidate();
+    },
+  });
+
   const items = queue.data ?? [];
   const total = items.filter(
     (item) =>
@@ -45,8 +73,8 @@ export function DownloadStatus() {
       item.status === 'queued' || item.status === 'downloading' || item.status === 'processing',
   );
   const completed = items.filter((item) => item.status === 'completed').slice(0, 5);
-
   const hasError = items.some((item) => item.status === 'failed');
+  const isPaused = pausedQuery.data?.paused ?? false;
 
   return (
     <Popover>
@@ -75,7 +103,14 @@ export function DownloadStatus() {
 
       <PopoverContent className="w-80 p-0" align="end">
         <div className="flex items-center justify-between border-b px-4 py-3">
-          <h3 className="font-semibold">Coda download</h3>
+          <div className="flex items-center gap-2">
+            <h3 className="font-semibold">Coda download</h3>
+            {isPaused ? (
+              <span className="rounded-full border px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                Pausa
+              </span>
+            ) : null}
+          </div>
           {queue.isFetching ? (
             <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
           ) : null}
@@ -131,7 +166,42 @@ export function DownloadStatus() {
           ) : null}
         </ScrollArea>
 
-        <div className="border-t px-4 py-3">
+        <div className="space-y-2 border-t px-4 py-3">
+          <div className="grid grid-cols-2 gap-2">
+            {isPaused ? (
+              <Button
+                variant="outline"
+                size="sm"
+                className="col-span-1 gap-1"
+                onClick={() => resumeMutation.mutate()}
+                disabled={resumeMutation.isPending}
+              >
+                <Play className="h-4 w-4" />
+                Riprendi
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                className="col-span-1 gap-1"
+                onClick={() => pauseMutation.mutate()}
+                disabled={pauseMutation.isPending || active.length === 0}
+              >
+                <Pause className="h-4 w-4" />
+                Pausa
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              className="col-span-1 gap-1"
+              onClick={() => clearMutation.mutate()}
+              disabled={clearMutation.isPending || completed.length === 0}
+            >
+              <Trash2 className="h-4 w-4" />
+              Pulisci
+            </Button>
+          </div>
           <Button asChild variant="outline" className="w-full">
             <Link href="/downloads">Vai alla coda completa</Link>
           </Button>

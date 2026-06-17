@@ -31,4 +31,24 @@ export const downloadRouter = router({
   clearCompleted: publicProcedure.mutation(({ ctx }) => ({
     removed: ctx.services.download.clearCompleted(),
   })),
+
+  cancelAll: publicProcedure.mutation(({ ctx }) => ({
+    cancelled: ctx.services.download.cancelAll(),
+  })),
+
+  retryAllFailed: publicProcedure.mutation(({ ctx }) => ({
+    retried: ctx.services.download.retryAllFailed(),
+  })),
+
+  pauseQueue: publicProcedure.mutation(({ ctx }) => ({
+    paused: ctx.services.download.pauseQueue(),
+  })),
+
+  resumeQueue: publicProcedure.mutation(({ ctx }) => ({
+    paused: ctx.services.download.resumeQueue(),
+  })),
+
+  isPaused: publicProcedure.query(({ ctx }) => ({
+    paused: ctx.services.download.isQueuePaused(),
+  })),
 });

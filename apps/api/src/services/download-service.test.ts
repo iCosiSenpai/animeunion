@@ -111,6 +111,7 @@ describe('DownloadService', () => {
       config,
       logger: testLogger,
     });
+    service.start();
     return { service, config };
   }
 
@@ -318,5 +319,55 @@ describe('DownloadService', () => {
     const n = service.enqueueForWatchingFollows();
     expect(n).toBe(1);
     expect(enqueueSpy).toHaveBeenCalledWith('ef-1');
+  });
+
+  it('pauseQueue/resumeQueue controllano lo stato della coda', () => {
+    const { service } = makeService();
+    expect(service.isQueuePaused()).toBe(false);
+    service.pauseQueue();
+    expect(service.isQueuePaused()).toBe(true);
+    service.resumeQueue();
+    expect(service.isQueuePaused()).toBe(false);
+  });
+
+  it('cancelAll annulla solo i job in coda', () => {
+    const { service } = makeService();
+    insertAnime(db, 'a-1');
+    insertEpisode(db, 'e-1', 'a-1', 1);
+    insertEpisode(db, 'e-2', 'a-1', 2);
+    insertFile(db, 'ef-1', 'e-1', 'SUB_ITA');
+    insertFile(db, 'ef-2', 'e-2', 'SUB_ITA');
+    const ts = new Date().toISOString();
+    db.insert(schema.downloadQueue)
+      .values({ id: 'q-1', episodeFileId: 'ef-1', status: 'queued', priority: 50, createdAt: ts })
+      .run();
+    db.insert(schema.downloadQueue)
+      .values({ id: 'q-2', episodeFileId: 'ef-2', status: 'queued', priority: 50, createdAt: ts })
+      .run();
+
+    const n = service.cancelAll();
+    expect(n).toBe(2);
+  });
+
+  it('retryAllFailed rimette in coda solo i job falliti', () => {
+    const { service } = makeService();
+    insertAnime(db, 'a-1');
+    insertEpisode(db, 'e-1', 'a-1', 1);
+    insertFile(db, 'ef-1', 'e-1', 'SUB_ITA');
+    const ts = new Date().toISOString();
+    db.insert(schema.downloadQueue)
+      .values({
+        id: 'q-1',
+        episodeFileId: 'ef-1',
+        status: 'failed',
+        priority: 50,
+        retryCount: 3,
+        retryMax: 3,
+        createdAt: ts,
+      })
+      .run();
+
+    const n = service.retryAllFailed();
+    expect(n).toBe(1);
   });
 });

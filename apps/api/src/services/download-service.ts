@@ -45,10 +45,20 @@ export interface DownloadService {
   getQueue(): DownloadQueueItem[];
   /** Cancella un job (queued: immediato; downloading: abort). */
   cancel(queueId: string): boolean;
+  /** Annulla tutti i job in coda. */
+  cancelAll(): number;
   /** Rimette in coda un job in failed. */
   retry(queueId: string): boolean;
+  /** Rimette in coda tutti i job falliti. */
+  retryAllFailed(): number;
   /** Rimuove dalla tabella gli item terminali. */
   clearCompleted(): number;
+  /** Mette in pausa la coda (i job attivi terminano, non ne partono altri). */
+  pauseQueue(): boolean;
+  /** Riprende la coda. */
+  resumeQueue(): boolean;
+  /** Ritorna true se la coda è in pausa. */
+  isQueuePaused(): boolean;
   /** Accoda nuovi episodi per tutti i follow con status='watching' (chiamato dallo scheduler). */
   enqueueForWatchingFollows(): number;
 }
@@ -205,6 +215,56 @@ export function createDownloadService(deps: DownloadServiceDeps): DownloadServic
         logger.info({ queueId }, 'Download rimesso in coda');
       }
       return ok;
+    },
+
+    cancelAll() {
+      const rows = db
+        .select({ id: schema.downloadQueue.id })
+        .from(schema.downloadQueue)
+        .where(eq(schema.downloadQueue.status, 'queued'))
+        .all();
+      let count = 0;
+      for (const row of rows) {
+        if (worker.cancel(row.id)) {
+          count += 1;
+        }
+      }
+      if (count > 0) {
+        logger.info({ count }, 'Tutti i download in coda annullati');
+      }
+      return count;
+    },
+
+    retryAllFailed() {
+      const rows = db
+        .select({ id: schema.downloadQueue.id })
+        .from(schema.downloadQueue)
+        .where(eq(schema.downloadQueue.status, 'failed'))
+        .all();
+      let count = 0;
+      for (const row of rows) {
+        if (worker.retry(row.id)) {
+          count += 1;
+        }
+      }
+      if (count > 0) {
+        logger.info({ count }, 'Tutti i download falliti rimetterti in coda');
+      }
+      return count;
+    },
+
+    pauseQueue() {
+      worker.pause();
+      return worker.isPaused();
+    },
+
+    resumeQueue() {
+      worker.resume();
+      return worker.isPaused();
+    },
+
+    isQueuePaused() {
+      return worker.isPaused();
     },
 
     clearCompleted() {

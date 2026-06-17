@@ -45,7 +45,11 @@ Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
   `SeriesResolverService` con fallback da dati API, relazioni o slug isolato, `RenamerService`
   che produce path `sub-ita|dub-ita/<seriesSlug>/Season NN/SXXEXX.mp4` e corregge sia
   numerazione assoluta che ripartita dei sequel.
-- **114 test verdi** (15 file).
+- **Frontend polish post-STEP 3**: azioni globali in `/downloads`
+  (pausa/ripresa, annulla tutti, riprova falliti, pulisci completati) collegate al backend;
+  guard navigazione in Settings con dialog "salva, abbandona o rimani";
+  home page restyle premium con hero, header a icone e CTA.
+- **118 test verdi** (15 file).
 
 **Endpoint v1.0.3/1.1.0/1.1.1 verificati live (12/13, base path
 `https://api.animeunion.tv/api/v1/integration`):**
@@ -63,8 +67,8 @@ Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
 - **Non deployato (404)**: `POST /me/favorites/sync` — non serve: GET + delta via `?updatedSince=`
   coprono già "import iniziale + sync incrementale".
 
-**Manca:** renamer "full" (seasonNumber, cartelle sub-ita/dub-ita, sanitizzazione avanzata),
-library scanner, e 1 pagina è stub (`ComingSoon`): **Libreria**. `ffmpeg-static`/`node-cron`
+**Manca:** library scanner per sincronizzare la cartella `/data/anime` con il DB e pagina
+`/library` (prende il posto dello stub `ComingSoon`). `ffmpeg-static`/`node-cron`
 ancora inutilizzati (rinviati: il team di AnimeUnion conferma MP4 diretto, niente HLS; scheduler custom).
 
 ## Roadmap a step (verso v0.1.0)
@@ -90,6 +94,8 @@ ancora inutilizzati (rinviati: il team di AnimeUnion conferma MP4 diretto, nient
 - [x] **STEP 3** — **Renamer + serie/stagione + fix sequel** (PLAN §S6): path
       `sub-ita|dub-ita/<seriesSlug>/Season NN/SXXEXX.mp4`, `seriesId`/`seasonNumber` reale,
       fallback da relazioni, correzione rinumerazione sequel.
+- [x] **Frontend polish post-STEP 3** — Azioni globali in `/downloads`, guard navigazione
+      Settings con save-and-continue, home premium con hero/icone/CTA.
 - [ ] **STEP 4** — **Library scanner** + pagina `/library` (PLAN §S6).
 - [x] **STEP 5** — Verifica **live** API (12/13 endpoint + social) con credenziali reali ✅.
       Da fare: **merge** del branch `feat/integrazione-api-v103` → `main` quando decidi.

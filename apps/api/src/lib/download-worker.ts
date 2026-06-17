@@ -44,6 +44,12 @@ export interface DownloadWorker {
   cancel(queueId: string): boolean;
   /** Riavvia un job in failed (azzera retry_count). */
   retry(queueId: string): boolean;
+  /** Mette in pausa la coda: i job in corso continuano, non ne partono di nuovi. */
+  pause(): void;
+  /** Riprende la coda. */
+  resume(): void;
+  /** Ritorna true se la coda è in pausa. */
+  isPaused(): boolean;
 }
 
 const SAFETY_TICK_MS = 60_000;
@@ -69,6 +75,7 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
 
   let timer: NodeJS.Timeout | null = null;
   let stopped = true;
+  let paused = false;
 
   function updateQueue(
     queueId: string,
@@ -252,7 +259,7 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
   }
 
   async function tryStartNext(): Promise<void> {
-    if (stopped) {
+    if (stopped || paused) {
       return;
     }
     while (activeCount() < config.get('maxConcurrent')) {
@@ -287,6 +294,7 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
         return;
       }
       stopped = false;
+      paused = false;
       timer = setInterval(safetyTick, SAFETY_TICK_MS);
       timer.unref?.();
       logger.info(
@@ -298,6 +306,7 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
 
     stop(): void {
       stopped = true;
+      paused = false;
       if (timer) {
         clearInterval(timer);
         timer = null;
@@ -307,6 +316,27 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
       }
       inFlight.clear();
       logger.info('Download worker fermato');
+    },
+
+    pause() {
+      if (stopped || paused) {
+        return;
+      }
+      paused = true;
+      logger.info('Coda download messa in pausa');
+    },
+
+    resume() {
+      if (stopped || !paused) {
+        return;
+      }
+      paused = false;
+      logger.info('Coda download ripresa');
+      void tryStartNext();
+    },
+
+    isPaused() {
+      return paused;
     },
 
     on(event, listener) {

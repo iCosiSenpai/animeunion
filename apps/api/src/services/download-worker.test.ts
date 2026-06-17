@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AnimeSource } from '@animeunion/shared';
 import type { EpisodeDetail } from '@animeunion/shared';
+import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { schema } from '../db';
 import { createDownloadWorker } from '../lib/download-worker';
@@ -387,5 +388,69 @@ describe('DownloadWorker (FSM)', () => {
     worker.start(); // noop
     worker.stop();
     worker.stop(); // noop
+  });
+
+  it('pause blocca nuovi job, resume li riabilita', () => {
+    const config = createConfigService({ db });
+    config.set('animePath', animePath);
+    const worker = makeWorker(db, buildStubCatalog(new Map()), config);
+
+    const timestamp = new Date().toISOString();
+    db.insert(schema.anime)
+      .values({
+        id: 'a-1',
+        slug: 'foo',
+        title: 'Foo',
+        titleIta: null,
+        type: 'TV',
+        status: 'ONGOING',
+        coverImage: null,
+        episodeCount: 1,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      })
+      .run();
+    db.insert(schema.episode)
+      .values({
+        id: 'e-1',
+        animeId: 'a-1',
+        number: 1,
+        title: 'Pilot',
+        titleIta: null,
+        thumbnail: null,
+        duration: null,
+        airDate: null,
+        isFiller: 0,
+        languages: 'SUB_ITA',
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      })
+      .run();
+    db.insert(schema.episodeFile)
+      .values({
+        id: 'ef-1',
+        episodeId: 'e-1',
+        language: 'SUB_ITA',
+        downloadStatus: 'not_downloaded',
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      })
+      .run();
+
+    worker.start();
+    worker.pause();
+    expect(worker.isPaused()).toBe(true);
+
+    worker.enqueue('ef-1');
+    const queued = db
+      .select()
+      .from(schema.downloadQueue)
+      .where(eq(schema.downloadQueue.episodeFileId, 'ef-1'))
+      .get();
+    expect(queued?.status).toBe('queued');
+
+    worker.resume();
+    expect(worker.isPaused()).toBe(false);
+    worker.stop();
   });
 });

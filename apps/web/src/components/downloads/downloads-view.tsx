@@ -6,7 +6,19 @@ import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { trpc } from '@/lib/trpc';
 import type { DownloadQueueItem, DownloadStatus, Language } from '@animeunion/shared';
-import { CheckCircle2, Download, Film, RefreshCw, Trash2, X, XCircle } from 'lucide-react';
+import {
+  AlertCircle,
+  CheckCircle2,
+  Download,
+  Film,
+  Pause,
+  Play,
+  RefreshCw,
+  Trash2,
+  X,
+  XCircle,
+} from 'lucide-react';
+import type { ReactNode } from 'react';
 import { toast } from 'sonner';
 
 const STATUS_LABELS: Record<DownloadStatus, string> = {
@@ -140,7 +152,7 @@ function Section({
   empty,
 }: {
   title: string;
-  children: React.ReactNode;
+  children: ReactNode;
   empty?: boolean;
 }) {
   if (empty) return null;
@@ -164,6 +176,8 @@ export function DownloadsView() {
       return active ? 1500 : 5000;
     },
   });
+
+  const pausedQuery = trpc.download.isPaused.useQuery();
 
   const cancelMutation = trpc.download.cancel.useMutation({
     onSuccess: (res) => {
@@ -196,33 +210,137 @@ export function DownloadsView() {
     },
   });
 
+  const pauseMutation = trpc.download.pauseQueue.useMutation({
+    onSuccess: () => {
+      toast.success('Coda in pausa');
+      void utils.download.isPaused.invalidate();
+      void utils.download.queue.invalidate();
+    },
+    onError: () => toast.error('Errore durante la pausa'),
+  });
+
+  const resumeMutation = trpc.download.resumeQueue.useMutation({
+    onSuccess: () => {
+      toast.success('Coda ripresa');
+      void utils.download.isPaused.invalidate();
+      void utils.download.queue.invalidate();
+    },
+    onError: () => toast.error('Errore durante la ripresa'),
+  });
+
+  const cancelAllMutation = trpc.download.cancelAll.useMutation({
+    onSuccess: (res) => {
+      toast.success(`${res.cancelled} download annullati`);
+      void utils.download.queue.invalidate();
+    },
+    onError: () => toast.error("Errore durante l'annullamento massivo"),
+  });
+
+  const retryAllMutation = trpc.download.retryAllFailed.useMutation({
+    onSuccess: (res) => {
+      toast.success(`${res.retried} download rimesssi in coda`);
+      void utils.download.queue.invalidate();
+    },
+    onError: () => toast.error('Errore durante il retry massivo'),
+  });
+
   const queue = queueQuery.data ?? [];
   const active = queue.filter((i) => ['queued', 'downloading', 'processing'].includes(i.status));
   const completed = queue.filter((i) => i.status === 'completed');
   const failed = queue.filter((i) => i.status === 'failed' || i.status === 'cancelled');
+  const hasFailed = failed.some((i) => i.status === 'failed');
+  const isPaused = pausedQuery.data?.paused === true;
+  const isWorking =
+    clearMutation.isPending ||
+    pauseMutation.isPending ||
+    resumeMutation.isPending ||
+    cancelAllMutation.isPending ||
+    retryAllMutation.isPending;
 
   return (
     <div className="space-y-8">
-      <header className="flex flex-wrap items-end justify-between gap-4">
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-1">
           <h1 className="text-2xl font-bold tracking-tight">Download</h1>
           <p className="text-sm text-muted-foreground">
             Coda attiva e storico degli episodi scaricati.
           </p>
         </div>
-        {completed.length + failed.length > 0 ? (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => clearMutation.mutate()}
-            disabled={clearMutation.isPending}
-            className="gap-1"
-          >
-            <Trash2 className="h-4 w-4" />
-            Pulisci conclusi
-          </Button>
+
+        {queue.length > 0 ? (
+          <div className="flex flex-wrap gap-2">
+            {isPaused ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => resumeMutation.mutate()}
+                disabled={resumeMutation.isPending || isWorking}
+                className="gap-1"
+              >
+                <Play className="h-4 w-4" />
+                Riprendi
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => pauseMutation.mutate()}
+                disabled={pauseMutation.isPending || isWorking}
+                className="gap-1"
+              >
+                <Pause className="h-4 w-4" />
+                Pausa
+              </Button>
+            )}
+
+            {active.length > 0 ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => cancelAllMutation.mutate()}
+                disabled={cancelAllMutation.isPending || isWorking}
+                className="gap-1"
+              >
+                <AlertCircle className="h-4 w-4" />
+                Annulla tutti
+              </Button>
+            ) : null}
+
+            {hasFailed ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => retryAllMutation.mutate()}
+                disabled={retryAllMutation.isPending || isWorking}
+                className="gap-1"
+              >
+                <RefreshCw className="h-4 w-4" />
+                Riprova falliti
+              </Button>
+            ) : null}
+
+            {completed.length > 0 ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => clearMutation.mutate()}
+                disabled={clearMutation.isPending || isWorking}
+                className="gap-1"
+              >
+                <Trash2 className="h-4 w-4" />
+                Pulisci completati
+              </Button>
+            ) : null}
+          </div>
         ) : null}
       </header>
+
+      {isPaused && queue.length > 0 ? (
+        <div className="flex items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-600">
+          <Pause className="h-4 w-4" />
+          Coda in pausa: i download attivi finiranno, ma non partiranno nuovi job.
+        </div>
+      ) : null}
 
       {queueQuery.isLoading ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

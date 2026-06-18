@@ -111,12 +111,13 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
       .from(schema.downloadQueue)
       .where(eq(schema.downloadQueue.id, queueId))
       .get();
-    if (!item || item.status !== 'queued') {
+    // tryStartNext prenota il job (status -> 'downloading') prima di chiamarci:
+    // accettiamo lo stato riservato, non 'queued'.
+    if (!item || item.status !== 'downloading') {
       return;
     }
 
-    const now = new Date().toISOString();
-    updateQueue(queueId, { status: 'downloading', startedAt: now, progress: 0 });
+    updateQueue(queueId, { progress: 0 });
     const epFile = db
       .select()
       .from(schema.episodeFile)
@@ -165,8 +166,10 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
       await ensureDir(dirname(finalPath), logger);
 
       const onProgress = (p: DownloadProgress): void => {
+        const total = p.totalBytes ?? 0;
+        const ratio = total > 0 ? p.bytesDownloaded / total : 0;
         updateQueue(queueId, {
-          progress: p.bytesDownloaded / (p.totalBytes ?? p.bytesDownloaded ?? 1),
+          progress: Math.min(Math.max(ratio, 0), 1),
         });
         emitter.emit('progress', {
           queueId,

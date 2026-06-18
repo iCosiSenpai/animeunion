@@ -1,4 +1,6 @@
 import { mkdtemp, rm } from 'node:fs/promises';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AnimeSource } from '@animeunion/shared';
@@ -452,5 +454,100 @@ describe('DownloadWorker (FSM)', () => {
     worker.resume();
     expect(worker.isPaused()).toBe(false);
     worker.stop();
+  });
+
+  it('enqueue + tryStartNext scarica davvero e completa (regressione path normale)', async () => {
+    const body = Buffer.from('fake-mp4-bytes-0123456789');
+    const server = createServer((_req, res) => {
+      res.writeHead(200, {
+        'content-type': 'video/mp4',
+        'content-length': String(body.length),
+      });
+      res.end(body);
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const { port } = server.address() as AddressInfo;
+    const url = `http://127.0.0.1:${port}/ep.mp4`;
+
+    const config = createConfigService({ db });
+    config.set('animePath', animePath);
+    const worker = makeWorker(db, buildStubCatalog(new Map([['ef-1', url]])), config);
+
+    const timestamp = new Date().toISOString();
+    db.insert(schema.anime)
+      .values({
+        id: 'a-1',
+        slug: 'foo',
+        title: 'Foo',
+        titleIta: null,
+        type: 'TV',
+        status: 'ONGOING',
+        coverImage: null,
+        episodeCount: 1,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      })
+      .run();
+    db.insert(schema.episode)
+      .values({
+        id: 'e-1',
+        animeId: 'a-1',
+        number: 1,
+        title: 'Pilot',
+        titleIta: null,
+        thumbnail: null,
+        duration: null,
+        airDate: null,
+        isFiller: 0,
+        languages: 'SUB_ITA',
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      })
+      .run();
+    db.insert(schema.episodeFile)
+      .values({
+        id: 'ef-1',
+        episodeId: 'e-1',
+        language: 'SUB_ITA',
+        downloadStatus: 'not_downloaded',
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      })
+      .run();
+
+    try {
+      worker.start();
+      const id = worker.enqueue('ef-1');
+      await worker.tryStartNext();
+
+      const deadline = Date.now() + 4000;
+      let queue = db
+        .select()
+        .from(schema.downloadQueue)
+        .where(eq(schema.downloadQueue.id, id))
+        .get();
+      while (queue && queue.status !== 'completed' && queue.status !== 'failed') {
+        if (Date.now() > deadline) {
+          throw new Error(`timeout: stato coda fermo su '${queue.status}'`);
+        }
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        queue = db.select().from(schema.downloadQueue).where(eq(schema.downloadQueue.id, id)).get();
+      }
+
+      expect(queue?.status).toBe('completed');
+      expect(queue?.progress).toBe(1);
+
+      const epFile = db
+        .select()
+        .from(schema.episodeFile)
+        .where(eq(schema.episodeFile.id, 'ef-1'))
+        .get();
+      expect(epFile?.downloadStatus).toBe('downloaded');
+      expect(epFile?.localPath).toBeTruthy();
+      expect(epFile?.fileSize).toBe(body.length);
+    } finally {
+      worker.stop();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
   });
 });

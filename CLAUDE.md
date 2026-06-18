@@ -68,7 +68,23 @@ Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
   non era `'queued'` -> **il download non partiva mai nel path normale**. Fix: `runOne` ora si fida
   della prenotazione atomica; aggiunto clamp difensivo al calcolo `progress` (no `NaN`/overflow) e
   un test di regressione end-to-end (enqueue -> download reale -> `completed`/`downloaded`).
-- **131 test verdi** (16 file).
+- **Post-STEP 5 — UX & robustezza (giu 2026, tutto su `main`):**
+  - Home "Ultimi episodi": dialog al click (scarica quell'episodio via `download.addEpisodeRef`
+    oppure vai alla serie). Fix dettaglio senza episodi su serie ONGOING (`episodeCount: null`
+    rompeva il parse) + parsing episodi resiliente (`safeParse` per elemento).
+  - Relazioni e Consigliati come card con copertina e **persistenti** dal percorso cache DB
+    (`assembleDetailFromDb` rilegge `anime_relation`; nuova colonna `anime.recommendations`).
+  - Indicatore lingua bandiera+icona (SVG inline) al posto del testo SUB/DUB.
+  - Pulsante **Segui stateful** (mostra lo stato, lo cambia, smette di seguire); stato download
+    per episodio nel dettaglio; badge "Seguito" sulle card.
+  - **Gestione file** in `/library`: elimina episodio/stagione/serie e orfani (pulsanti rossi +
+    conferma), con pulizia delle cartelle vuote.
+  - **Quick wins (A)**: validazione download (rifiuta HTML "link scaduto" / sniff primi byte),
+    avviso `animePath` non scrivibile o di default (`SetupBanner`), cleanup `.part` all'avvio.
+  - **Hardening (D)**: redaction segreti nei log, security headers + CORS allowlist
+    (`CORS_ORIGINS`), gestione 429 (Retry-After/backoff), watchdog stallo download (60s),
+    guardia spazio disco (500 MiB), script `npm run dev:clean` (libera 3001/3000).
+- **148 test verdi** (17 file).
 
 **Endpoint v1.0.3/1.1.0/1.1.1 verificati live (12/13, base path
 `https://api.animeunion.tv/api/v1/integration`):**
@@ -86,9 +102,11 @@ Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
 - **Non deployato (404)**: `POST /me/favorites/sync` — non serve: GET + delta via `?updatedSince=`
   coprono già "import iniziale + sync incrementale".
 
-**Manca:** Docker multi-arch + PWA + Web Push (STEP 6) e test E2E/release v0.1.0
-(STEP 7). `ffmpeg-static`/`node-cron` ancora inutilizzati (rinviati: il team di AnimeUnion
-conferma MP4 diretto, niente HLS; scheduler custom).
+**Manca:** Docker multi-arch + PWA + Web Push (STEP 6, i `Dockerfile` di api/web non esistono
+ancora) e test E2E/release v0.1.0 (STEP 7). `ffmpeg-static`/`node-cron` ancora inutilizzati
+(rinviati: il team di AnimeUnion conferma MP4 diretto, niente HLS; scheduler custom).
+**Rimandato di proposito (D):** password/app-token per la web UI — è l'unico cambiamento che
+potrebbe bloccare l'accesso, da fare con una scelta UX esplicita.
 
 ## Roadmap a step (verso v0.1.0)
 
@@ -119,7 +137,11 @@ conferma MP4 diretto, niente HLS; scheduler custom).
 - [x] **STEP 5** — Verifica **live** API (12/13 endpoint + social) con credenziali reali ✅
       + **controllo bug del progetto** (fix critico download engine, vedi Stato) + **merge** del
       lavoro (`feat/settings-e-motore`) → `main`.
-- [ ] **STEP 6** — Docker multi-arch + PWA + Web Push (PLAN §S7).
+- [x] **Post-STEP 5** — Polish dettaglio/home/libreria (dialog episodi, relazioni+consigliati
+      persistenti, lingua bandiera+icona, Segui stateful, stato download, gestione file) +
+      **quick wins (A)** + **hardening backend (D)**. Vedi Stato. Tutto mergiato in `main`.
+      Rimandato: password web UI (opzionale).
+- [ ] **STEP 6** — Docker multi-arch (creare i `Dockerfile`) + PWA + Web Push (PLAN §S7).
 - [ ] **STEP 7** — Test E2E (Playwright) + CHANGELOG + DEPLOYMENT + release v0.1.0 (PLAN §S8).
 
 ## Gotchas operativi
@@ -130,9 +152,10 @@ conferma MP4 diretto, niente HLS; scheduler custom).
   token reale. Solo `POST /me/favorites/sync` non è deployato (non necessario). La shape dei
   contratti `packages/shared/src/contracts/me.ts` combacia con le risposte reali. Base path:
   `https://api.animeunion.tv/api/v1/integration`. Rate limit: 120 req/min per token.
-- **Branch**: il lavoro fino allo STEP 5 (integrazione API + STEP 2.5→4 + fix download engine)
-  è stato **mergiato in `main`** (fast-forward) e pushato su `origin/main` al 2026-06-18.
-  `feat/settings-e-motore` resta come riferimento. Il prossimo step (STEP 6) parte da `main`.
+- **Branch**: tutto il lavoro (integrazione API + STEP 2.5→5 + polish post-STEP 5 + quick wins +
+  hardening) è **mergiato in `main`** (sempre fast-forward) e pushato su `origin/main`. I branch
+  feature (`feat/quick-wins`, `feat/hardening`, ecc.) restano come riferimento ma sono già in `main`.
+  Il prossimo step (STEP 6 — Docker/PWA) parte da `main`.
 - **Credenziali**: email/password in `.env` (gitignored); token in SQLite (tabella `auth`). Mai
   segreti nel codice/compose. L'utente usa l'account `lookatale95@gmail.com`.
 - **Verifica sempre**: `npm run lint` + `npm run typecheck` + `npm run test` verdi prima di committare.

@@ -27,6 +27,8 @@ export interface LibraryService {
   deleteEntry(input: { animeId: string; language: Language }): Promise<LibraryDeleteResult>;
   /** Elimina tutti i file scaricati dell'intera serie/franchise. */
   deleteSeries(input: { animeId: string }): Promise<LibraryDeleteResult>;
+  /** Elimina i file orfani indicati (rilevati dalla scansione). */
+  deleteOrphans(paths: string[]): Promise<LibraryDeleteResult>;
 }
 
 export interface LibraryServiceDeps {
@@ -451,6 +453,25 @@ export function createLibraryService(deps: LibraryServiceDeps): LibraryService {
         .all()
         .map((row) => row.id);
       return removeFiles(ids);
+    },
+
+    async deleteOrphans(paths) {
+      const animePath = config.get('animePath');
+      let deletedFiles = 0;
+      let freedBytes = 0;
+      for (const path of paths) {
+        try {
+          const info = await stat(path).catch(() => null);
+          const removed = await deleteFileAndPrune(path, animePath, logger);
+          if (removed) {
+            deletedFiles += 1;
+            freedBytes += info ? Number(info.size) : 0;
+          }
+        } catch (error) {
+          logger.error({ err: error, path }, 'Eliminazione orfano fallita');
+        }
+      }
+      return { deletedFiles, freedBytes };
     },
   };
 }

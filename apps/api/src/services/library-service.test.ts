@@ -262,6 +262,20 @@ describe('LibraryService', () => {
     expect(dubRow?.downloadStatus).toBe('downloaded');
   });
 
+  it('deleteOrphans cancella i file orfani indicati', async () => {
+    const db = createTestDb();
+    const service = makeService(db, tmpDir);
+    const orphanDir = join(tmpDir, 'sub-ita', 'ghost', 'Season 01');
+    await mkdir(orphanDir, { recursive: true });
+    const orphan = join(orphanDir, 'S01E99.mp4');
+    await writeFile(orphan, 'orphan-bytes');
+
+    const res = await service.deleteOrphans([orphan]);
+    expect(res.deletedFiles).toBe(1);
+    expect(res.freedBytes).toBe('orphan-bytes'.length);
+    expect(existsSync(orphan)).toBe(false);
+  });
+
   it('deleteSeries cancella tutte le lingue della serie', async () => {
     const db = createTestDb();
     insertAnime(db, 'show-s');

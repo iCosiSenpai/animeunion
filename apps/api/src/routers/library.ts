@@ -7,6 +7,7 @@ import {
   libraryScanResultSchema,
   libraryStatsSchema,
 } from '@animeunion/shared';
+import { z } from 'zod';
 import { publicProcedure, router } from '../trpc';
 
 /** Libreria locale: scansione, lista, statistiche ed eliminazione dei file scaricati. */
@@ -37,4 +38,9 @@ export const libraryRouter = router({
     .input(libraryDeleteSeriesInputSchema)
     .output(libraryDeleteResultSchema)
     .mutation(({ ctx, input }) => ctx.services.library.deleteSeries(input)),
+
+  deleteOrphans: publicProcedure
+    .input(z.object({ paths: z.array(z.string().min(1)) }))
+    .output(libraryDeleteResultSchema)
+    .mutation(({ ctx, input }) => ctx.services.library.deleteOrphans(input.paths)),
 });

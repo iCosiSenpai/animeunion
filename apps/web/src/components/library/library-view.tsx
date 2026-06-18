@@ -3,11 +3,19 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { trpc } from '@/lib/trpc';
 import { formatBytes } from '@/lib/utils';
 import type { LibraryScanResult } from '@animeunion/shared';
-import { FolderOpen, HardDrive, Play, RefreshCw, Tv } from 'lucide-react';
+import { FolderOpen, HardDrive, Play, RefreshCw, Trash2, Tv } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -95,6 +103,20 @@ export function LibraryView() {
   });
 
   const [lastScan, setLastScan] = useState<LibraryScanResult | null>(null);
+  const [confirmOrphans, setConfirmOrphans] = useState(false);
+
+  const deleteOrphans = trpc.library.deleteOrphans.useMutation({
+    onSuccess: (res) => {
+      toast.success(
+        `Eliminati ${res.deletedFiles} orfani · ${formatBytes(res.freedBytes)} liberati`,
+      );
+      void utils.library.stats.invalidate();
+      void utils.library.list.invalidate();
+      setLastScan((prev) => (prev ? { ...prev, orphans: 0, orphanPaths: [] } : prev));
+      setConfirmOrphans(false);
+    },
+    onError: () => toast.error('Eliminazione orfani fallita'),
+  });
 
   async function onScan() {
     try {
@@ -135,9 +157,53 @@ export function LibraryView() {
             ) : lastScan ? (
               <ScanSummary result={lastScan} />
             ) : null}
+            {lastScan && lastScan.orphanPaths.length > 0 ? (
+              <Button
+                variant="destructive"
+                size="sm"
+                className="mt-2 gap-1"
+                disabled={deleteOrphans.isPending}
+                onClick={() => setConfirmOrphans(true)}
+              >
+                <Trash2 className="h-4 w-4" />
+                Elimina {lastScan.orphanPaths.length} orfan
+                {lastScan.orphanPaths.length === 1 ? 'o' : 'i'}
+              </Button>
+            ) : null}
           </div>
         </Card>
       ) : null}
+
+      <Dialog open={confirmOrphans} onOpenChange={setConfirmOrphans}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="text-destructive">Eliminare i file orfani?</DialogTitle>
+            <DialogDescription>
+              Verranno cancellati {lastScan?.orphanPaths.length ?? 0} file presenti su disco ma non
+              collegati ad alcun episodio del catalogo. L&apos;operazione &egrave;{' '}
+              <strong>irreversibile</strong>.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setConfirmOrphans(false)}
+              disabled={deleteOrphans.isPending}
+            >
+              Annulla
+            </Button>
+            <Button
+              variant="destructive"
+              className="gap-2"
+              disabled={deleteOrphans.isPending}
+              onClick={() => deleteOrphans.mutate({ paths: lastScan?.orphanPaths ?? [] })}
+            >
+              <Trash2 className="h-4 w-4" />
+              Elimina definitivamente
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div className="space-y-1">
         <h2 className="text-lg font-semibold tracking-tight">Serie scaricate</h2>

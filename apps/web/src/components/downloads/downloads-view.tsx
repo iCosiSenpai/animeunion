@@ -1,11 +1,12 @@
 'use client';
 
+import { LanguageBadge } from '@/components/anime/language-badge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { trpc } from '@/lib/trpc';
-import type { DownloadQueueItem, DownloadStatus, Language } from '@animeunion/shared';
+import type { DownloadQueueItem, DownloadStatus } from '@animeunion/shared';
 import {
   AlertCircle,
   CheckCircle2,
@@ -39,11 +40,6 @@ const STATUS_VARIANT: Record<DownloadStatus, 'default' | 'secondary' | 'destruct
     failed: 'destructive',
     cancelled: 'outline',
   };
-
-const LANGUAGE_LABELS: Record<Language, string> = {
-  SUB_ITA: 'SUB',
-  DUB_ITA: 'DUB',
-};
 
 function ProgressBar({ value }: { value: number }) {
   const pct = Math.max(0, Math.min(1, value)) * 100;
@@ -92,7 +88,7 @@ function DownloadCard({
             </p>
             <div className="flex items-center gap-2">
               <Badge variant={STATUS_VARIANT[item.status]}>{STATUS_LABELS[item.status]}</Badge>
-              <Badge variant="outline">{LANGUAGE_LABELS[item.language]}</Badge>
+              <LanguageBadge language={item.language} />
             </div>
           </div>
 

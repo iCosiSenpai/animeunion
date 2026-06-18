@@ -1,5 +1,6 @@
 'use client';
 
+import { LanguageBadge } from '@/components/anime/language-badge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -46,9 +47,7 @@ export function LibrarySeriesCard({ item }: { item: LibraryItem }) {
               </Link>
               <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                 <Badge variant="secondary">Stagione {pad2(item.seasonNumber)}</Badge>
-                <Badge variant="outline">
-                  {item.language === 'SUB_ITA' ? 'Sub ITA' : 'Dub ITA'}
-                </Badge>
+                <LanguageBadge language={item.language} />
                 <span className="flex items-center gap-1">
                   <Eye className="h-3 w-3" />
                   {item.episodes.length} episod{item.episodes.length === 1 ? 'io' : 'i'}

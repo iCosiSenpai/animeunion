@@ -1,5 +1,6 @@
 'use client';
 
+import { LanguageBadge } from '@/components/anime/language-badge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -65,9 +66,7 @@ export function EpisodeCard({ episode }: { episode: LatestEpisode }) {
               />
             ) : null}
             <Badge className="absolute left-2 top-2">Ep. {episode.episodeNumber}</Badge>
-            <Badge variant="secondary" className="absolute right-2 top-2">
-              {LANGUAGE_LABELS[episode.language]}
-            </Badge>
+            <LanguageBadge language={episode.language} className="absolute right-2 top-2" />
           </div>
           <div className="space-y-1 p-3">
             <h3 className="line-clamp-2 text-sm font-medium">{episode.title}</h3>

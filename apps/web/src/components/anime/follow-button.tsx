@@ -5,6 +5,8 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { FOLLOW_STATUSES } from '@/lib/follow';
@@ -31,13 +33,17 @@ export function FollowButton({ animeId }: { animeId: string }) {
           <ChevronDown className="ml-2 h-4 w-4" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start">
+      <DropdownMenuContent align="start" className="w-72">
+        <DropdownMenuLabel>Come vuoi seguirlo?</DropdownMenuLabel>
+        <DropdownMenuSeparator />
         {FOLLOW_STATUSES.map((status) => (
           <DropdownMenuItem
             key={status.value}
             onClick={() => add.mutate({ animeId, status: status.value })}
+            className="flex-col items-start gap-0.5"
           >
-            {status.label}
+            <span className="font-medium">{status.label}</span>
+            <span className="text-xs text-muted-foreground whitespace-normal">{status.hint}</span>
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>

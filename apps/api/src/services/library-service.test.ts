@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -194,5 +195,93 @@ describe('LibraryService', () => {
     const service = makeService(db, tmpDir);
     expect(service.list()).toEqual([]);
     expect(service.stats()).toEqual({ totalEpisodes: 0, totalSizeBytes: 0, totalSeries: 0 });
+  });
+
+  it('deleteEpisodeFile cancella il file, azzera la riga, pulisce coda e cartelle', async () => {
+    const db = createTestDb();
+    insertAnime(db, 'show-d');
+    insertEpisode(db, 'ep-d-1', 'show-d', 1);
+    insertFile(db, 'file-d-1', 'ep-d-1', 'SUB_ITA');
+    const file = await makeLibraryFile(tmpDir, 'show-d', 1, 'SUB_ITA');
+    const service = makeService(db, tmpDir);
+    await service.scan();
+    db.insert(schema.downloadQueue)
+      .values({
+        id: 'q-d',
+        episodeFileId: 'file-d-1',
+        status: 'completed',
+        priority: 50,
+        createdAt: new Date().toISOString(),
+      })
+      .run();
+
+    const res = await service.deleteEpisodeFile('file-d-1');
+    expect(res).toEqual({ deletedFiles: 1, freedBytes: 10 });
+    expect(existsSync(file)).toBe(false);
+    // cartelle vuote ripulite fino ad animePath
+    expect(existsSync(join(tmpDir, 'sub-ita', 'show-d', 'Season 01'))).toBe(false);
+    expect(existsSync(join(tmpDir, 'sub-ita'))).toBe(false);
+
+    const row = db
+      .select()
+      .from(schema.episodeFile)
+      .where(eq(schema.episodeFile.id, 'file-d-1'))
+      .get();
+    expect(row?.downloadStatus).toBe('not_downloaded');
+    expect(row?.localPath).toBeNull();
+    expect(db.select().from(schema.downloadQueue).all()).toHaveLength(0);
+  });
+
+  it('deleteEntry cancella solo i file della lingua indicata', async () => {
+    const db = createTestDb();
+    insertAnime(db, 'show-e');
+    insertEpisode(db, 'ep-e-1', 'show-e', 1);
+    insertFile(db, 'file-e-sub', 'ep-e-1', 'SUB_ITA');
+    insertFile(db, 'file-e-dub', 'ep-e-1', 'DUB_ITA');
+    await makeLibraryFile(tmpDir, 'show-e', 1, 'SUB_ITA');
+    const dub = await makeLibraryFile(tmpDir, 'show-e', 1, 'DUB_ITA');
+    const service = makeService(db, tmpDir);
+    await service.scan();
+
+    const res = await service.deleteEntry({ animeId: 'show-e', language: 'SUB_ITA' });
+    expect(res.deletedFiles).toBe(1);
+    expect(existsSync(join(tmpDir, 'sub-ita'))).toBe(false);
+    expect(existsSync(dub)).toBe(true); // DUB intatto
+
+    const subRow = db
+      .select()
+      .from(schema.episodeFile)
+      .where(eq(schema.episodeFile.id, 'file-e-sub'))
+      .get();
+    const dubRow = db
+      .select()
+      .from(schema.episodeFile)
+      .where(eq(schema.episodeFile.id, 'file-e-dub'))
+      .get();
+    expect(subRow?.downloadStatus).toBe('not_downloaded');
+    expect(dubRow?.downloadStatus).toBe('downloaded');
+  });
+
+  it('deleteSeries cancella tutte le lingue della serie', async () => {
+    const db = createTestDb();
+    insertAnime(db, 'show-s');
+    insertEpisode(db, 'ep-s-1', 'show-s', 1);
+    insertFile(db, 'file-s-sub', 'ep-s-1', 'SUB_ITA');
+    insertFile(db, 'file-s-dub', 'ep-s-1', 'DUB_ITA');
+    await makeLibraryFile(tmpDir, 'show-s', 1, 'SUB_ITA');
+    await makeLibraryFile(tmpDir, 'show-s', 1, 'DUB_ITA');
+    const service = makeService(db, tmpDir);
+    await service.scan();
+
+    const res = await service.deleteSeries({ animeId: 'show-s' });
+    expect(res.deletedFiles).toBe(2);
+    expect(existsSync(join(tmpDir, 'sub-ita'))).toBe(false);
+    expect(existsSync(join(tmpDir, 'dub-ita'))).toBe(false);
+    const downloaded = db
+      .select()
+      .from(schema.episodeFile)
+      .where(eq(schema.episodeFile.downloadStatus, 'downloaded'))
+      .all();
+    expect(downloaded).toHaveLength(0);
   });
 });

@@ -1,3 +1,5 @@
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { TRPCError } from '@trpc/server';
 import { describe, expect, it, vi } from 'vitest';
 import { createAuthService } from '../services/auth-service';
@@ -20,6 +22,8 @@ function makeCaller() {
   const db = createTestDb();
   const source = createMockSource();
   const config = createConfigService({ db });
+  // animePath isolato e inesistente: la scansione non deve toccare la cartella reale di sviluppo.
+  config.set('animePath', join(tmpdir(), `au-router-${Math.random().toString(36).slice(2)}`));
   const catalog = createCatalogService({ db, source, config, logger: testLogger });
   const follow = createFollowService({ db, source, logger: testLogger });
   const favorites = createFavoritesService({ db, source, catalog, config, logger: testLogger });

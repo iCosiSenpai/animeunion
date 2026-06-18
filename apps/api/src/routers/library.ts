@@ -1,7 +1,15 @@
-import { libraryItemSchema, libraryScanResultSchema, libraryStatsSchema } from '@animeunion/shared';
+import {
+  libraryDeleteEntryInputSchema,
+  libraryDeleteEpisodeInputSchema,
+  libraryDeleteResultSchema,
+  libraryDeleteSeriesInputSchema,
+  libraryItemSchema,
+  libraryScanResultSchema,
+  libraryStatsSchema,
+} from '@animeunion/shared';
 import { publicProcedure, router } from '../trpc';
 
-/** Libreria locale: scansione, lista e statistiche dei file scaricati. */
+/** Libreria locale: scansione, lista, statistiche ed eliminazione dei file scaricati. */
 export const libraryRouter = router({
   scan: publicProcedure
     .output(libraryScanResultSchema)
@@ -14,4 +22,19 @@ export const libraryRouter = router({
   stats: publicProcedure
     .output(libraryStatsSchema)
     .query(({ ctx }) => ctx.services.library.stats()),
+
+  deleteEpisode: publicProcedure
+    .input(libraryDeleteEpisodeInputSchema)
+    .output(libraryDeleteResultSchema)
+    .mutation(({ ctx, input }) => ctx.services.library.deleteEpisodeFile(input.episodeFileId)),
+
+  deleteEntry: publicProcedure
+    .input(libraryDeleteEntryInputSchema)
+    .output(libraryDeleteResultSchema)
+    .mutation(({ ctx, input }) => ctx.services.library.deleteEntry(input)),
+
+  deleteSeries: publicProcedure
+    .input(libraryDeleteSeriesInputSchema)
+    .output(libraryDeleteResultSchema)
+    .mutation(({ ctx, input }) => ctx.services.library.deleteSeries(input)),
 });

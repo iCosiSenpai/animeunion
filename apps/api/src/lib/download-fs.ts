@@ -1,5 +1,5 @@
-import { mkdir, rename } from 'node:fs/promises';
-import { join } from 'node:path';
+import { mkdir, rename, rm, rmdir } from 'node:fs/promises';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import type { Logger } from './logger';
 
 /**
@@ -72,7 +72,45 @@ export async function ensureDir(dir: string, logger?: Logger): Promise<void> {
  * il consumer (Jellyfin/Plex) vede o il nome vecchio o quello nuovo, mai un mix.
  */
 export async function atomicMove(from: string, to: string, logger?: Logger): Promise<void> {
-  const { dirname } = await import('node:path');
   await ensureDir(dirname(to), logger);
   await rename(from, to);
+}
+
+/**
+ * Cancella un file e ripulisce le cartelle padre rimaste vuote, risalendo fino a (escluso)
+ * `rootPath`. Opera SOLO se `filePath` è dentro `rootPath` (guardia di sicurezza). Tollerante
+ * a file già assenti. Ritorna true se il file esisteva ed è stato rimosso.
+ */
+export async function deleteFileAndPrune(
+  filePath: string,
+  rootPath: string,
+  logger?: Logger,
+): Promise<boolean> {
+  const root = resolve(rootPath);
+  const target = resolve(filePath);
+  const rel = relative(root, target);
+  if (rel === '' || rel.startsWith('..') || isAbsolute(rel)) {
+    logger?.warn({ filePath, rootPath }, 'Eliminazione fuori da animePath rifiutata');
+    return false;
+  }
+  let removed = false;
+  try {
+    await rm(target);
+    removed = true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      logger?.error({ err: error, target }, 'Eliminazione file fallita');
+      throw error;
+    }
+  }
+  let dir = dirname(target);
+  while (dir !== root && dir.startsWith(root)) {
+    try {
+      await rmdir(dir);
+    } catch {
+      break; // ENOTEMPTY / ENOENT: ci fermiamo
+    }
+    dir = dirname(dir);
+  }
+  return removed;
 }

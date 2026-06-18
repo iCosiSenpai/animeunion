@@ -3,6 +3,7 @@ import { animeSummarySchema } from './anime';
 import { languageSchema } from './enums';
 
 export const libraryEpisodeSchema = z.object({
+  episodeFileId: z.string(),
   episodeId: z.string(),
   episodeNumber: z.number().int(),
   episodeTitle: z.string().nullable(),
@@ -46,3 +47,17 @@ export const libraryStatsSchema = z.object({
   totalSeries: z.number().int(),
 });
 export type LibraryStats = z.infer<typeof libraryStatsSchema>;
+
+// Eliminazione file dalla libreria (episodio / stagione / serie).
+export const libraryDeleteEpisodeInputSchema = z.object({ episodeFileId: z.string().min(1) });
+export const libraryDeleteEntryInputSchema = z.object({
+  animeId: z.string().min(1),
+  language: languageSchema,
+});
+export const libraryDeleteSeriesInputSchema = z.object({ animeId: z.string().min(1) });
+
+export const libraryDeleteResultSchema = z.object({
+  deletedFiles: z.number().int(),
+  freedBytes: z.number().int(),
+});
+export type LibraryDeleteResult = z.infer<typeof libraryDeleteResultSchema>;

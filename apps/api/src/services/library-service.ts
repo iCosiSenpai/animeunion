@@ -1,9 +1,16 @@
 import { readdir, stat } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
-import type { Language, LibraryItem, LibraryScanResult, LibraryStats } from '@animeunion/shared';
-import { eq } from 'drizzle-orm';
+import type {
+  Language,
+  LibraryDeleteResult,
+  LibraryItem,
+  LibraryScanResult,
+  LibraryStats,
+} from '@animeunion/shared';
+import { and, eq, inArray } from 'drizzle-orm';
 import type { Db } from '../db';
 import { schema } from '../db';
+import { deleteFileAndPrune } from '../lib/download-fs';
 import type { Logger } from '../lib/logger';
 import type { ConfigService } from './config-service';
 import { loadGenresByAnimeIds, toAnimeSummary } from './mappers';
@@ -14,6 +21,12 @@ export interface LibraryService {
   scan(): Promise<LibraryScanResult>;
   list(): LibraryItem[];
   stats(): LibraryStats;
+  /** Elimina il file di un singolo episodio (episodio+lingua). */
+  deleteEpisodeFile(episodeFileId: string): Promise<LibraryDeleteResult>;
+  /** Elimina tutti i file scaricati di un anime in una lingua (una "stagione"). */
+  deleteEntry(input: { animeId: string; language: Language }): Promise<LibraryDeleteResult>;
+  /** Elimina tutti i file scaricati dell'intera serie/franchise. */
+  deleteSeries(input: { animeId: string }): Promise<LibraryDeleteResult>;
 }
 
 export interface LibraryServiceDeps {
@@ -106,6 +119,60 @@ export function createLibraryService(deps: LibraryServiceDeps): LibraryService {
         ),
       };
     });
+  }
+
+  /** Cancella i file degli episode_file indicati, azzera lo stato e pulisce la coda. */
+  async function removeFiles(episodeFileIds: string[]): Promise<LibraryDeleteResult> {
+    const animePath = config.get('animePath');
+    let deletedFiles = 0;
+    let freedBytes = 0;
+    for (const id of episodeFileIds) {
+      const file = db.select().from(schema.episodeFile).where(eq(schema.episodeFile.id, id)).get();
+      if (!file) {
+        continue;
+      }
+      const wasDownloaded = file.downloadStatus === 'downloaded' || file.localPath != null;
+      let path = file.localPath;
+      if (!path) {
+        const episode = db
+          .select()
+          .from(schema.episode)
+          .where(eq(schema.episode.id, file.episodeId))
+          .get();
+        if (episode) {
+          path = renamer.computeEpisodePath({
+            animePath,
+            animeId: episode.animeId,
+            episodeNumber: episode.number,
+            language: file.language as Language,
+          });
+        }
+      }
+      if (path) {
+        try {
+          await deleteFileAndPrune(path, animePath, logger);
+        } catch (error) {
+          logger.error({ err: error, episodeFileId: id }, 'Eliminazione file libreria fallita');
+        }
+      }
+      const now = new Date().toISOString();
+      db.update(schema.episodeFile)
+        .set({
+          downloadStatus: 'not_downloaded',
+          localPath: null,
+          fileSize: null,
+          downloadedAt: null,
+          updatedAt: now,
+        })
+        .where(eq(schema.episodeFile.id, id))
+        .run();
+      db.delete(schema.downloadQueue).where(eq(schema.downloadQueue.episodeFileId, id)).run();
+      if (wasDownloaded) {
+        deletedFiles += 1;
+        freedBytes += file.fileSize ?? 0;
+      }
+    }
+    return { deletedFiles, freedBytes };
   }
 
   return {
@@ -289,6 +356,7 @@ export function createLibraryService(deps: LibraryServiceDeps): LibraryService {
           buckets.set(key, item);
         }
         item.episodes.push({
+          episodeFileId: row.episodeFileId,
           episodeId: row.episodeId,
           episodeNumber: row.episodeNumber,
           episodeTitle: row.episodeTitle ?? null,
@@ -337,6 +405,52 @@ export function createLibraryService(deps: LibraryServiceDeps): LibraryService {
         totalSizeBytes,
         totalSeries: seriesSet.size,
       };
+    },
+
+    async deleteEpisodeFile(episodeFileId) {
+      return removeFiles([episodeFileId]);
+    },
+
+    async deleteEntry({ animeId, language }) {
+      const ids = db
+        .select({ id: schema.episodeFile.id })
+        .from(schema.episodeFile)
+        .innerJoin(schema.episode, eq(schema.episode.id, schema.episodeFile.episodeId))
+        .where(
+          and(
+            eq(schema.episode.animeId, animeId),
+            eq(schema.episodeFile.language, language),
+            eq(schema.episodeFile.downloadStatus, 'downloaded'),
+          ),
+        )
+        .all()
+        .map((row) => row.id);
+      return removeFiles(ids);
+    },
+
+    async deleteSeries({ animeId }) {
+      const series = resolver.resolve(animeId);
+      const animeIds = new Set<string>([animeId]);
+      for (const row of db
+        .select({ id: schema.anime.id })
+        .from(schema.anime)
+        .where(eq(schema.anime.seriesId, series.seriesId))
+        .all()) {
+        animeIds.add(row.id);
+      }
+      const ids = db
+        .select({ id: schema.episodeFile.id })
+        .from(schema.episodeFile)
+        .innerJoin(schema.episode, eq(schema.episode.id, schema.episodeFile.episodeId))
+        .where(
+          and(
+            inArray(schema.episode.animeId, [...animeIds]),
+            eq(schema.episodeFile.downloadStatus, 'downloaded'),
+          ),
+        )
+        .all()
+        .map((row) => row.id);
+      return removeFiles(ids);
     },
   };
 }

@@ -130,8 +130,9 @@ conferma MP4 diretto, niente HLS; scheduler custom).
   token reale. Solo `POST /me/favorites/sync` non è deployato (non necessario). La shape dei
   contratti `packages/shared/src/contracts/me.ts` combacia con le risposte reali. Base path:
   `https://api.animeunion.tv/api/v1/integration`. Rate limit: 120 req/min per token.
-- **Branch attivo**: `feat/integrazione-api-v103` (integrazione) → da cui parte
-  `feat/settings-e-motore` (lavoro corrente). `main` non ha ancora questo lavoro.
+- **Branch**: il lavoro fino allo STEP 5 (integrazione API + STEP 2.5→4 + fix download engine)
+  è stato **mergiato in `main`** (fast-forward) e pushato su `origin/main` al 2026-06-18.
+  `feat/settings-e-motore` resta come riferimento. Il prossimo step (STEP 6) parte da `main`.
 - **Credenziali**: email/password in `.env` (gitignored); token in SQLite (tabella `auth`). Mai
   segreti nel codice/compose. L'utente usa l'account `lookatale95@gmail.com`.
 - **Verifica sempre**: `npm run lint` + `npm run typecheck` + `npm run test` verdi prima di committare.

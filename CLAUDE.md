@@ -141,7 +141,11 @@ potrebbe bloccare l'accesso, da fare con una scelta UX esplicita.
       persistenti, lingua bandiera+icona, Segui stateful, stato download, gestione file) +
       **quick wins (A)** + **hardening backend (D)**. Vedi Stato. Tutto mergiato in `main`.
       Rimandato: password web UI (opzionale).
-- [ ] **STEP 6** — Docker multi-arch (creare i `Dockerfile`) + PWA + Web Push (PLAN §S7).
+- [~] **STEP 6** — Docker: **`Dockerfile` api/web creati** (api via `tsx`; web Next standalone),
+      `docker-compose` + workflow `docker-publish` (context root) + `.dockerignore` + credenziali
+      AnimeUnion rese **opzionali** (login dalla web UI, anche Google/Discord). **Da validare con un
+      `docker compose build` reale** (qui Docker non era disponibile). **Restano**: PWA (manifest +
+      service worker) e Web Push (PLAN §S7).
 - [ ] **STEP 7** — Test E2E (Playwright) + CHANGELOG + DEPLOYMENT + release v0.1.0 (PLAN §S8).
 
 ## Gotchas operativi

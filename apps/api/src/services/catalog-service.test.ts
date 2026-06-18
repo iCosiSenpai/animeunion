@@ -1,4 +1,4 @@
-import type { AnimeSource } from '@animeunion/shared';
+import type { AnimeDetail, AnimeSource } from '@animeunion/shared';
 import { eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 import { schema } from '../db';
@@ -83,6 +83,100 @@ describe('CatalogService', () => {
   it('getBySlug inesistente lancia NotFoundError', async () => {
     const { service } = makeService();
     await expect(service.getBySlug('slug-inesistente')).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it('getBySlug serve le relazioni anche dal percorso cache DB (fix "indietro")', async () => {
+    const db = createTestDb();
+    const config = createConfigService({ db });
+    const ts = new Date().toISOString();
+    // L'anime correlato deve esistere (FK su anime_relation + join di lettura).
+    db.insert(schema.anime)
+      .values({
+        id: 'rel-1',
+        slug: 'related-anime',
+        title: 'Related Anime',
+        titleIta: null,
+        type: 'TV',
+        status: 'COMPLETED',
+        coverImage: 'https://cdn.test/rel.jpg',
+        episodeCount: 0,
+        seasonYear: 2024,
+        createdAt: ts,
+        updatedAt: ts,
+      })
+      .run();
+
+    const detail: AnimeDetail = {
+      id: 'parent-1',
+      slug: 'parent',
+      title: 'Parent',
+      titleIta: null,
+      coverImage: null,
+      type: 'TV',
+      status: 'ONGOING',
+      season: null,
+      seasonYear: 2026,
+      score: null,
+      genres: [],
+      availableLanguages: ['SUB_ITA'],
+      seriesId: null,
+      seasonNumber: null,
+      titleEng: null,
+      titleJpn: null,
+      synopsis: null,
+      synopsisEng: null,
+      bannerImage: null,
+      trailerUrl: null,
+      studio: null,
+      episodeCount: 1,
+      episodeDuration: null,
+      malId: null,
+      anilistId: null,
+      relatedAnime: [
+        {
+          id: 'rel-1',
+          slug: 'related-anime',
+          title: 'Related Anime',
+          titleIta: null,
+          coverImage: 'https://cdn.test/rel.jpg',
+          type: 'TV',
+          seasonYear: 2024,
+          relationType: 'SEQUEL',
+          seriesId: null,
+          seasonNumber: null,
+        },
+      ],
+      recommendations: [],
+      episodes: [
+        {
+          id: 'parent-1_e1_SUB_ITA',
+          animeId: 'parent-1',
+          number: 1,
+          title: 'Ep 1',
+          titleIta: null,
+          thumbnail: null,
+          duration: null,
+          airDate: null,
+          isFiller: false,
+          language: 'SUB_ITA',
+        },
+      ],
+    };
+    const source = { getAnimeBySlug: async () => detail } as unknown as AnimeSource;
+    const service = createCatalogService({ db, source, config, logger: testLogger });
+
+    const first = await service.getBySlug('parent');
+    expect(first.relatedAnime).toHaveLength(1);
+
+    // Seconda chiamata: riga fresh con episodi -> percorso DB. Le relazioni devono restare.
+    const second = await service.getBySlug('parent');
+    expect(second.relatedAnime).toHaveLength(1);
+    expect(second.relatedAnime[0]).toMatchObject({
+      id: 'rel-1',
+      slug: 'related-anime',
+      relationType: 'SEQUEL',
+      coverImage: 'https://cdn.test/rel.jpg',
+    });
   });
 
   it('search senza sync passa dal source e aggiorna il DB incrementalmente', async () => {

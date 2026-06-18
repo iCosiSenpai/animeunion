@@ -267,6 +267,16 @@ export function createCatalogService(options: CatalogServiceOptions): CatalogSer
   function saveRelations(animeId: string, relations: RelatedAnime[]): void {
     db.delete(schema.animeRelation).where(eq(schema.animeRelation.animeId, animeId)).run();
     for (const relation of relations) {
+      // La FK su related_anime_id richiede che l'anime correlato sia presente: se non e'
+      // ancora in catalogo saltiamo la relazione per non far fallire tutto il salvataggio.
+      const exists = db
+        .select({ id: schema.anime.id })
+        .from(schema.anime)
+        .where(eq(schema.anime.id, relation.id))
+        .get();
+      if (!exists) {
+        continue;
+      }
       db.insert(schema.animeRelation)
         .values({
           animeId,
@@ -276,6 +286,27 @@ export function createCatalogService(options: CatalogServiceOptions): CatalogSer
         .onConflictDoNothing()
         .run();
     }
+  }
+
+  function loadRelationsFromDb(animeId: string): RelatedAnime[] {
+    const rows = db
+      .select({ relationType: schema.animeRelation.relationType, related: schema.anime })
+      .from(schema.animeRelation)
+      .innerJoin(schema.anime, eq(schema.anime.id, schema.animeRelation.relatedAnimeId))
+      .where(eq(schema.animeRelation.animeId, animeId))
+      .all();
+    return rows.map(({ relationType, related }) => ({
+      id: related.id,
+      slug: related.slug,
+      title: related.title,
+      titleIta: related.titleIta,
+      coverImage: related.coverImage,
+      type: related.type as RelatedAnime['type'],
+      seasonYear: related.seasonYear,
+      relationType,
+      seriesId: related.seriesId,
+      seasonNumber: related.seasonNumber,
+    }));
   }
 
   function saveEpisodes(animeId: string, episodes: SourceEpisode[]): void {
@@ -387,7 +418,7 @@ export function createCatalogService(options: CatalogServiceOptions): CatalogSer
       anilistId: row.anilistId,
       season: row.season as AnimeDetail['season'],
       genres,
-      relatedAnime: [],
+      relatedAnime: loadRelationsFromDb(row.id),
       recommendations: [],
       episodes: listEpisodesFromDb(row.id),
     };

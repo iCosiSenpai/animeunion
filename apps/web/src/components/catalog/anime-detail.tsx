@@ -2,8 +2,10 @@
 
 import { AnimeGrid } from '@/components/anime/anime-grid';
 import { FollowButton } from '@/components/anime/follow-button';
+import { LanguageBadge } from '@/components/anime/language-badge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,7 +16,12 @@ import {
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { trpc } from '@/lib/trpc';
-import type { AnimeDetail as AnimeDetailType, EpisodeSummary, Language } from '@animeunion/shared';
+import type {
+  AnimeDetail as AnimeDetailType,
+  EpisodeSummary,
+  Language,
+  RelatedAnime,
+} from '@animeunion/shared';
 import { ChevronDown, Download, Star } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
@@ -30,6 +37,22 @@ const LANGUAGE_LABELS: Record<Language, string> = {
   SUB_ITA: 'SUB ITA',
   DUB_ITA: 'DUB ITA',
 };
+
+const RELATION_TYPE_LABELS: Record<string, string> = {
+  SEQUEL: 'Sequel',
+  PREQUEL: 'Prequel',
+  SPIN_OFF: 'Spin-off',
+  SIDE_STORY: 'Side story',
+  PARENT_STORY: 'Storia principale',
+  ALTERNATIVE: 'Alternativa',
+  CHARACTER: 'Personaggi',
+  SUMMARY: 'Riassunto',
+  OTHER: 'Correlato',
+};
+
+function relationLabel(type: string): string {
+  return RELATION_TYPE_LABELS[type] ?? type;
+}
 
 interface GroupedEpisode {
   number: number;
@@ -87,14 +110,9 @@ export function AnimeDetail({ slug }: { slug: string }) {
       {data.relatedAnime.length > 0 ? (
         <section className="space-y-3">
           <h2 className="text-xl font-semibold">Relazioni</h2>
-          <div className="flex flex-wrap gap-2">
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
             {data.relatedAnime.map((related) => (
-              <Link key={related.id} href={`/catalog/${related.slug}`}>
-                <Badge variant="outline" className="gap-1">
-                  {related.title}
-                  <span className="text-muted-foreground">({related.relationType})</span>
-                </Badge>
-              </Link>
+              <RelationCard key={`${related.id}_${related.relationType}`} related={related} />
             ))}
           </div>
         </section>
@@ -247,9 +265,7 @@ function EpisodeList({ anime }: { anime: AnimeDetailType }) {
             </span>
             <div className="flex shrink-0 gap-1">
               {episode.languages.map((language) => (
-                <Badge key={language} variant="secondary">
-                  {LANGUAGE_LABELS[language]}
-                </Badge>
+                <LanguageBadge key={language} language={language} />
               ))}
             </div>
             <DropdownMenu>
@@ -287,6 +303,34 @@ function EpisodeList({ anime }: { anime: AnimeDetailType }) {
         ))}
       </div>
     </div>
+  );
+}
+
+function RelationCard({ related }: { related: RelatedAnime }) {
+  const title = related.titleIta ?? related.title;
+  return (
+    <Link href={`/catalog/${related.slug}`} className="group" aria-label={title}>
+      <Card className="overflow-hidden border border-border/50 shadow-sm transition-all duration-300 hover:border-primary/30 hover:shadow-lg">
+        <div className="relative aspect-[2/3] overflow-hidden bg-muted">
+          {related.coverImage ? (
+            <img
+              src={related.coverImage}
+              alt={title}
+              loading="lazy"
+              className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+            />
+          ) : null}
+          <Badge variant="secondary" className="absolute left-2 top-2 shadow-sm">
+            {relationLabel(related.relationType)}
+          </Badge>
+        </div>
+        <div className="p-2">
+          <h3 className="line-clamp-2 text-xs font-medium transition-colors group-hover:text-primary">
+            {title}
+          </h3>
+        </div>
+      </Card>
+    </Link>
   );
 }
 

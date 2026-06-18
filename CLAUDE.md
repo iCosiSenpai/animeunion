@@ -21,7 +21,7 @@ Shared: `packages/shared` (zod + interfaccia `AnimeSource`). Video: ffmpeg-stati
 Scheduler: setInterval (node-cron non usato). Lint: Biome. Test: Vitest (+ Playwright in futuro).
 Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
 
-## Stato attuale (2026-06-17)
+## Stato attuale (2026-06-18)
 
 **Fatto:**
 - Monorepo, CI (lint+typecheck+test), DB SQLite (10 tabelle), MockSource/ApiSource, rate-limiter.
@@ -62,7 +62,13 @@ Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
   calcolando i path attesi tramite `RenamerService`, aggiorna `episode_file` per i file trovati,
   rileva orfani e missing; router `library.scan/list/stats`; pagina `/library` con statistiche,
   serie scaricate espandibili, bottone scan e toast. Watchlist/cronologia spostate sotto `meRouter`.
-- **130 test verdi** (16 file).
+- **Controllo bug progetto + fix download engine (STEP 5)**: passata di review sui moduli core.
+  Trovato e corretto un bug critico nel `download-worker`: `tryStartNext` prenotava il job
+  (`status -> 'downloading'`) prima di chiamare `runOne`, ma `runOne` usciva subito se lo stato
+  non era `'queued'` -> **il download non partiva mai nel path normale**. Fix: `runOne` ora si fida
+  della prenotazione atomica; aggiunto clamp difensivo al calcolo `progress` (no `NaN`/overflow) e
+  un test di regressione end-to-end (enqueue -> download reale -> `completed`/`downloaded`).
+- **131 test verdi** (16 file).
 
 **Endpoint v1.0.3/1.1.0/1.1.1 verificati live (12/13, base path
 `https://api.animeunion.tv/api/v1/integration`):**
@@ -110,8 +116,9 @@ conferma MP4 diretto, niente HLS; scheduler custom).
 - [x] **Frontend polish post-STEP 3** — Azioni globali in `/downloads`, guard navigazione
       Settings con save-and-continue, home premium con hero/icone/CTA.
 - [x] **STEP 4** — **Library scanner** + pagina `/library` (PLAN §S6).
-- [x] **STEP 5** — Verifica **live** API (12/13 endpoint + social) con credenziali reali ✅.
-      Da fare: **merge** del branch `feat/integrazione-api-v103` → `main` quando decidi.
+- [x] **STEP 5** — Verifica **live** API (12/13 endpoint + social) con credenziali reali ✅
+      + **controllo bug del progetto** (fix critico download engine, vedi Stato) + **merge** del
+      lavoro (`feat/settings-e-motore`) → `main`.
 - [ ] **STEP 6** — Docker multi-arch + PWA + Web Push (PLAN §S7).
 - [ ] **STEP 7** — Test E2E (Playwright) + CHANGELOG + DEPLOYMENT + release v0.1.0 (PLAN §S8).
 

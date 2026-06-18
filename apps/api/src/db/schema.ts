@@ -38,6 +38,8 @@ export const anime = sqliteTable(
     seriesId: text('series_id'),
     seasonNumber: integer('season_number'),
     languages: text('languages'),
+    // JSON di AnimeSummary[] dei consigliati, persistito col dettaglio per sopravvivere alla cache.
+    recommendations: text('recommendations'),
     createdAt: text('created_at').notNull(),
     updatedAt: text('updated_at').notNull(),
   },

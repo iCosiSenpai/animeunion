@@ -147,7 +147,24 @@ describe('CatalogService', () => {
           seasonNumber: null,
         },
       ],
-      recommendations: [],
+      recommendations: [
+        {
+          id: 'rec-1',
+          slug: 'consigliato',
+          title: 'Consigliato',
+          titleIta: null,
+          coverImage: 'https://cdn.test/rec.jpg',
+          type: 'TV',
+          status: 'COMPLETED',
+          season: null,
+          seasonYear: 2023,
+          score: 80,
+          genres: [],
+          availableLanguages: ['SUB_ITA'],
+          seriesId: null,
+          seasonNumber: null,
+        },
+      ],
       episodes: [
         {
           id: 'parent-1_e1_SUB_ITA',
@@ -168,8 +185,9 @@ describe('CatalogService', () => {
 
     const first = await service.getBySlug('parent');
     expect(first.relatedAnime).toHaveLength(1);
+    expect(first.recommendations).toHaveLength(1);
 
-    // Seconda chiamata: riga fresh con episodi -> percorso DB. Le relazioni devono restare.
+    // Seconda chiamata: riga fresh con episodi -> percorso DB. Relazioni e consigliati restano.
     const second = await service.getBySlug('parent');
     expect(second.relatedAnime).toHaveLength(1);
     expect(second.relatedAnime[0]).toMatchObject({
@@ -178,6 +196,8 @@ describe('CatalogService', () => {
       relationType: 'SEQUEL',
       coverImage: 'https://cdn.test/rel.jpg',
     });
+    expect(second.recommendations).toHaveLength(1);
+    expect(second.recommendations[0]).toMatchObject({ id: 'rec-1', slug: 'consigliato' });
   });
 
   it('search senza sync passa dal source e aggiorna il DB incrementalmente', async () => {

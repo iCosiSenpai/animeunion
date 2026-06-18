@@ -14,7 +14,9 @@ import type {
   Season,
   WeekDay,
 } from '@animeunion/shared';
+import { animeSummarySchema } from '@animeunion/shared';
 import { type SQL, and, asc, count, desc, eq, inArray, like, or, sql } from 'drizzle-orm';
+import { z } from 'zod';
 import type { Db } from '../db';
 import { schema } from '../db';
 import { NotFoundError } from '../lib/errors';
@@ -226,6 +228,7 @@ export function createCatalogService(options: CatalogServiceOptions): CatalogSer
         languages: JSON.stringify(detail.availableLanguages),
         seriesId: detail.seriesId,
         seasonNumber: detail.seasonNumber,
+        recommendations: JSON.stringify(detail.recommendations),
         createdAt: timestamp,
         updatedAt: timestamp,
       })
@@ -255,6 +258,7 @@ export function createCatalogService(options: CatalogServiceOptions): CatalogSer
           languages: JSON.stringify(detail.availableLanguages),
           seriesId: detail.seriesId,
           seasonNumber: detail.seasonNumber,
+          recommendations: JSON.stringify(detail.recommendations),
           updatedAt: timestamp,
         },
       })
@@ -285,6 +289,18 @@ export function createCatalogService(options: CatalogServiceOptions): CatalogSer
         })
         .onConflictDoNothing()
         .run();
+    }
+  }
+
+  function parseRecommendations(raw: string | null): AnimeSummary[] {
+    if (!raw) {
+      return [];
+    }
+    try {
+      const parsed = z.array(animeSummarySchema).safeParse(JSON.parse(raw));
+      return parsed.success ? parsed.data : [];
+    } catch {
+      return [];
     }
   }
 
@@ -419,7 +435,7 @@ export function createCatalogService(options: CatalogServiceOptions): CatalogSer
       season: row.season as AnimeDetail['season'],
       genres,
       relatedAnime: loadRelationsFromDb(row.id),
-      recommendations: [],
+      recommendations: parseRecommendations(row.recommendations),
       episodes: listEpisodesFromDb(row.id),
     };
   }

@@ -527,7 +527,9 @@ export function createCatalogService(options: CatalogServiceOptions): CatalogSer
         if (error instanceof ApiError && error.status === 404) {
           throw new NotFoundError(`Anime non trovato: ${slug}`);
         }
-        if (row) {
+        // Serviamo il DB solo se ha davvero gli episodi: una riga senza episodi darebbe
+        // un falso "Nessun episodio disponibile", mascherando l'errore reale della source.
+        if (row && hasEpisodes(row.id)) {
           logger.warn({ err: error, slug }, 'Source non raggiungibile, servo il dettaglio dal DB');
           return assembleDetailFromDb(row);
         }

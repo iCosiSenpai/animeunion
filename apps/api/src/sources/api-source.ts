@@ -24,7 +24,7 @@ import {
   type ApiRelation,
   apiAnimeDetailSchema,
   apiCalendarResponseSchema,
-  apiEpisodesResponseSchema,
+  apiEpisodeSchema,
   apiFavoriteAddResponseSchema,
   apiFavoritesResponseSchema,
   apiFeaturedResponseSchema,
@@ -35,6 +35,7 @@ import {
   apiMeSchema,
   apiNewsResponseSchema,
   apiPaginatedAnimeSchema,
+  apiSourceSchema,
   apiStatsSchema,
   apiWatchlistResponseSchema,
 } from './api-schemas';
@@ -132,12 +133,31 @@ export function createApiSource(options: ApiSourceOptions): AnimeSource {
     getToken: async () => (options.getToken ? await options.getToken() : null) ?? sessionToken,
   });
 
+  // Parsing resiliente: un episodio o una singola sorgente malformati non devono azzerare
+  // l'intera lista. Validiamo per-elemento e scartiamo solo quelli non validi.
+  const episodeBaseSchema = apiEpisodeSchema.omit({ sources: true });
+
   function expandEpisodes(slug: string, animeId: string, raw: unknown): EpisodeDetail[] {
-    const parsed = apiEpisodesResponseSchema.parse(raw);
+    const data =
+      raw && typeof raw === 'object' && Array.isArray((raw as { data?: unknown }).data)
+        ? (raw as { data: unknown[] }).data
+        : [];
     const episodes: EpisodeDetail[] = [];
-    for (const episode of parsed.data) {
+    for (const rawEpisode of data) {
+      const base = episodeBaseSchema.safeParse(rawEpisode);
+      if (!base.success) {
+        continue;
+      }
+      const episode = base.data;
       const baseId = episode.id ?? `${slug}_e${episode.number}`;
-      for (const source of episode.sources) {
+      const rawSources = (rawEpisode as { sources?: unknown }).sources;
+      const sources = Array.isArray(rawSources) ? rawSources : [];
+      for (const rawSource of sources) {
+        const parsedSource = apiSourceSchema.safeParse(rawSource);
+        if (!parsedSource.success) {
+          continue;
+        }
+        const source = parsedSource.data;
         episodes.push({
           id: `${baseId}_${source.language}`,
           animeId,

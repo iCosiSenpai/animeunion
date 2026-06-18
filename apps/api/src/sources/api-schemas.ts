@@ -87,7 +87,13 @@ export const apiAnimeDetailSchema = apiAnimeSummarySchema.extend({
   bannerImage: nullableString,
   trailerUrl: nullableString,
   studio: nullableString,
-  episodeCount: z.number().int().default(0),
+  // L'API restituisce episodeCount: null per le serie in corso. `.default(0)` copre solo
+  // undefined, non null: senza questo transform l'intero dettaglio fallirebbe il parse.
+  episodeCount: z
+    .number()
+    .int()
+    .nullish()
+    .transform((value) => value ?? 0),
   episodeDuration: nullableInt,
   malId: nullableInt,
   anilistId: nullableInt,

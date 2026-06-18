@@ -170,6 +170,83 @@ describe('ApiSource', () => {
     expect(detail.recommendations).toEqual([]);
   });
 
+  it('getAnimeBySlug tollera episodeCount null (serie in corso)', async () => {
+    pool()
+      .intercept({ path: '/anime/koori-no-jouheki', method: 'GET' })
+      .reply(
+        200,
+        {
+          id: 'a1',
+          slug: 'koori-no-jouheki',
+          title: 'Koori no Jouheki',
+          type: 'TV',
+          status: 'ONGOING',
+          episodeCount: null,
+          availableLanguages: ['SUB_ITA', 'DUB_ITA'],
+          genres: [],
+          relationsFrom: [],
+        },
+        JSON_HEADERS,
+      );
+    pool()
+      .intercept({ path: '/anime/koori-no-jouheki/episodes', method: 'GET' })
+      .reply(
+        200,
+        {
+          data: [
+            {
+              id: 'ep12',
+              number: 12,
+              languages: ['SUB_ITA', 'DUB_ITA'],
+              sources: [
+                { language: 'SUB_ITA', url: 'https://cdn.test/sub/ep12.mp4', format: 'mp4' },
+                { language: 'DUB_ITA', url: 'https://cdn.test/dub/ep12.mp4', format: 'mp4' },
+              ],
+            },
+          ],
+        },
+        JSON_HEADERS,
+      );
+
+    const detail = await createSource().getAnimeBySlug('koori-no-jouheki');
+    expect(detail.episodeCount).toBe(0);
+    expect(detail.episodes).toHaveLength(2);
+  });
+
+  it('getEpisodes scarta sorgenti/episodi malformati senza perdere i validi', async () => {
+    pool()
+      .intercept({ path: '/anime/mix/episodes', method: 'GET' })
+      .reply(
+        200,
+        {
+          data: [
+            {
+              id: 'ep1',
+              number: 1,
+              sources: [
+                { language: 'SUB_ITA', url: 'not-a-valid-url', format: 'mp4' },
+                { language: 'DUB_ITA', url: 'https://cdn.test/dub/ep1.mp4', format: 'mp4' },
+              ],
+            },
+            { id: 'ep2', number: 'NaN', sources: [] },
+            {
+              id: 'ep3',
+              number: 3,
+              sources: [
+                { language: 'SUB_ITA', url: 'https://cdn.test/sub/ep3.mp4', format: 'mp4' },
+              ],
+            },
+          ],
+        },
+        JSON_HEADERS,
+      );
+
+    const episodes = await createSource().getEpisodes('mix');
+    // ep1: solo la sorgente DUB valida; ep2 scartato (number non valido); ep3: SUB valida.
+    expect(episodes).toHaveLength(2);
+    expect(episodes.map((e) => `${e.number}_${e.language}`)).toEqual(['1_DUB_ITA', '3_SUB_ITA']);
+  });
+
   it('login restituisce il token e mappa la risposta snake_case', async () => {
     pool()
       .intercept({ path: '/auth/login', method: 'POST' })

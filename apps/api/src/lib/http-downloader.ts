@@ -32,6 +32,13 @@ export class DownloadAbortedError extends Error {
   }
 }
 
+export class DownloadStalledError extends Error {
+  constructor(stallMs: number) {
+    super(`Download in stallo: nessun dato per ${Math.round(stallMs / 1000)}s`);
+    this.name = 'DownloadStalledError';
+  }
+}
+
 export interface DownloadOptions {
   url: string;
   destPath: string;
@@ -39,9 +46,12 @@ export interface DownloadOptions {
   signal?: AbortSignal;
   progressIntervalMs?: number;
   headers?: Record<string, string>;
+  /** Aborta se non arrivano dati per questo intervallo (default 60s). */
+  stallTimeoutMs?: number;
 }
 
 const DEFAULT_PROGRESS_INTERVAL_MS = 200;
+const DEFAULT_STALL_TIMEOUT_MS = 60_000;
 
 export async function downloadToFile(options: DownloadOptions): Promise<DownloadResult> {
   const {
@@ -50,13 +60,24 @@ export async function downloadToFile(options: DownloadOptions): Promise<Download
     onProgress,
     signal,
     progressIntervalMs = DEFAULT_PROGRESS_INTERVAL_MS,
+    stallTimeoutMs = DEFAULT_STALL_TIMEOUT_MS,
     headers,
   } = options;
+
+  // Controller interno: abortito sia dal segnale esterno (cancel utente) sia dallo stall watchdog.
+  const internal = new AbortController();
+  if (signal) {
+    if (signal.aborted) {
+      internal.abort();
+    } else {
+      signal.addEventListener('abort', () => internal.abort(), { once: true });
+    }
+  }
 
   const start = Date.now();
   const response = await request(url, {
     method: 'GET',
-    signal,
+    signal: internal.signal,
     headers,
   });
 
@@ -95,9 +116,12 @@ export async function downloadToFile(options: DownloadOptions): Promise<Download
   let bytesDownloaded = 0;
   let lastEmit = 0;
   let sniffed = false;
+  let lastActivity = Date.now();
+  let stalled = false;
 
   const counter = new Transform({
     transform(chunk: Buffer, _enc, cb): void {
+      lastActivity = Date.now();
       if (!sniffed) {
         sniffed = true;
         // '<' = HTML, '{' = JSON: non è un contenuto binario/video.
@@ -118,6 +142,18 @@ export async function downloadToFile(options: DownloadOptions): Promise<Download
     },
   });
 
+  // Watchdog: se non arrivano dati per stallTimeoutMs, aborta (CDN bloccato a metà).
+  const watchdog = setInterval(
+    () => {
+      if (Date.now() - lastActivity > stallTimeoutMs) {
+        stalled = true;
+        internal.abort();
+      }
+    },
+    Math.min(stallTimeoutMs, 5_000),
+  );
+  watchdog.unref?.();
+
   // undici su Node restituisce body: Readable (Node stream).
   const body = response.body as Readable;
 
@@ -126,10 +162,15 @@ export async function downloadToFile(options: DownloadOptions): Promise<Download
   } catch (error) {
     // Rimuove il file parziale rimasto, qualunque sia la causa (abort o errore).
     await rm(destPath).catch(() => {});
+    if (stalled) {
+      throw new DownloadStalledError(stallTimeoutMs);
+    }
     if (signal?.aborted) {
       throw new DownloadAbortedError();
     }
     throw error;
+  } finally {
+    clearInterval(watchdog);
   }
 
   if (onProgress) {

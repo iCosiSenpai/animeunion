@@ -1,4 +1,4 @@
-import { mkdir, readdir, rename, rm, rmdir } from 'node:fs/promises';
+import { mkdir, readdir, rename, rm, rmdir, statfs } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import type { Logger } from './logger';
 
@@ -113,6 +113,16 @@ export async function deleteFileAndPrune(
     dir = dirname(dir);
   }
   return removed;
+}
+
+/** Byte liberi sul filesystem che contiene `path`, o null se non determinabile. */
+export async function freeDiskBytes(path: string): Promise<number | null> {
+  try {
+    const stats = await statfs(path);
+    return stats.bavail * stats.bsize;
+  } catch {
+    return null;
+  }
 }
 
 /**

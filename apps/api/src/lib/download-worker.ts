@@ -7,7 +7,7 @@ import { schema } from '../db';
 import type { CatalogService } from '../services/catalog-service';
 import type { ConfigService } from '../services/config-service';
 import type { RenamerService } from '../services/renamer-service';
-import { atomicMove, ensureDir, sweepPartFiles, tempPath } from './download-fs';
+import { atomicMove, ensureDir, freeDiskBytes, sweepPartFiles, tempPath } from './download-fs';
 import { DownloadAbortedError, type DownloadProgress, downloadToFile } from './http-downloader';
 import type { Logger } from './logger';
 
@@ -55,6 +55,7 @@ export interface DownloadWorker {
 const SAFETY_TICK_MS = 60_000;
 const BACKOFF_BASE_MS = 1_000;
 const BACKOFF_CAP_MS = 60_000;
+const MIN_FREE_DISK_BYTES = 500 * 1024 * 1024; // 500 MiB di margine minimo
 
 function backoffMs(attempt: number): number {
   return Math.min(BACKOFF_BASE_MS * 2 ** attempt, BACKOFF_CAP_MS);
@@ -164,6 +165,14 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
       });
       const partial = tempPath(finalPath, queueId);
       await ensureDir(dirname(finalPath), logger);
+
+      // Guardia spazio disco: evita di riempire completamente il volume.
+      const free = await freeDiskBytes(dirname(finalPath));
+      if (free != null && free < MIN_FREE_DISK_BYTES) {
+        throw new Error(
+          `Spazio su disco insufficiente: ${Math.round(free / 1024 / 1024)} MiB liberi`,
+        );
+      }
 
       const onProgress = (p: DownloadProgress): void => {
         const total = p.totalBytes ?? 0;

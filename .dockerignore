@@ -3,9 +3,12 @@
 **/.next
 **/dist
 
-# Dati locali e segreti: MAI nell'immagine
-**/data
-**/anime
+# Dati locali e segreti: MAI nell'immagine.
+# NB: ancorati alla root — NON usare **/anime o **/data (matcherebbero anche
+# src/components/anime e altre cartelle sorgente!).
+/data
+/anime
+apps/api/data
 **/*.db
 **/*.db-shm
 **/*.db-wal

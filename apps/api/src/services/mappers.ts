@@ -5,6 +5,7 @@ import {
   type Language,
   animeStatusSchema,
   animeTypeSchema,
+  episodeFileStatusSchema,
   languageSchema,
 } from '@animeunion/shared';
 import { eq, inArray } from 'drizzle-orm';
@@ -85,5 +86,6 @@ export function toEpisodeSummary(epRow: EpisodeRow, fileRow: EpisodeFileRow): Ep
     airDate: epRow.airDate,
     isFiller: epRow.isFiller === 1,
     language: languageSchema.parse(fileRow.language),
+    downloadStatus: episodeFileStatusSchema.catch('not_downloaded').parse(fileRow.downloadStatus),
   };
 }

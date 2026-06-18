@@ -58,3 +58,12 @@ export const downloadStatusSchema = z.enum([
   'cancelled',
 ]);
 export type DownloadStatus = z.infer<typeof downloadStatusSchema>;
+
+// Stato persistente del file episodio (tabella episode_file), distinto dallo stato della coda.
+export const episodeFileStatusSchema = z.enum([
+  'not_downloaded',
+  'downloading',
+  'downloaded',
+  'failed',
+]);
+export type EpisodeFileStatus = z.infer<typeof episodeFileStatusSchema>;

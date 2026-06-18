@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { languageSchema } from './enums';
+import { episodeFileStatusSchema, languageSchema } from './enums';
 
 export const episodeSummarySchema = z.object({
   id: z.string(),
@@ -12,6 +12,9 @@ export const episodeSummarySchema = z.object({
   airDate: z.string().nullable(),
   isFiller: z.boolean(),
   language: languageSchema,
+  // Stato persistente del file locale; assente per gli episodi che arrivano direttamente
+  // dalla source (non ancora mappati su episode_file).
+  downloadStatus: episodeFileStatusSchema.optional(),
 });
 export type EpisodeSummary = z.infer<typeof episodeSummarySchema>;
 

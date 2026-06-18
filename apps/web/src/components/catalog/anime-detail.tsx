@@ -16,8 +16,11 @@ import {
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { trpc } from '@/lib/trpc';
+import { cn } from '@/lib/utils';
 import type {
   AnimeDetail as AnimeDetailType,
+  DownloadStatus,
+  EpisodeFileStatus,
   EpisodeSummary,
   Language,
   RelatedAnime,
@@ -60,6 +63,8 @@ interface GroupedEpisode {
   languages: Language[];
   /** Mappa lingua -> episodeFileId (per il download). */
   fileIds: Partial<Record<Language, string>>;
+  /** Stato persistente del file per lingua (da episode_file). */
+  fileStatus: Partial<Record<Language, EpisodeFileStatus>>;
 }
 
 function groupEpisodes(episodes: EpisodeSummary[]): GroupedEpisode[] {
@@ -71,16 +76,60 @@ function groupEpisodes(episodes: EpisodeSummary[]): GroupedEpisode[] {
         existing.languages.push(episode.language);
       }
       existing.fileIds[episode.language] = episode.id;
+      existing.fileStatus[episode.language] = episode.downloadStatus;
     } else {
       map.set(episode.number, {
         number: episode.number,
         title: episode.titleIta ?? episode.title,
         languages: [episode.language],
         fileIds: { [episode.language]: episode.id },
+        fileStatus: { [episode.language]: episode.downloadStatus },
       });
     }
   }
   return [...map.values()].sort((a, b) => a.number - b.number);
+}
+
+type EpisodeDlState = 'downloaded' | 'downloading' | 'queued' | 'failed' | 'none';
+
+const DL_STATE_BADGE: Record<
+  Exclude<EpisodeDlState, 'none'>,
+  { label: string; className: string }
+> = {
+  downloaded: { label: 'Scaricato', className: 'border-transparent bg-emerald-600 text-white' },
+  downloading: { label: 'In corso', className: 'border-transparent bg-blue-600 text-white' },
+  queued: { label: 'In coda', className: 'border-transparent bg-amber-500 text-white' },
+  failed: {
+    label: 'Errore',
+    className: 'border-transparent bg-destructive text-destructive-foreground',
+  },
+};
+
+/** Stato di un file: la coda (transitoria) ha la precedenza sullo stato persistente. */
+function fileDlState(
+  fileId: string | undefined,
+  persistent: EpisodeFileStatus | undefined,
+  queue: Map<string, DownloadStatus>,
+): EpisodeDlState {
+  if (!fileId) return 'none';
+  const queued = queue.get(fileId);
+  if (queued === 'completed') return 'downloaded';
+  if (queued === 'queued') return 'queued';
+  if (queued === 'downloading' || queued === 'processing') return 'downloading';
+  if (queued === 'failed') return 'failed';
+  if (persistent === 'downloaded') return 'downloaded';
+  if (persistent === 'downloading') return 'downloading';
+  if (persistent === 'failed') return 'failed';
+  return 'none';
+}
+
+/** Aggregato a livello episodio per la chip di stato (priorità ai transitori). */
+function aggregateDlState(states: EpisodeDlState[]): EpisodeDlState {
+  if (states.includes('downloading')) return 'downloading';
+  if (states.includes('queued')) return 'queued';
+  if (states.includes('downloaded')) return 'downloaded';
+  if (states.includes('failed')) return 'failed';
+  return 'none';
 }
 
 export function AnimeDetail({ slug }: { slug: string }) {
@@ -201,6 +250,10 @@ function Hero({
 function EpisodeList({ anime }: { anime: AnimeDetailType }) {
   const grouped = groupEpisodes(anime.episodes);
   const utils = trpc.useUtils();
+  const queue = trpc.download.queue.useQuery(undefined, { refetchInterval: 2000 });
+  const queueMap = new Map<string, DownloadStatus>(
+    (queue.data ?? []).map((item) => [item.episodeFileId, item.status]),
+  );
   const addEpisodeMutation = trpc.download.addEpisode.useMutation({
     onSuccess: (res) => {
       toast.success(`Ep accodato (#${res.queueId.slice(0, 8)})`);
@@ -255,52 +308,74 @@ function EpisodeList({ anime }: { anime: AnimeDetailType }) {
         </DropdownMenu>
       </div>
       <div className="divide-y rounded-lg border">
-        {grouped.map((episode) => (
-          <div key={episode.number} className="flex items-center gap-3 p-3">
-            <span className="w-10 shrink-0 text-sm font-medium text-muted-foreground">
-              {episode.number}
-            </span>
-            <span className="flex-1 truncate text-sm">
-              {episode.title ?? `Episodio ${episode.number}`}
-            </span>
-            <div className="flex shrink-0 gap-1">
-              {episode.languages.map((language) => (
-                <LanguageBadge key={language} language={language} />
-              ))}
+        {grouped.map((episode) => {
+          const langStates = episode.languages.map((language) =>
+            fileDlState(episode.fileIds[language], episode.fileStatus[language], queueMap),
+          );
+          const aggregate = aggregateDlState(langStates);
+          return (
+            <div key={episode.number} className="flex items-center gap-3 p-3">
+              <span className="w-10 shrink-0 text-sm font-medium text-muted-foreground">
+                {episode.number}
+              </span>
+              <span className="flex-1 truncate text-sm">
+                {episode.title ?? `Episodio ${episode.number}`}
+              </span>
+              {aggregate !== 'none' ? (
+                <Badge className={cn('shrink-0', DL_STATE_BADGE[aggregate].className)}>
+                  {DL_STATE_BADGE[aggregate].label}
+                </Badge>
+              ) : null}
+              <div className="flex shrink-0 gap-1">
+                {episode.languages.map((language) => (
+                  <LanguageBadge key={language} language={language} />
+                ))}
+              </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0 gap-1"
+                    disabled={addEpisodeMutation.isPending}
+                  >
+                    <Download className="h-4 w-4" />
+                    Scarica
+                    <ChevronDown className="h-3 w-3 opacity-60" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {episode.languages.flatMap((language, idx) => {
+                    const state = fileDlState(
+                      episode.fileIds[language],
+                      episode.fileStatus[language],
+                      queueMap,
+                    );
+                    // Scaricabile solo se non e' gia' scaricato/in coda/in corso.
+                    const disabled =
+                      state === 'downloaded' || state === 'queued' || state === 'downloading';
+                    const suffix = state !== 'none' ? ` — ${DL_STATE_BADGE[state].label}` : '';
+                    const item = (
+                      <DropdownMenuItem
+                        key={`lang-${language}`}
+                        disabled={disabled}
+                        onSelect={() => {
+                          const id = episode.fileIds[language];
+                          if (id) onDownloadEpisode(id);
+                        }}
+                      >
+                        {LANGUAGE_LABELS[language]}
+                        {suffix}
+                      </DropdownMenuItem>
+                    );
+                    if (idx === 0) return [item];
+                    return [<DropdownMenuSeparator key={`sep-${language}`} />, item];
+                  })}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="shrink-0 gap-1"
-                  disabled={addEpisodeMutation.isPending}
-                >
-                  <Download className="h-4 w-4" />
-                  Scarica
-                  <ChevronDown className="h-3 w-3 opacity-60" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {episode.languages.flatMap((language, idx) => {
-                  const item = (
-                    <DropdownMenuItem
-                      key={`lang-${language}`}
-                      onSelect={() => {
-                        const id = episode.fileIds[language];
-                        if (id) onDownloadEpisode(id);
-                      }}
-                    >
-                      {LANGUAGE_LABELS[language]}
-                    </DropdownMenuItem>
-                  );
-                  if (idx === 0) return [item];
-                  return [<DropdownMenuSeparator key={`sep-${language}`} />, item];
-                })}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

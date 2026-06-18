@@ -58,6 +58,7 @@ describe('CatalogService', () => {
 
     expect(detail.slug).toBe(slug);
     expect(detail.episodes.length).toBeGreaterThan(0);
+    expect(detail.episodes[0]?.downloadStatus).toBe('not_downloaded');
     const row = db.select().from(schema.anime).where(eq(schema.anime.slug, slug)).get();
     expect(row).toBeDefined();
     const episodes = db

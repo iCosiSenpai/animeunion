@@ -1,41 +1,47 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # AnimeUnion Docker — docker-compose
 #
-# ATTENZIONE (Settimana 0): questo file è una BOZZA. I Dockerfile di `apps/api`
-# e `apps/web` non esistono ancora (arrivano in Settimana 7), quindi il build
-# NON è ancora funzionante. La struttura è definitiva e verrà attivata in S7.
+# Avvio:  cp .env.example .env  &&  docker compose up -d --build
+# Web:    http://localhost:${WEB_PORT:-7979}
 #
-# Le credenziali AnimeUnion stanno SOLO nel file `.env` (mai committato).
-# I token API (access + refresh) vengono generati al primo avvio e salvati
-# in SQLite — non vanno mai messi qui.
+# LOGIN: al primo avvio la web UI mostra una schermata di accesso. Puoi:
+#   - lasciare ANIMEUNION_EMAIL/PASSWORD vuote in .env e accedere dalla web UI
+#     (email/password OPPURE Google/Discord), oppure
+#   - compilarle in .env per l'auto-login.
+# I token API vengono generati al primo accesso e salvati in SQLite (mai qui).
 # ─────────────────────────────────────────────────────────────────────────────
 
 services:
   api:
-    build: ./apps/api
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
     restart: unless-stopped
     ports:
       - '${API_PORT:-3001}:3001'
     volumes:
-      - ./data:/data # database SQLite + storage token
-      - ${DOWNLOAD_PATH:-./anime}:/anime # libreria download
+      - ./data:/data # database SQLite + token
+      - ${DOWNLOAD_PATH:-./anime}:/data/anime # libreria download (= animePath di default)
     env_file:
-      - .env # ANIMEUNION_EMAIL, ANIMEUNION_PASSWORD (MAI committare!)
+      - .env # ANIMEUNION_EMAIL/PASSWORD (opzionali), MAI committare!
     environment:
       - NODE_ENV=production
       - DATABASE_PATH=/data/animeunion.db
-      - DOWNLOAD_PATH=/anime
-      - SOURCE_MODE=api
+      - SOURCE_MODE=${SOURCE_MODE:-api}
       - ANIMEUNION_API_URL=${ANIMEUNION_API_URL:-https://api.animeunion.tv/api/v1/integration}
       - TZ=Europe/Rome
-      - LOG_LEVEL=info
+      - LOG_LEVEL=${LOG_LEVEL:-info}
 
   web:
-    build: ./apps/web
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        # Indirizzo interno dell'API (nome-servizio compose). "Cotto" nel build.
+        API_URL: http://api:3001
     restart: unless-stopped
     ports:
       - '${WEB_PORT:-7979}:3000'
-    environment:
-      - API_URL=http://api:3001
     depends_on:
-      - api
+      api:
+        condition: service_healthy

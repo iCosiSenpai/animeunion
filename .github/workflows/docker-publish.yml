@@ -1,15 +1,11 @@
 name: Docker Publish
 
 # ─────────────────────────────────────────────────────────────────────────────
-# PLACEHOLDER (Settimana 0).
-#
-# I Dockerfile di apps/api e apps/web non esistono ancora (arrivano in S7).
-# Per non rendere la CI rossa, questo workflow NON si attiva sui push a `main`:
-# parte solo manualmente (workflow_dispatch) o su tag di versione `v*`, che non
-# verranno creati finché le immagini non saranno pronte.
-#
-# La struttura buildx multi-arch qui sotto è quella definitiva e verrà
-# completata/attivata in Settimana 7.
+# Build multi-arch (amd64 + arm64) delle immagini api/web e push su GHCR.
+# Si attiva manualmente (workflow_dispatch) o su tag di versione `v*`.
+# Guardia: il job parte solo se la repo variable DOCKER_PUBLISH_ENABLED == 'true'.
+# Il context di build è la ROOT del repo (monorepo npm workspaces); il Dockerfile
+# è in apps/<app>/Dockerfile.
 # ─────────────────────────────────────────────────────────────────────────────
 
 on:
@@ -51,7 +47,8 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
-          context: ./apps/${{ matrix.app }}
+          context: .
+          file: apps/${{ matrix.app }}/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |

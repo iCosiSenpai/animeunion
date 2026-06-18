@@ -14,4 +14,6 @@ export const configRouter = router({
     key: input.key,
     value: ctx.services.config.set(input.key, input.value),
   })),
+
+  animePathStatus: publicProcedure.query(({ ctx }) => ctx.services.config.animePathStatus()),
 });

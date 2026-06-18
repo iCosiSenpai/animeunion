@@ -1,12 +1,25 @@
+import { mkdir, rm, stat, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { type AppConfig, type ConfigKey, appConfigSchema } from '@animeunion/shared';
 import type { Db } from '../db';
 import { schema } from '../db';
+
+export interface AnimePathStatus {
+  path: string;
+  exists: boolean;
+  writable: boolean;
+  isDefault: boolean;
+}
 
 export interface ConfigService {
   getAll(): AppConfig;
   get<K extends ConfigKey>(key: K): AppConfig[K];
   set<K extends ConfigKey>(key: K, value: unknown): AppConfig[K];
+  /** Verifica che la cartella di download esista e sia scrivibile. */
+  animePathStatus(): Promise<AnimePathStatus>;
 }
+
+const DEFAULT_ANIME_PATH = appConfigSchema.shape.animePath.parse(undefined);
 
 export function createConfigService(deps: { db: Db }): ConfigService {
   function getAll(): AppConfig {
@@ -42,6 +55,26 @@ export function createConfigService(deps: { db: Db }): ConfigService {
         })
         .run();
       return parsed;
+    },
+
+    async animePathStatus(): Promise<AnimePathStatus> {
+      const path = getAll().animePath;
+      const isDefault = path === DEFAULT_ANIME_PATH;
+      try {
+        await mkdir(path, { recursive: true });
+        const probe = join(path, `.write-test-${Date.now()}`);
+        await writeFile(probe, 'ok');
+        await rm(probe).catch(() => {});
+        return { path, exists: true, writable: true, isDefault };
+      } catch {
+        let exists = false;
+        try {
+          exists = (await stat(path)).isDirectory();
+        } catch {
+          exists = false;
+        }
+        return { path, exists, writable: false, isDefault };
+      }
     },
   };
 }

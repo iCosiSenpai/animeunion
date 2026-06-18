@@ -17,8 +17,11 @@ services:
       context: .
       dockerfile: apps/api/Dockerfile
     restart: unless-stopped
-    ports:
-      - '${API_PORT:-3001}:3001'
+    # Nessuna porta pubblicata sull'host: il web raggiunge l'API sulla rete interna
+    # (http://api:3001). Esponila solo se ti serve fare debug dall'host, scegliendo
+    # una porta host libera, es: ports: ['3011:3001'].
+    expose:
+      - '3001'
     volumes:
       - ./data:/data # database SQLite + token
       - ${DOWNLOAD_PATH:-./anime}:/data/anime # libreria download (= animePath di default)

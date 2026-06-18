@@ -7,7 +7,7 @@ import { schema } from '../db';
 import type { CatalogService } from '../services/catalog-service';
 import type { ConfigService } from '../services/config-service';
 import type { RenamerService } from '../services/renamer-service';
-import { atomicMove, ensureDir, tempPath } from './download-fs';
+import { atomicMove, ensureDir, sweepPartFiles, tempPath } from './download-fs';
 import { DownloadAbortedError, type DownloadProgress, downloadToFile } from './http-downloader';
 import type { Logger } from './logger';
 
@@ -317,6 +317,14 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
       stopped = false;
       paused = false;
       reconcileOrphans();
+      // Pulizia best-effort dei .part rimasti da un crash precedente.
+      void sweepPartFiles(config.get('animePath'), logger)
+        .then((n) => {
+          if (n > 0) {
+            logger.info({ removed: n }, "File .part orfani rimossi all'avvio");
+          }
+        })
+        .catch(() => {});
       timer = setInterval(safetyTick, SAFETY_TICK_MS);
       timer.unref?.();
       logger.info(

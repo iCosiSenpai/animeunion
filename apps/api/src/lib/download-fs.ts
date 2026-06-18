@@ -1,4 +1,4 @@
-import { mkdir, rename, rm, rmdir } from 'node:fs/promises';
+import { mkdir, readdir, rename, rm, rmdir } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import type { Logger } from './logger';
 
@@ -112,5 +112,37 @@ export async function deleteFileAndPrune(
     }
     dir = dirname(dir);
   }
+  return removed;
+}
+
+/**
+ * Rimuove i file temporanei `.part.<id>` rimasti sotto `rootPath` (es. dopo un crash a metà
+ * download). Ritorna quanti ne ha cancellati. Tollerante a cartella inesistente.
+ */
+export async function sweepPartFiles(rootPath: string, logger?: Logger): Promise<number> {
+  let removed = 0;
+  async function walk(dir: string): Promise<void> {
+    try {
+      const entries = await readdir(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        const full = join(dir, entry.name);
+        if (entry.isDirectory()) {
+          await walk(full);
+        } else if (entry.isFile() && entry.name.includes('.part.')) {
+          try {
+            await rm(full);
+            removed += 1;
+          } catch (error) {
+            logger?.debug({ err: error, full }, 'Sweep .part: rimozione fallita');
+          }
+        }
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        logger?.error({ err: error, dir }, 'Sweep .part: lettura cartella fallita');
+      }
+    }
+  }
+  await walk(resolve(rootPath));
   return removed;
 }

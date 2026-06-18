@@ -1,4 +1,5 @@
-import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, sep } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -8,6 +9,7 @@ import {
   ensureDir,
   pad2,
   sanitizeSlugForFs,
+  sweepPartFiles,
   targetPath,
   tempPath,
 } from './download-fs';
@@ -113,5 +115,24 @@ describe('ensureDir + atomicMove (filesystem reale, cartella tmp)', () => {
     const got = await readFile(to, 'utf8');
     expect(got).toBe('mp4-content');
     await expect(stat(from)).rejects.toThrow();
+  });
+
+  it('sweepPartFiles rimuove i .part lasciando intatti gli altri file', async () => {
+    const dir = join(work, 'sub-ita', 'show', 'Season 01');
+    await mkdir(dir, { recursive: true });
+    const partial = join(dir, 'S01E01.mp4.part.abc123');
+    const real = join(dir, 'S01E02.mp4');
+    await writeFile(partial, 'partial');
+    await writeFile(real, 'video');
+
+    const removed = await sweepPartFiles(work, testLogger);
+    expect(removed).toBe(1);
+    expect(existsSync(partial)).toBe(false);
+    expect(existsSync(real)).toBe(true);
+  });
+
+  it('sweepPartFiles tollera una cartella inesistente', async () => {
+    const removed = await sweepPartFiles(join(work, 'non-esiste'), testLogger);
+    expect(removed).toBe(0);
   });
 });

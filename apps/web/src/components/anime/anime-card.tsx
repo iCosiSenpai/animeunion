@@ -1,11 +1,13 @@
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
+import { useFollowedIds } from '@/lib/use-followed';
 import type { AnimeSummary } from '@animeunion/shared';
-import { ArrowUpRight, Star } from 'lucide-react';
+import { ArrowUpRight, Check, Star } from 'lucide-react';
 import Link from 'next/link';
 
 export function AnimeCard({ anime }: { anime: AnimeSummary }) {
   const title = anime.titleIta ?? anime.title;
+  const followed = useFollowedIds().has(anime.id);
 
   return (
     <Link href={`/catalog/${anime.slug}`} className="group" aria-label={title}>
@@ -22,6 +24,12 @@ export function AnimeCard({ anime }: { anime: AnimeSummary }) {
           <Badge variant="secondary" className="absolute left-2 top-2 shadow-sm">
             {anime.type}
           </Badge>
+          {followed ? (
+            <Badge className="absolute bottom-2 left-2 gap-1 shadow-sm">
+              <Check className="h-3 w-3" />
+              Seguito
+            </Badge>
+          ) : null}
           {anime.score != null ? (
             <Badge
               variant="secondary"

@@ -218,10 +218,12 @@ export function createDownloadService(deps: DownloadServiceDeps): DownloadServic
     },
 
     cancelAll() {
+      // Annulla sia i job in coda sia quelli attivi/orfani (downloading/processing):
+      // "Annulla tutti" deve fermare davvero ogni download non terminato.
       const rows = db
         .select({ id: schema.downloadQueue.id })
         .from(schema.downloadQueue)
-        .where(eq(schema.downloadQueue.status, 'queued'))
+        .where(inArray(schema.downloadQueue.status, ['queued', 'downloading', 'processing']))
         .all();
       let count = 0;
       for (const row of rows) {
@@ -230,7 +232,7 @@ export function createDownloadService(deps: DownloadServiceDeps): DownloadServic
         }
       }
       if (count > 0) {
-        logger.info({ count }, 'Tutti i download in coda annullati');
+        logger.info({ count }, 'Tutti i download non terminati annullati');
       }
       return count;
     },

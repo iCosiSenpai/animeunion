@@ -49,6 +49,57 @@ function makeWorker(
   return createDownloadWorker({ db, catalog, config, logger: testLogger, renamer });
 }
 
+/** Inserisce un anime e un episode_file SUB_ITA per ogni id richiesto (un episodio per file). */
+function seedEpisodeFiles(
+  db: ReturnType<typeof import('../test/helpers').createTestDb>,
+  fileIds: string[],
+): void {
+  const t = new Date().toISOString();
+  db.insert(schema.anime)
+    .values({
+      id: 'a-1',
+      slug: 'foo',
+      title: 'Foo',
+      titleIta: null,
+      type: 'TV',
+      status: 'ONGOING',
+      coverImage: null,
+      episodeCount: fileIds.length,
+      createdAt: t,
+      updatedAt: t,
+    })
+    .run();
+  fileIds.forEach((fileId, i) => {
+    const episodeId = `e-${i + 1}`;
+    db.insert(schema.episode)
+      .values({
+        id: episodeId,
+        animeId: 'a-1',
+        number: i + 1,
+        title: 'Pilot',
+        titleIta: null,
+        thumbnail: null,
+        duration: null,
+        airDate: null,
+        isFiller: 0,
+        languages: 'SUB_ITA',
+        createdAt: t,
+        updatedAt: t,
+      })
+      .run();
+    db.insert(schema.episodeFile)
+      .values({
+        id: fileId,
+        episodeId,
+        language: 'SUB_ITA',
+        downloadStatus: 'not_downloaded',
+        createdAt: t,
+        updatedAt: t,
+      })
+      .run();
+  });
+}
+
 describe('DownloadWorker (FSM)', () => {
   let db: ReturnType<typeof import('../test/helpers').createTestDb>;
   let animePath: string;
@@ -548,6 +599,81 @@ describe('DownloadWorker (FSM)', () => {
     } finally {
       worker.stop();
       await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+
+  it('cancel su downloading orfano (nessun controller in volo) lo segna cancelled', () => {
+    const config = createConfigService({ db });
+    config.set('animePath', animePath);
+    const worker = makeWorker(db, buildStubCatalog(new Map()), config);
+
+    const t = new Date().toISOString();
+    seedEpisodeFiles(db, ['ef-orph']);
+    db.insert(schema.downloadQueue)
+      .values({
+        id: 'q-orph',
+        episodeFileId: 'ef-orph',
+        status: 'downloading',
+        startedAt: t,
+        priority: 50,
+        createdAt: t,
+      })
+      .run();
+
+    // Il worker non ha avviato questo job: nessun AbortController in volo -> orfano.
+    expect(worker.cancel('q-orph')).toBe(true);
+    const row = db
+      .select()
+      .from(schema.downloadQueue)
+      .where(eq(schema.downloadQueue.id, 'q-orph'))
+      .get();
+    expect(row?.status).toBe('cancelled');
+  });
+
+  it('start reimposta i download orfani (downloading/processing) a failed', () => {
+    const config = createConfigService({ db });
+    config.set('animePath', animePath);
+    const worker = makeWorker(db, buildStubCatalog(new Map()), config);
+
+    const t = new Date().toISOString();
+    seedEpisodeFiles(db, ['ef-a', 'ef-b']);
+    db.insert(schema.downloadQueue)
+      .values({
+        id: 'q-dl',
+        episodeFileId: 'ef-a',
+        status: 'downloading',
+        startedAt: t,
+        priority: 50,
+        createdAt: t,
+      })
+      .run();
+    db.insert(schema.downloadQueue)
+      .values({
+        id: 'q-proc',
+        episodeFileId: 'ef-b',
+        status: 'processing',
+        startedAt: t,
+        priority: 50,
+        createdAt: t,
+      })
+      .run();
+
+    worker.start();
+    try {
+      const dl = db
+        .select()
+        .from(schema.downloadQueue)
+        .where(eq(schema.downloadQueue.id, 'q-dl'))
+        .get();
+      const proc = db
+        .select()
+        .from(schema.downloadQueue)
+        .where(eq(schema.downloadQueue.id, 'q-proc'))
+        .get();
+      expect(dl?.status).toBe('failed');
+      expect(proc?.status).toBe('failed');
+    } finally {
+      worker.stop();
     }
   });
 });

@@ -291,6 +291,24 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
     void tryStartNext();
   }
 
+  function reconcileOrphans(): void {
+    // All'avvio nessun download e' davvero in volo: le righe lasciate 'downloading' o
+    // 'processing' da un processo precedente sono orfane. Le marchiamo come interrotte
+    // (failed) cosi' restano cancellabili/riavviabili dalla UI invece di bloccarsi.
+    const completedAt = new Date().toISOString();
+    const result = db
+      .update(schema.downloadQueue)
+      .set({ status: 'failed', error: 'Interrotto da riavvio del server', completedAt })
+      .where(inArray(schema.downloadQueue.status, ['downloading', 'processing']))
+      .run();
+    if (result.changes > 0) {
+      logger.warn(
+        { count: result.changes },
+        "Download orfani trovati all'avvio e segnati come interrotti",
+      );
+    }
+  }
+
   const worker: DownloadWorker = {
     start(): void {
       if (!stopped) {
@@ -298,6 +316,7 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
       }
       stopped = false;
       paused = false;
+      reconcileOrphans();
       timer = setInterval(safetyTick, SAFETY_TICK_MS);
       timer.unref?.();
       logger.info(
@@ -392,12 +411,17 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
         emitter.emit('cancelled', { queueId, episodeFileId: item.episodeFileId });
         return true;
       }
-      if (item.status === 'downloading') {
+      if (item.status === 'downloading' || item.status === 'processing') {
         const inflight = inFlight.get(queueId);
         if (inflight) {
           inflight.controller.abort();
           return true;
         }
+        // Orfano: il processo che lo scaricava non c'e' piu' (es. dopo un riavvio),
+        // quindi non c'e' nulla da abortire. Lo chiudiamo direttamente come cancelled.
+        updateQueue(queueId, { status: 'cancelled', completedAt: new Date().toISOString() });
+        emitter.emit('cancelled', { queueId, episodeFileId: item.episodeFileId });
+        return true;
       }
       return false;
     },

@@ -12,6 +12,7 @@ import type { DownloadService } from './services/download-service';
 import type { FavoritesService } from './services/favorites-service';
 import type { FollowService } from './services/follow-service';
 import type { HomeService } from './services/home-service';
+import type { LibraryService } from './services/library-service';
 import type { ProfileService } from './services/profile-service';
 
 export interface Context {
@@ -26,6 +27,7 @@ export interface Context {
     config: ConfigService;
     auth: AuthService;
     download: DownloadService;
+    library: LibraryService;
   };
   logger: Logger;
 }

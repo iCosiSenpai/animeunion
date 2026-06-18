@@ -7,7 +7,10 @@ import { createDownloadService } from '../services/download-service';
 import { createFavoritesService } from '../services/favorites-service';
 import { createFollowService } from '../services/follow-service';
 import { createHomeService } from '../services/home-service';
+import { createLibraryService } from '../services/library-service';
 import { createProfileService } from '../services/profile-service';
+import { createRenamerService } from '../services/renamer-service';
+import { createSeriesResolver } from '../services/series-resolver';
 import { createMockSource } from '../sources/mock-source';
 import { createTestDb, testLogger } from '../test/helpers';
 import { type Context, createCallerFactory } from '../trpc';
@@ -23,6 +26,9 @@ function makeCaller() {
   const profile = createProfileService({ source, logger: testLogger });
   const home = createHomeService({ source, logger: testLogger });
   const auth = createAuthService({ db, baseUrl: 'https://api.test', logger: testLogger });
+  const renamer = createRenamerService({ db });
+  const resolver = createSeriesResolver({ db });
+  const library = createLibraryService({ db, config, renamer, resolver, logger: testLogger });
   const download = createDownloadService({
     db,
     worker: {
@@ -39,7 +45,7 @@ function makeCaller() {
   const ctx: Context = {
     db,
     source,
-    services: { catalog, follow, favorites, profile, home, config, auth, download },
+    services: { catalog, follow, favorites, profile, home, config, auth, download, library },
     logger: testLogger,
   };
   return { caller: createCallerFactory(appRouter)(ctx), ctx };
@@ -197,5 +203,30 @@ describe('appRouter (integrazione)', () => {
     // clearCompleted ritorna il numero di righe terminali rimosse.
     const cleared = await caller.download.clearCompleted();
     expect(cleared.removed).toBe(0);
+  });
+
+  it('library.list/stats/scan rispondono con dati vuoti', async () => {
+    const { caller } = makeCaller();
+
+    const list = await caller.library.list();
+    expect(list).toEqual([]);
+
+    const stats = await caller.library.stats();
+    expect(stats).toEqual({ totalEpisodes: 0, totalSizeBytes: 0, totalSeries: 0 });
+
+    const scan = await caller.library.scan();
+    expect(scan.found).toBe(0);
+    expect(scan.missing).toBe(0);
+    expect(scan.orphans).toBe(0);
+  });
+
+  it('me.watchlist e me.history restituiscono array', async () => {
+    const { caller } = makeCaller();
+
+    const watchlist = await caller.me.watchlist();
+    expect(Array.isArray(watchlist)).toBe(true);
+
+    const history = await caller.me.history();
+    expect(Array.isArray(history)).toBe(true);
   });
 });

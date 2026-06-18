@@ -11,8 +11,10 @@ import { createDownloadService } from './services/download-service';
 import { createFavoritesService } from './services/favorites-service';
 import { createFollowService } from './services/follow-service';
 import { createHomeService } from './services/home-service';
+import { createLibraryService } from './services/library-service';
 import { createProfileService } from './services/profile-service';
 import { createRenamerService } from './services/renamer-service';
+import { createSeriesResolver } from './services/series-resolver';
 import { createSource } from './sources';
 import type { Context } from './trpc';
 
@@ -42,12 +44,14 @@ export function createAppContext(options: { env?: Env; databasePath?: string } =
   const profile = createProfileService({ source, logger });
   const home = createHomeService({ source, logger });
   const renamer = createRenamerService({ db });
+  const resolver = createSeriesResolver({ db });
+  const library = createLibraryService({ db, config, renamer, resolver, logger });
   const worker = createDownloadWorker({ db, catalog, config, logger, renamer });
   const download = createDownloadService({ db, worker, catalog, config, logger });
   return {
     db,
     source,
-    services: { catalog, follow, favorites, profile, home, config, auth, download },
+    services: { catalog, follow, favorites, profile, home, config, auth, download, library },
     logger,
   };
 }

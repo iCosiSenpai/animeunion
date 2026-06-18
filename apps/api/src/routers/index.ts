@@ -8,6 +8,7 @@ import { episodeRouter } from './episode';
 import { followRouter } from './follow';
 import { homeRouter } from './home';
 import { libraryRouter } from './library';
+import { meRouter } from './me';
 import { profileRouter } from './profile';
 import { statsRouter } from './stats';
 
@@ -19,6 +20,7 @@ export const appRouter = router({
   follow: followRouter,
   home: homeRouter,
   library: libraryRouter,
+  me: meRouter,
   profile: profileRouter,
   config: configRouter,
   download: downloadRouter,

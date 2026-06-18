@@ -324,7 +324,7 @@ export function HomeView() {
   const recent = trpc.catalog.recent.useQuery({ page: 1 });
   const latestEpisodes = trpc.home.latestEpisodes.useQuery();
   const featured = trpc.home.featured.useQuery();
-  const continueWatching = trpc.library.history.useQuery();
+  const continueWatching = trpc.me.history.useQuery();
   const news = trpc.home.news.useQuery();
 
   const todayAnime = week.data?.find((entry) => entry.day === todayWeekday)?.anime ?? [];

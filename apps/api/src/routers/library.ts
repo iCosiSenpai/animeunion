@@ -1,14 +1,17 @@
-import { historyEntrySchema, watchlistItemSchema } from '@animeunion/shared';
-import { z } from 'zod';
+import { libraryItemSchema, libraryScanResultSchema, libraryStatsSchema } from '@animeunion/shared';
 import { publicProcedure, router } from '../trpc';
 
-/** Dati di libreria in sola lettura dal sito: watchlist e cronologia (`/me/*`). */
+/** Libreria locale: scansione, lista e statistiche dei file scaricati. */
 export const libraryRouter = router({
-  watchlist: publicProcedure
-    .output(z.array(watchlistItemSchema))
-    .query(({ ctx }) => ctx.services.favorites.getWatchlist()),
+  scan: publicProcedure
+    .output(libraryScanResultSchema)
+    .mutation(({ ctx }) => ctx.services.library.scan()),
 
-  history: publicProcedure
-    .output(z.array(historyEntrySchema))
-    .query(({ ctx }) => ctx.services.favorites.getHistory()),
+  list: publicProcedure
+    .output(libraryItemSchema.array())
+    .query(({ ctx }) => ctx.services.library.list()),
+
+  stats: publicProcedure
+    .output(libraryStatsSchema)
+    .query(({ ctx }) => ctx.services.library.stats()),
 });

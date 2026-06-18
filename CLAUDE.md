@@ -58,7 +58,11 @@ Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
   "In evidenza", generi e score; confermato aggiornamento dai dati `/in-evidenza` del backend.
 - **Card anime e skeleton migliorati**: overlay hover con "Vedi dettagli", badge score in alto a
   destra, generi nel footer; skeleton con titolo e metadati.
-- **124 test verdi** (15 file).
+- **Library scanner + pagina `/library` (STEP 4)**: `library-service` scansiona `animePath`
+  calcolando i path attesi tramite `RenamerService`, aggiorna `episode_file` per i file trovati,
+  rileva orfani e missing; router `library.scan/list/stats`; pagina `/library` con statistiche,
+  serie scaricate espandibili, bottone scan e toast. Watchlist/cronologia spostate sotto `meRouter`.
+- **130 test verdi** (16 file).
 
 **Endpoint v1.0.3/1.1.0/1.1.1 verificati live (12/13, base path
 `https://api.animeunion.tv/api/v1/integration`):**
@@ -76,9 +80,9 @@ Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
 - **Non deployato (404)**: `POST /me/favorites/sync` — non serve: GET + delta via `?updatedSince=`
   coprono già "import iniziale + sync incrementale".
 
-**Manca:** library scanner per sincronizzare la cartella `/data/anime` con il DB e pagina
-`/library` (prende il posto dello stub `ComingSoon`). `ffmpeg-static`/`node-cron`
-ancora inutilizzati (rinviati: il team di AnimeUnion conferma MP4 diretto, niente HLS; scheduler custom).
+**Manca:** Docker multi-arch + PWA + Web Push (STEP 6) e test E2E/release v0.1.0
+(STEP 7). `ffmpeg-static`/`node-cron` ancora inutilizzati (rinviati: il team di AnimeUnion
+conferma MP4 diretto, niente HLS; scheduler custom).
 
 ## Roadmap a step (verso v0.1.0)
 
@@ -105,7 +109,7 @@ ancora inutilizzati (rinviati: il team di AnimeUnion conferma MP4 diretto, nient
       fallback da relazioni, correzione rinumerazione sequel.
 - [x] **Frontend polish post-STEP 3** — Azioni globali in `/downloads`, guard navigazione
       Settings con save-and-continue, home premium con hero/icone/CTA.
-- [ ] **STEP 4** — **Library scanner** + pagina `/library` (PLAN §S6).
+- [x] **STEP 4** — **Library scanner** + pagina `/library` (PLAN §S6).
 - [x] **STEP 5** — Verifica **live** API (12/13 endpoint + social) con credenziali reali ✅.
       Da fare: **merge** del branch `feat/integrazione-api-v103` → `main` quando decidi.
 - [ ] **STEP 6** — Docker multi-arch + PWA + Web Push (PLAN §S7).

@@ -1,5 +1,5 @@
-import { ComingSoon } from '@/components/shared/coming-soon';
+import { LibraryView } from '@/components/library/library-view';
 
 export default function LibraryPage() {
-  return <ComingSoon title="Libreria" />;
+  return <LibraryView />;
 }

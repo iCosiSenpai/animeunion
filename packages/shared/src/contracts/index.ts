@@ -6,6 +6,7 @@ export * from './catalog';
 export * from './follow';
 export * from './me';
 export * from './download';
+export * from './library';
 export * from './calendar';
 export * from './config';
 export * from './stats';

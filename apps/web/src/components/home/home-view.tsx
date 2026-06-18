@@ -1,6 +1,7 @@
 'use client';
 
 import { AnimeGrid, AnimeGridSkeleton } from '@/components/anime/anime-grid';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { trpc } from '@/lib/trpc';
 import type { AnimeSummary, Season } from '@animeunion/shared';
@@ -12,6 +13,7 @@ import {
   Newspaper,
   Play,
   Sparkles,
+  Star,
   TrendingUp,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -154,18 +156,22 @@ function HeroCarousel({
 
   if (isLoading) {
     return (
-      <div className="relative h-72 overflow-hidden rounded-2xl bg-muted animate-pulse md:h-[28rem]">
-        <div className="absolute inset-0 bg-gradient-to-r from-background/90 via-background/60 to-transparent" />
+      <div className="relative h-[26rem] overflow-hidden rounded-2xl bg-muted animate-pulse md:h-[32rem] lg:h-[36rem]">
+        <div className="absolute inset-0 bg-gradient-to-r from-background via-background/80 to-background/40" />
+        <div className="absolute bottom-10 left-6 md:bottom-12 md:left-10 lg:left-14">
+          <div className="h-8 w-48 rounded bg-white/10 md:h-10 md:w-80" />
+          <div className="mt-3 h-4 w-32 rounded bg-white/10 md:w-48" />
+        </div>
       </div>
     );
   }
 
   if (anime.length === 0) {
     return (
-      <div className="relative h-72 overflow-hidden rounded-2xl bg-gradient-to-br from-primary/20 to-background md:h-[28rem]">
-        <div className="absolute inset-0 bg-gradient-to-r from-background/95 via-background/70 to-transparent" />
-        <div className="relative flex h-full flex-col justify-center px-6 md:px-10">
-          <h1 className="text-3xl font-extrabold tracking-tight md:text-5xl">AnimeUnion</h1>
+      <div className="relative h-[26rem] overflow-hidden rounded-2xl bg-gradient-to-br from-primary/20 to-background md:h-[32rem] lg:h-[36rem]">
+        <div className="absolute inset-0 bg-gradient-to-r from-background via-background/80 to-transparent" />
+        <div className="relative flex h-full flex-col justify-center px-6 md:px-10 lg:px-14">
+          <h1 className="text-3xl font-black tracking-tight md:text-5xl">AnimeUnion</h1>
           <p className="mt-2 max-w-md text-muted-foreground md:text-lg">
             Scopri, segui e scarica i tuoi anime preferiti in un solo posto.
           </p>
@@ -184,67 +190,87 @@ function HeroCarousel({
 
   return (
     <div
-      className="relative h-72 overflow-hidden rounded-2xl md:h-[28rem]"
+      className="relative h-[26rem] overflow-hidden rounded-2xl shadow-lg md:h-[32rem] lg:h-[36rem]"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
     >
-      {current.coverImage ? (
-        <>
+      <div className="absolute inset-0">
+        {current.coverImage ? (
           <img
             src={current.coverImage}
             alt=""
-            className="absolute inset-0 h-full w-full scale-105 object-cover blur-xl saturate-150"
+            className="h-full w-full object-cover object-center md:object-top"
             loading="eager"
           />
-          <div className="absolute inset-0 bg-black/40" />
-        </>
-      ) : null}
-      <div className="absolute inset-0 bg-gradient-to-r from-background via-background/85 to-background/30" />
-      <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent" />
+        ) : null}
+        <div
+          className={`absolute inset-0 ${
+            current.coverImage ? 'bg-black/30' : 'bg-gradient-to-br from-primary/30 to-background'
+          }`}
+        />
+        <div className="absolute inset-0 bg-gradient-to-r from-background via-background/80 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/40 to-transparent" />
+      </div>
 
-      <div className="relative flex h-full items-end px-6 pb-8 md:px-10 md:pb-10">
-        <div className="flex w-full gap-6">
-          <div className="relative hidden shrink-0 overflow-hidden rounded-lg shadow-2xl md:block md:w-52 lg:w-60">
-            <div className="aspect-[2/3] w-full">
-              {current.coverImage ? (
-                <img
-                  src={current.coverImage}
-                  alt={current.title}
-                  className="h-full w-full object-cover"
-                  loading="eager"
-                />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center bg-muted">
-                  <Sparkles className="h-12 w-12 text-muted-foreground" />
-                </div>
-              )}
-            </div>
+      <div className="relative flex h-full items-end px-6 pb-10 md:px-10 md:pb-12 lg:px-14">
+        <div className="max-w-2xl space-y-3 md:space-y-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge
+              variant="secondary"
+              className="gap-1 border-0 bg-primary text-primary-foreground shadow-sm"
+            >
+              <Sparkles className="h-3 w-3" />
+              In evidenza
+            </Badge>
+            {current.score != null ? (
+              <Badge
+                variant="outline"
+                className="gap-1 border-white/30 bg-black/30 text-white backdrop-blur-sm"
+              >
+                <Star className="h-3 w-3 fill-current" />
+                {(current.score / 10).toFixed(1)}
+              </Badge>
+            ) : null}
           </div>
 
-          <div className="flex min-w-0 flex-1 flex-col justify-end space-y-3">
-            <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-primary">
-              <Sparkles className="h-3.5 w-3.5" />
-              In evidenza
+          <h1 className="text-3xl font-black tracking-tight text-white drop-shadow-md md:text-5xl lg:text-6xl">
+            {current.titleIta ?? current.title}
+          </h1>
+
+          <p className="text-sm text-white/90 drop-shadow md:text-base">
+            {current.type}
+            {current.seasonYear ? ` · ${current.seasonYear}` : ''}
+            {current.season && current.seasonYear ? ` · ${SEASON_LABELS[current.season]}` : ''}
+          </p>
+
+          {current.genres.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {current.genres.slice(0, 4).map((genre) => (
+                <Badge
+                  key={genre.slug}
+                  variant="outline"
+                  className="border-white/30 bg-black/30 text-white backdrop-blur-sm"
+                >
+                  {genre.name}
+                </Badge>
+              ))}
             </div>
-            <h1 className="text-3xl font-extrabold tracking-tight md:text-5xl">
-              {current.titleIta ?? current.title}
-            </h1>
-            <p className="line-clamp-2 max-w-2xl text-sm text-muted-foreground md:text-base">
-              {current.type}
-              {current.seasonYear ? ` · ${current.seasonYear}` : ''}
-              {current.score != null ? ` · ${(current.score / 10).toFixed(1)}` : ''}
-            </p>
-            <div className="flex flex-wrap gap-3">
-              <Button asChild className="gap-2">
-                <Link href={`/catalog/${current.slug}`}>
-                  <Play className="h-4 w-4" />
-                  Vai al dettaglio
-                </Link>
-              </Button>
-              <Button variant="outline" asChild>
-                <Link href="/catalog">Esplora il catalogo</Link>
-              </Button>
-            </div>
+          ) : null}
+
+          <div className="flex flex-wrap gap-3 pt-1">
+            <Button asChild className="gap-2 shadow-lg">
+              <Link href={`/catalog/${current.slug}`}>
+                <Play className="h-4 w-4" />
+                Vai al dettaglio
+              </Link>
+            </Button>
+            <Button
+              variant="outline"
+              asChild
+              className="border-white/40 bg-white/10 text-white hover:bg-white/20 hover:text-white backdrop-blur-sm"
+            >
+              <Link href="/catalog">Esplora il catalogo</Link>
+            </Button>
           </div>
         </div>
       </div>
@@ -254,7 +280,7 @@ function HeroCarousel({
           <button
             type="button"
             onClick={() => setIndex((prev) => (prev - 1 + anime.length) % anime.length)}
-            className="absolute left-3 top-1/2 hidden h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-background/80 text-foreground shadow-sm backdrop-blur hover:bg-background md:flex"
+            className="absolute left-3 top-1/2 hidden h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white shadow-sm backdrop-blur-sm transition-colors hover:bg-black/60 md:flex"
             aria-label="Hero precedente"
           >
             <ChevronLeft className="h-5 w-5" />
@@ -262,7 +288,7 @@ function HeroCarousel({
           <button
             type="button"
             onClick={() => setIndex((prev) => (prev + 1) % anime.length)}
-            className="absolute right-3 top-1/2 hidden h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-background/80 text-foreground shadow-sm backdrop-blur hover:bg-background md:flex"
+            className="absolute right-3 top-1/2 hidden h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white shadow-sm backdrop-blur-sm transition-colors hover:bg-black/60 md:flex"
             aria-label="Hero successiva"
           >
             <ChevronRight className="h-5 w-5" />
@@ -274,9 +300,7 @@ function HeroCarousel({
                 type="button"
                 onClick={() => setIndex(i)}
                 className={`h-2 rounded-full transition-all ${
-                  i === index
-                    ? 'w-6 bg-primary'
-                    : 'w-2 bg-muted-foreground/50 hover:bg-muted-foreground'
+                  i === index ? 'w-6 bg-primary' : 'w-2 bg-white/60 hover:bg-white'
                 }`}
                 aria-label={`Vai a hero ${i + 1}`}
               />

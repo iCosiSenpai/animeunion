@@ -51,8 +51,13 @@ Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
   home page restyle premium con hero, header a icone e CTA.
 - **Catalogo completo e hero dinamica**: procedura `catalog.browse` con filtri combinati
   (query, genere, tipo, stato, anno, stagione, lingua, ordinamento) + endpoint `catalog.genres`;
-  UI catalogo riscritta con tutti i filtri; home hero convertita in carosello auto-rotante
-  con sfondo cover sfocato + poster nitido e navigazione dots/frecce.
+  UI catalogo riscritta con tutti i filtri e pannello filtri mobile tramite Sheet.
+- **Fix avvio TRPC**: passato da `httpBatchLink` a `httpLink` + `QueryClient` con `staleTime`,
+  risolve l'errore `Unable to transform response from server` al primo caricamento.
+- **Hero restyle**: cover a schermo intero (senza blur) con overlay gradiente scuro, badge
+  "In evidenza", generi e score; confermato aggiornamento dai dati `/in-evidenza` del backend.
+- **Card anime e skeleton migliorati**: overlay hover con "Vedi dettagli", badge score in alto a
+  destra, generi nel footer; skeleton con titolo e metadati.
 - **124 test verdi** (15 file).
 
 **Endpoint v1.0.3/1.1.0/1.1.1 verificati live (12/13, base path

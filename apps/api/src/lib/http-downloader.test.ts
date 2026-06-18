@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -77,6 +78,44 @@ describe('downloadToFile', () => {
       await expect(
         downloadToFile({ url: `${BASE}/missing`, destPath: join(work, 'm.mp4') }),
       ).rejects.toThrow(/HTTP 404/);
+    } finally {
+      await rm(work, { recursive: true, force: true });
+    }
+  });
+
+  it('rifiuta una pagina HTML (200 text/html) senza lasciare file', async () => {
+    const work = await mkdtemp(join(tmpdir(), 'au-dl-'));
+    try {
+      agent
+        .get(BASE)
+        .intercept({ path: '/expired', method: 'GET' })
+        .reply(200, '<!doctype html><html>link scaduto</html>', {
+          headers: { 'content-type': 'text/html' },
+        });
+
+      const dest = join(work, 'expired.mp4');
+      await expect(downloadToFile({ url: `${BASE}/expired`, destPath: dest })).rejects.toThrow(
+        /non video/i,
+      );
+      expect(existsSync(dest)).toBe(false);
+    } finally {
+      await rm(work, { recursive: true, force: true });
+    }
+  });
+
+  it('rifiuta un corpo HTML servito come video/mp4 (sniff primi byte)', async () => {
+    const work = await mkdtemp(join(tmpdir(), 'au-dl-'));
+    try {
+      agent
+        .get(BASE)
+        .intercept({ path: '/fake', method: 'GET' })
+        .reply(200, '<html>nope</html>', { headers: { 'content-type': 'video/mp4' } });
+
+      const dest = join(work, 'fake.mp4');
+      await expect(downloadToFile({ url: `${BASE}/fake`, destPath: dest })).rejects.toThrow(
+        /non valido/i,
+      );
+      expect(existsSync(dest)).toBe(false);
     } finally {
       await rm(work, { recursive: true, force: true });
     }

@@ -1,4 +1,5 @@
 import { createWriteStream } from 'node:fs';
+import { rm } from 'node:fs/promises';
 import { type Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { request } from 'undici';
@@ -77,6 +78,15 @@ export async function downloadToFile(options: DownloadOptions): Promise<Download
   const totalHeaderValue = Array.isArray(totalHeader) ? totalHeader[0] : totalHeader;
   const totalBytes = totalHeaderValue ? Number.parseInt(totalHeaderValue, 10) : null;
 
+  // Il server può rispondere 200 con una pagina HTML ("link scaduto") invece del video:
+  // la rifiutiamo prima di creare il file, così non finisce in libreria come .mp4 rotto.
+  if (contentType && /^(?:text\/|application\/(?:json|xml|xhtml))/i.test(contentType)) {
+    const preview = await response.body.text().catch(() => '');
+    throw new Error(
+      `Risposta non video (content-type: ${contentType})${preview ? `: ${preview.slice(0, 120)}` : ''}`,
+    );
+  }
+
   if (onProgress) {
     onProgress({ bytesDownloaded: 0, totalBytes });
   }
@@ -84,9 +94,18 @@ export async function downloadToFile(options: DownloadOptions): Promise<Download
   const fileStream = createWriteStream(destPath);
   let bytesDownloaded = 0;
   let lastEmit = 0;
+  let sniffed = false;
 
   const counter = new Transform({
     transform(chunk: Buffer, _enc, cb): void {
+      if (!sniffed) {
+        sniffed = true;
+        // '<' = HTML, '{' = JSON: non è un contenuto binario/video.
+        if (chunk[0] === 0x3c || chunk[0] === 0x7b) {
+          cb(new Error('Contenuto scaricato non valido (sembra HTML/JSON, non un video)'));
+          return;
+        }
+      }
       bytesDownloaded += chunk.byteLength;
       if (onProgress) {
         const now = Date.now();
@@ -105,6 +124,8 @@ export async function downloadToFile(options: DownloadOptions): Promise<Download
   try {
     await pipeline(body, counter, fileStream);
   } catch (error) {
+    // Rimuove il file parziale rimasto, qualunque sia la causa (abort o errore).
+    await rm(destPath).catch(() => {});
     if (signal?.aborted) {
       throw new DownloadAbortedError();
     }

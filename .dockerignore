@@ -1,0 +1,30 @@
+# Dipendenze e build: reinstallate/rigenerate dentro l'immagine
+**/node_modules
+**/.next
+**/dist
+
+# Dati locali e segreti: MAI nell'immagine
+**/data
+**/anime
+**/*.db
+**/*.db-shm
+**/*.db-wal
+.env
+.env.*
+!.env.example
+
+# Git e meta
+.git
+.gitignore
+.github
+
+# Editor / OS
+**/.DS_Store
+**/Thumbs.db
+.vscode
+.idea
+
+# Documentazione e scratch non necessari al build
+*.md
+docs
+.claude

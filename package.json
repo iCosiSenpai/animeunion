@@ -16,6 +16,7 @@
   "workspaces": ["apps/*", "packages/*"],
   "scripts": {
     "dev": "concurrently -k -n api,web -c blue,green \"npm:dev:api\" \"npm:dev:web\"",
+    "dev:clean": "node scripts/free-ports.mjs && npm run dev",
     "dev:api": "npm run dev -w @animeunion/api",
     "dev:web": "npm run dev -w @animeunion/web",
     "lint": "biome check .",

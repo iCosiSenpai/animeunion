@@ -8,6 +8,9 @@ const envSchema = z.object({
   RATE_LIMIT_MS: z.coerce.number().int().positive().default(1000),
   DATABASE_PATH: z.string().default('./data/animeunion.db'),
   API_PORT: z.coerce.number().int().positive().default(3001),
+  // Lista di origin CORS consentiti (separati da virgola). Se vuoto, riflette l'origin
+  // (comodo per LAN/self-hosted); impostare per restringere.
+  CORS_ORIGINS: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

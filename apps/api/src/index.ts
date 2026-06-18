@@ -11,7 +11,22 @@ async function main(): Promise<void> {
   const ctx = createAppContext();
   const app = fastify({ loggerInstance: logger });
 
-  await app.register(cors, { origin: true });
+  // Header di sicurezza su ogni risposta (API JSON: niente sniffing, niente framing).
+  app.addHook('onRequest', async (_req, reply) => {
+    reply.headers({
+      'x-content-type-options': 'nosniff',
+      'x-frame-options': 'DENY',
+      'referrer-policy': 'no-referrer',
+      'x-dns-prefetch-control': 'off',
+    });
+  });
+
+  const corsOrigins = env.CORS_ORIGINS?.split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+  await app.register(cors, {
+    origin: corsOrigins && corsOrigins.length > 0 ? corsOrigins : true,
+  });
   await app.register(fastifyTRPCPlugin, {
     prefix: '/trpc',
     trpcOptions: {

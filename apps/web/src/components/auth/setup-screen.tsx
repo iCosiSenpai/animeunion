@@ -1,19 +1,11 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { trpc } from '@/lib/trpc';
 import { type AuthLoginInput, authLoginInputSchema } from '@animeunion/shared';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useState } from 'react';
+import { Lock, Mail } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { SocialLogin } from './social-login';
@@ -21,8 +13,6 @@ import { SocialLogin } from './social-login';
 export function SetupScreen() {
   const utils = trpc.useUtils();
   const login = trpc.auth.login.useMutation();
-  const setConfig = trpc.config.set.useMutation();
-  const [autoDownload, setAutoDownload] = useState(false);
 
   const {
     register,
@@ -33,15 +23,6 @@ export function SetupScreen() {
   const onSubmit = handleSubmit(async (values) => {
     try {
       await login.mutateAsync(values);
-      try {
-        await setConfig.mutateAsync({ key: 'autoDownload', value: autoDownload });
-      } catch (configError) {
-        toast.error(
-          configError instanceof Error
-            ? configError.message
-            : 'Impossibile salvare la preferenza di auto-download.',
-        );
-      }
       toast.success('Benvenuto! Accesso effettuato.');
       await utils.auth.status.invalidate();
     } catch (error) {
@@ -54,83 +35,91 @@ export function SetupScreen() {
     }
   });
 
+  const pending = isSubmitting || login.isPending;
+
   return (
-    <div className="flex min-h-screen items-center justify-center p-4">
-      <Card className="w-full max-w-md space-y-5 p-6">
-        <div className="space-y-1 text-center">
-          <h1 className="text-2xl font-bold tracking-tight">Benvenuto su AnimeUnion Docker</h1>
-          <p className="text-sm text-muted-foreground">
-            Applicazione ufficiale affiliata. Accedi con il tuo account AnimeUnion per iniziare.
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden p-4">
+      {/* Sfondo premium: glow brand + sfumatura verso il fondo. */}
+      <div className="pointer-events-none absolute inset-0 -z-10">
+        <div className="absolute left-1/2 top-[-12%] h-[42rem] w-[42rem] -translate-x-1/2 rounded-full bg-primary/20 blur-[130px]" />
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-background/40 to-background" />
+      </div>
+
+      <div className="w-full max-w-md">
+        <div className="rounded-2xl border border-border/60 bg-card/80 p-8 shadow-2xl backdrop-blur-sm">
+          <div className="flex flex-col items-center gap-4 text-center">
+            <img src="/logo.png" alt="AnimeUnion" className="h-14 w-auto drop-shadow" />
+            <div className="space-y-1.5">
+              <h1 className="text-2xl font-bold tracking-tight">AnimeUnion Docker</h1>
+              <p className="text-sm text-muted-foreground">
+                Accedi con il tuo account AnimeUnion per iniziare.
+              </p>
+            </div>
+          </div>
+
+          <form onSubmit={onSubmit} className="mt-7 space-y-4">
+            <div className="space-y-1.5">
+              <div className="relative">
+                <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  type="email"
+                  placeholder="Email"
+                  autoComplete="username"
+                  className="h-11 pl-10"
+                  {...register('email')}
+                />
+              </div>
+              {errors.email ? (
+                <p className="text-xs text-destructive">Inserisci un'email valida.</p>
+              ) : null}
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="relative">
+                <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  type="password"
+                  placeholder="Password"
+                  autoComplete="current-password"
+                  className="h-11 pl-10"
+                  {...register('password')}
+                />
+              </div>
+              {errors.password ? (
+                <p className="text-xs text-destructive">La password è richiesta.</p>
+              ) : null}
+            </div>
+
+            <Button
+              type="submit"
+              className="h-11 w-full text-base font-semibold"
+              disabled={pending}
+            >
+              {pending ? 'Accesso in corso…' : 'Accedi'}
+            </Button>
+          </form>
+
+          <div className="mt-6">
+            <SocialLogin />
+          </div>
+
+          <p className="mt-7 text-center text-xs text-muted-foreground">
+            Non hai un account?{' '}
+            <a
+              href="https://animeunion.tv/registrati"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-foreground underline underline-offset-4 transition-colors hover:text-primary"
+            >
+              Registrati su animeunion.tv
+            </a>
           </p>
         </div>
 
-        <form onSubmit={onSubmit} className="space-y-3">
-          <div className="space-y-1">
-            <Input
-              type="email"
-              placeholder="Email"
-              autoComplete="username"
-              {...register('email')}
-            />
-            {errors.email ? (
-              <p className="text-xs text-destructive">Inserisci un'email valida.</p>
-            ) : null}
-          </div>
-          <div className="space-y-1">
-            <Input
-              type="password"
-              placeholder="Password"
-              autoComplete="current-password"
-              {...register('password')}
-            />
-            {errors.password ? (
-              <p className="text-xs text-destructive">La password e richiesta.</p>
-            ) : null}
-          </div>
-          <div className="space-y-1">
-            <label className="text-sm font-medium" htmlFor="auto-download">
-              Download automatico
-            </label>
-            <Select
-              value={autoDownload ? 'on' : 'off'}
-              onValueChange={(v) => setAutoDownload(v === 'on')}
-            >
-              <SelectTrigger id="auto-download" className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="off">
-                  Disattivo (consigliato se hai già scaricato episodi manualmente)
-                </SelectItem>
-                <SelectItem value="on">
-                  Attivo (scarica automaticamente i nuovi episodi dei preferiti)
-                </SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              Puoi cambiare questa scelta in qualsiasi momento dalle impostazioni.
-            </p>
-          </div>
-
-          <Button type="submit" className="w-full" disabled={isSubmitting || login.isPending}>
-            {isSubmitting || login.isPending ? 'Accesso in corso...' : 'Accedi'}
-          </Button>
-        </form>
-
-        <SocialLogin />
-
-        <p className="text-center text-xs text-muted-foreground">
-          Non hai un account?{' '}
-          <a
-            href="https://animeunion.tv/registrati"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-medium underline underline-offset-4"
-          >
-            Registrati su animeunion.tv
-          </a>
+        <p className="mt-5 text-center text-xs text-muted-foreground">
+          Applicazione ufficiale affiliata ad AnimeUnion.
         </p>
-      </Card>
+      </div>
     </div>
   );
 }

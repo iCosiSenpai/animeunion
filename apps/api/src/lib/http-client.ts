@@ -34,6 +34,35 @@ export interface HttpClient {
   del(path: string): Promise<void>;
 }
 
+const MAX_429_RETRIES = 3;
+const RETRY_CAP_MS = 10_000;
+
+type FetchInit = Parameters<typeof fetch>[1];
+
+/** Esegue la fetch ritentando sui 429, rispettando `Retry-After` o un backoff esponenziale. */
+async function fetchWithRateLimit(
+  url: string,
+  init: FetchInit,
+): Promise<Awaited<ReturnType<typeof fetch>>> {
+  let attempt = 0;
+  for (;;) {
+    const response = await fetch(url, init);
+    if (response.status !== 429 || attempt >= MAX_429_RETRIES) {
+      return response;
+    }
+    attempt += 1;
+    const retryAfterHeader = response.headers.get('retry-after');
+    const retryAfter = retryAfterHeader != null ? Number(retryAfterHeader) : Number.NaN;
+    const waitMs =
+      Number.isFinite(retryAfter) && retryAfter >= 0
+        ? Math.min(retryAfter * 1000, RETRY_CAP_MS)
+        : Math.min(1000 * 2 ** attempt, RETRY_CAP_MS);
+    logger.warn({ url, attempt, waitMs }, 'Rate limit (429): attendo e riprovo');
+    await response.body?.cancel().catch(() => {});
+    await new Promise((resolve) => setTimeout(resolve, waitMs));
+  }
+}
+
 export function createHttpClient(options: HttpClientOptions): HttpClient {
   const limiter = createRateLimiter(options.rateLimitMs ?? 1000);
   const base = options.baseUrl.replace(/\/+$/, '');
@@ -82,7 +111,7 @@ export function createHttpClient(options: HttpClientOptions): HttpClient {
   return {
     get<T>(path: string, query?: Record<string, QueryValue>): Promise<T> {
       return limiter.schedule(async () => {
-        const response = await fetch(buildUrl(path, query), {
+        const response = await fetchWithRateLimit(buildUrl(path, query), {
           method: 'GET',
           headers: await buildHeaders(),
         });
@@ -91,7 +120,7 @@ export function createHttpClient(options: HttpClientOptions): HttpClient {
     },
     post<T>(path: string, body?: unknown): Promise<T> {
       return limiter.schedule(async () => {
-        const response = await fetch(buildUrl(path), {
+        const response = await fetchWithRateLimit(buildUrl(path), {
           method: 'POST',
           headers: await buildHeaders(),
           body: body === undefined ? undefined : JSON.stringify(body),
@@ -101,7 +130,7 @@ export function createHttpClient(options: HttpClientOptions): HttpClient {
     },
     del(path: string): Promise<void> {
       return limiter.schedule(async () => {
-        const response = await fetch(buildUrl(path), {
+        const response = await fetchWithRateLimit(buildUrl(path), {
           method: 'DELETE',
           headers: await buildHeaders(),
         });

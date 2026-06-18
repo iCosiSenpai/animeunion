@@ -1,7 +1,22 @@
+'use client';
+
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { trpc } from '@/lib/trpc';
 import type { LatestEpisode } from '@animeunion/shared';
-import Link from 'next/link';
+import { Download, Play } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { useState } from 'react';
+import { toast } from 'sonner';
 
 const LANGUAGE_LABELS: Record<LatestEpisode['language'], string> = {
   SUB_ITA: 'SUB ITA',
@@ -9,28 +24,85 @@ const LANGUAGE_LABELS: Record<LatestEpisode['language'], string> = {
 };
 
 export function EpisodeCard({ episode }: { episode: LatestEpisode }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const utils = trpc.useUtils();
+
+  const addEpisodeRef = trpc.download.addEpisodeRef.useMutation({
+    onSuccess: () => {
+      toast.success(`Ep ${episode.episodeNumber} accodato (${LANGUAGE_LABELS[episode.language]})`);
+      void utils.download.queue.invalidate();
+      setOpen(false);
+    },
+    onError: (error) => {
+      toast.error(
+        error.data?.code === 'NOT_FOUND'
+          ? 'Episodio non disponibile in questa lingua'
+          : 'Impossibile accodare il download',
+      );
+    },
+  });
+
+  function onDownload() {
+    addEpisodeRef.mutate({
+      slug: episode.slug,
+      episodeNumber: episode.episodeNumber,
+      language: episode.language,
+    });
+  }
+
   return (
-    <Link href={`/catalog/${episode.slug}`} className="group">
-      <Card className="overflow-hidden border border-border/50 shadow-sm transition-all duration-300 group-hover:border-primary/30 group-hover:shadow-lg">
-        <div className="relative aspect-[2/3] bg-muted">
-          {episode.coverImage ? (
-            <img
-              src={episode.coverImage}
-              alt={episode.title}
-              loading="lazy"
-              className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-            />
-          ) : null}
-          <Badge className="absolute left-2 top-2">Ep. {episode.episodeNumber}</Badge>
-          <Badge variant="secondary" className="absolute right-2 top-2">
-            {LANGUAGE_LABELS[episode.language]}
-          </Badge>
-        </div>
-        <div className="space-y-1 p-3">
-          <h3 className="line-clamp-2 text-sm font-medium">{episode.title}</h3>
-        </div>
-      </Card>
-    </Link>
+    <>
+      <button type="button" onClick={() => setOpen(true)} className="group block text-left">
+        <Card className="overflow-hidden border border-border/50 shadow-sm transition-all duration-300 group-hover:border-primary/30 group-hover:shadow-lg">
+          <div className="relative aspect-[2/3] bg-muted">
+            {episode.coverImage ? (
+              <img
+                src={episode.coverImage}
+                alt={episode.title}
+                loading="lazy"
+                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+              />
+            ) : null}
+            <Badge className="absolute left-2 top-2">Ep. {episode.episodeNumber}</Badge>
+            <Badge variant="secondary" className="absolute right-2 top-2">
+              {LANGUAGE_LABELS[episode.language]}
+            </Badge>
+          </div>
+          <div className="space-y-1 p-3">
+            <h3 className="line-clamp-2 text-sm font-medium">{episode.title}</h3>
+          </div>
+        </Card>
+      </button>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{episode.title}</DialogTitle>
+            <DialogDescription>
+              Episodio {episode.episodeNumber} · {LANGUAGE_LABELS[episode.language]}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              className="gap-2"
+              onClick={() => {
+                setOpen(false);
+                router.push(`/catalog/${episode.slug}`);
+              }}
+            >
+              <Play className="h-4 w-4" />
+              Vai alla serie completa
+            </Button>
+            <Button className="gap-2" onClick={onDownload} disabled={addEpisodeRef.isPending}>
+              <Download className="h-4 w-4" />
+              Scarica questo episodio
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 

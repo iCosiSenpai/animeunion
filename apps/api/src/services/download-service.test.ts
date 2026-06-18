@@ -91,14 +91,14 @@ describe('DownloadService', () => {
     await rm(animePath, { recursive: true, force: true });
   });
 
-  function makeService() {
+  function makeService(catalog: CatalogService = buildStubCatalog()) {
     const config = createConfigService({ db });
     config.set('animePath', animePath);
     config.set('autoDownload', true);
     const renamer = createRenamerService({ db });
     const realWorker = createDownloadWorker({
       db,
-      catalog: buildStubCatalog(),
+      catalog,
       config,
       logger: testLogger,
       renamer,
@@ -107,7 +107,7 @@ describe('DownloadService', () => {
     const service = createDownloadService({
       db,
       worker: worker as never,
-      catalog: buildStubCatalog(),
+      catalog,
       config,
       logger: testLogger,
     });
@@ -369,5 +369,40 @@ describe('DownloadService', () => {
 
     const n = service.retryAllFailed();
     expect(n).toBe(1);
+  });
+
+  it('addEpisodeByRef risolve slug+numero+lingua e accoda', async () => {
+    const catalog = {
+      getBySlug: vi.fn(async () => ({ id: 'a-1' })),
+    } as unknown as CatalogService;
+    const { service } = makeService(catalog);
+    insertAnime(db, 'a-1');
+    insertEpisode(db, 'e-1', 'a-1', 12);
+    insertFile(db, 'ef-1', 'e-1', 'DUB_ITA');
+    enqueueSpy.mockReturnValue('q-ref');
+
+    const id = await service.addEpisodeByRef({
+      slug: 'koori',
+      episodeNumber: 12,
+      language: 'DUB_ITA',
+    });
+    expect(id).toBe('q-ref');
+    expect(catalog.getBySlug).toHaveBeenCalledWith('koori');
+    expect(enqueueSpy).toHaveBeenCalledWith('ef-1', undefined);
+  });
+
+  it('addEpisodeByRef lancia NOT_FOUND se la lingua non esiste', async () => {
+    const catalog = {
+      getBySlug: vi.fn(async () => ({ id: 'a-1' })),
+    } as unknown as CatalogService;
+    const { service } = makeService(catalog);
+    insertAnime(db, 'a-1');
+    insertEpisode(db, 'e-1', 'a-1', 12);
+    insertFile(db, 'ef-1', 'e-1', 'SUB_ITA'); // esiste solo SUB
+
+    await expect(
+      service.addEpisodeByRef({ slug: 'koori', episodeNumber: 12, language: 'DUB_ITA' }),
+    ).rejects.toThrow(/non disponibile/);
+    expect(enqueueSpy).not.toHaveBeenCalled();
   });
 });

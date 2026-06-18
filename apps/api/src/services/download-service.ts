@@ -1,8 +1,9 @@
-import type { Language } from '@animeunion/shared';
-import { desc, eq, inArray } from 'drizzle-orm';
+import type { DownloadAddByRefInput, Language } from '@animeunion/shared';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 import type { Db } from '../db';
 import { schema } from '../db';
 import type { DownloadWorker } from '../lib/download-worker';
+import { NotFoundError } from '../lib/errors';
 import type { Logger } from '../lib/logger';
 import type { CatalogService } from './catalog-service';
 import type { ConfigService } from './config-service';
@@ -37,6 +38,11 @@ export interface DownloadService {
   stop(): void;
   /** Accoda un singolo episode file. Ritorna l'id del job in coda. */
   addEpisode(input: { episodeFileId: string; priority?: number }): string;
+  /**
+   * Accoda un episodio identificato da (slug, numero, lingua): garantisce prima che l'anime
+   * e i suoi episodi siano in cache, poi risolve l'episode_file e accoda. Usato dalla home.
+   */
+  addEpisodeByRef(input: DownloadAddByRefInput): Promise<string>;
   /** Accoda tutti gli episode file non ancora scaricati di un anime (una sola stagione, Regola #13). */
   addMissing(input: { animeId: string; language?: Language }): number;
   /** Sinonimo esplicito di addMissing, per la UI ("Scarica tutti gli episodi mancanti"). */
@@ -114,6 +120,29 @@ export function createDownloadService(deps: DownloadServiceDeps): DownloadServic
       const queueId = worker.enqueue(episodeFileId, priority);
       logger.info({ queueId, episodeFileId }, 'Download accodato');
       return queueId;
+    },
+
+    async addEpisodeByRef({ slug, episodeNumber, language, priority }) {
+      // Garantisce anime+episodi in cache (dopo il fix di parsing è affidabile).
+      const detail = await catalog.getBySlug(slug);
+      const fileRow = db
+        .select({ id: schema.episodeFile.id })
+        .from(schema.episodeFile)
+        .innerJoin(schema.episode, eq(schema.episodeFile.episodeId, schema.episode.id))
+        .where(
+          and(
+            eq(schema.episode.animeId, detail.id),
+            eq(schema.episode.number, episodeNumber),
+            eq(schema.episodeFile.language, language),
+          ),
+        )
+        .get();
+      if (!fileRow) {
+        throw new NotFoundError(
+          `Episodio non disponibile: ${slug} ep ${episodeNumber} (${language})`,
+        );
+      }
+      return this.addEpisode({ episodeFileId: fileRow.id, priority });
     },
 
     addMissing({ animeId, language }) {

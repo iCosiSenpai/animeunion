@@ -1,5 +1,6 @@
 import {
   downloadActionInputSchema,
+  downloadAddByRefInputSchema,
   downloadAddInputSchema,
   downloadAddMissingInputSchema,
 } from '@animeunion/shared';
@@ -9,6 +10,12 @@ export const downloadRouter = router({
   addEpisode: publicProcedure.input(downloadAddInputSchema).mutation(({ ctx, input }) => ({
     queueId: ctx.services.download.addEpisode(input),
   })),
+
+  addEpisodeRef: publicProcedure
+    .input(downloadAddByRefInputSchema)
+    .mutation(async ({ ctx, input }) => ({
+      queueId: await ctx.services.download.addEpisodeByRef(input),
+    })),
 
   addMissing: publicProcedure.input(downloadAddMissingInputSchema).mutation(({ ctx, input }) => ({
     enqueued: ctx.services.download.addMissing(input),

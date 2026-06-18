@@ -42,6 +42,16 @@ export const downloadActionInputSchema = z.object({
 });
 export type DownloadActionInput = z.infer<typeof downloadActionInputSchema>;
 
+// Accoda un episodio identificato da (slug serie, numero, lingua) — usato dalla home
+// "Ultimi episodi", dove non si dispone dell'episodeFileId.
+export const downloadAddByRefInputSchema = z.object({
+  slug: z.string(),
+  episodeNumber: z.number().int(),
+  language: languageSchema,
+  priority: z.number().int().min(0).max(100).optional(),
+});
+export type DownloadAddByRefInput = z.infer<typeof downloadAddByRefInputSchema>;
+
 export const downloadEnqueueResultSchema = z.object({
   queueId: z.string(),
   enqueued: z.number().int(),

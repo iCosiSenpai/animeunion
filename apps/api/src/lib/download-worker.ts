@@ -156,9 +156,7 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
         throw new Error(`URL download mancante per ${item.episodeFileId}`);
       }
 
-      const animePath = config.get('animePath');
       const finalPath = renamer.computeEpisodePath({
-        animePath,
         animeId: anime.id,
         episodeNumber: episode.number,
         language: epFile.language as Language,
@@ -326,9 +324,10 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
       stopped = false;
       paused = false;
       reconcileOrphans();
-      // Pulizia best-effort dei .part rimasti da un crash precedente.
-      void sweepPartFiles(config.get('animePath'), logger)
-        .then((n) => {
+      // Pulizia best-effort dei .part rimasti da un crash precedente (su tutte le root).
+      void Promise.all(config.distinctDownloadRoots().map((root) => sweepPartFiles(root, logger)))
+        .then((counts) => {
+          const n = counts.reduce((sum, c) => sum + c, 0);
           if (n > 0) {
             logger.info({ removed: n }, "File .part orfani rimossi all'avvio");
           }

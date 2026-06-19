@@ -22,15 +22,15 @@ function makeCaller() {
   const db = createTestDb();
   const source = createMockSource();
   const config = createConfigService({ db });
-  // animePath isolato e inesistente: la scansione non deve toccare la cartella reale di sviluppo.
-  config.set('animePath', join(tmpdir(), `au-router-${Math.random().toString(36).slice(2)}`));
+  // cartella isolata e inesistente: la scansione non deve toccare la cartella reale di sviluppo.
+  config.set('seriesPathSub', join(tmpdir(), `au-router-${Math.random().toString(36).slice(2)}`));
   const catalog = createCatalogService({ db, source, config, logger: testLogger });
   const follow = createFollowService({ db, source, logger: testLogger });
   const favorites = createFavoritesService({ db, source, catalog, config, logger: testLogger });
   const profile = createProfileService({ source, logger: testLogger });
   const home = createHomeService({ source, logger: testLogger });
   const auth = createAuthService({ db, baseUrl: 'https://api.test', logger: testLogger });
-  const renamer = createRenamerService({ db });
+  const renamer = createRenamerService({ db, config });
   const resolver = createSeriesResolver({ db });
   const library = createLibraryService({ db, config, renamer, resolver, logger: testLogger });
   const download = createDownloadService({

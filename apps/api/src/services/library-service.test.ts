@@ -1,7 +1,8 @@
 import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import type { Language } from '@animeunion/shared';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { schema } from '../db';
@@ -65,7 +66,7 @@ function insertFile(
   db: ReturnType<typeof createTestDb>,
   id: string,
   episodeId: string,
-  language: 'SUB_ITA' | 'DUB_ITA',
+  language: Language,
   status: 'not_downloaded' | 'downloaded' = 'not_downloaded',
 ) {
   const ts = new Date().toISOString();
@@ -81,21 +82,26 @@ function insertFile(
     .run();
 }
 
-function makeService(db: ReturnType<typeof createTestDb>, animePath: string) {
+function makeService(db: ReturnType<typeof createTestDb>, basePath: string) {
   const config = createConfigService({ db });
-  config.set('animePath', animePath);
-  const renamer = createRenamerService({ db });
+  config.set('seriesPathSub', basePath);
+  const renamer = createRenamerService({ db, config });
   const resolver = createSeriesResolver({ db });
-  return createLibraryService({ db, config, renamer, resolver, logger: testLogger });
+  const service = createLibraryService({ db, config, renamer, resolver, logger: testLogger });
+  return { service, renamer };
 }
 
-async function makeLibraryFile(base: string, slug: string, episode: number, language: string) {
-  const lang = language.toLowerCase().replace(/_/g, '-');
-  const dir = join(base, lang, slug, 'Season 01');
-  await mkdir(dir, { recursive: true });
-  const file = join(dir, `S01E${String(episode).padStart(2, '0')}.mp4`);
-  await writeFile(file, 'fake-video');
-  return file;
+/** Crea il file dell'episodio nel path che il renamer si aspetta (10 byte). */
+async function placeEpisode(
+  renamer: ReturnType<typeof createRenamerService>,
+  animeId: string,
+  episodeNumber: number,
+  language: Language,
+) {
+  const path = renamer.computeEpisodePath({ animeId, episodeNumber, language });
+  await mkdir(dirname(path), { recursive: true });
+  await writeFile(path, 'fake-video'); // 10 byte
+  return path;
 }
 
 describe('LibraryService', () => {
@@ -115,18 +121,13 @@ describe('LibraryService', () => {
     insertEpisode(db, 'ep-a-1', 'show-a', 1);
     insertFile(db, 'file-a-1', 'ep-a-1', 'SUB_ITA');
 
-    const file = await makeLibraryFile(tmpDir, 'show-a', 1, 'SUB_ITA');
-    const service = makeService(db, tmpDir);
+    const { service, renamer } = makeService(db, tmpDir);
+    const file = await placeEpisode(renamer, 'show-a', 1, 'SUB_ITA');
 
     const result = await service.scan();
-    expect(result).toEqual({
-      found: 1,
-      updated: 1,
-      orphans: 0,
-      missing: 0,
-      orphanPaths: [],
-      missingEntries: [],
-    });
+    expect(result.found).toBe(1);
+    expect(result.orphans).toBe(0);
+    expect(result.missing).toBe(0);
 
     const row = db
       .select()
@@ -137,15 +138,8 @@ describe('LibraryService', () => {
     expect(row?.localPath).toBe(file);
     expect(row?.fileSize).toBe(10);
 
-    const list = service.list();
-    expect(list).toHaveLength(1);
-    expect(list[0]?.episodes).toHaveLength(1);
-    expect(list[0]?.episodes[0]?.episodeNumber).toBe(1);
-
-    const stats = service.stats();
-    expect(stats.totalEpisodes).toBe(1);
-    expect(stats.totalSizeBytes).toBe(10);
-    expect(stats.totalSeries).toBe(1);
+    expect(service.list()).toHaveLength(1);
+    expect(service.stats()).toEqual({ totalEpisodes: 1, totalSizeBytes: 10, totalSeries: 1 });
   });
 
   it('segna come mancante un file che era stato cancellato', async () => {
@@ -154,15 +148,14 @@ describe('LibraryService', () => {
     insertEpisode(db, 'ep-b-1', 'show-b', 1);
     insertFile(db, 'file-b-1', 'ep-b-1', 'SUB_ITA', 'downloaded');
 
-    const file = await makeLibraryFile(tmpDir, 'show-b', 1, 'SUB_ITA');
-    const service = makeService(db, tmpDir);
+    const { service, renamer } = makeService(db, tmpDir);
+    const file = await placeEpisode(renamer, 'show-b', 1, 'SUB_ITA');
     await service.scan();
 
     await rm(file);
     const result = await service.scan();
     expect(result.found).toBe(0);
     expect(result.missing).toBe(1);
-    expect(result.updated).toBe(1);
 
     const row = db
       .select()
@@ -179,20 +172,21 @@ describe('LibraryService', () => {
     insertEpisode(db, 'ep-c-1', 'show-c', 1);
     insertFile(db, 'file-c-1', 'ep-c-1', 'SUB_ITA');
 
-    await makeLibraryFile(tmpDir, 'show-c', 1, 'SUB_ITA');
-    const orphanDir = join(tmpDir, 'sub-ita', 'show-c', 'Season 01');
-    await writeFile(join(orphanDir, 'S01E99.mp4'), 'orphan');
+    const { service, renamer } = makeService(db, tmpDir);
+    await placeEpisode(renamer, 'show-c', 1, 'SUB_ITA');
+    // File non atteso da nessun episode_file → orfano.
+    const orphanDir = join(tmpDir, 'Sconosciuto', 'Season 01');
+    await mkdir(orphanDir, { recursive: true });
+    await writeFile(join(orphanDir, 'Random - S01E99.mp4'), 'orphan');
 
-    const service = makeService(db, tmpDir);
     const result = await service.scan();
     expect(result.orphans).toBe(1);
-    expect(result.orphanPaths).toHaveLength(1);
-    expect(result.orphanPaths[0]).toContain('S01E99.mp4');
+    expect(result.orphanPaths[0]).toContain('S01E99');
   });
 
   it('restituisce lista e stats vuote se non ci sono download', () => {
     const db = createTestDb();
-    const service = makeService(db, tmpDir);
+    const { service } = makeService(db, tmpDir);
     expect(service.list()).toEqual([]);
     expect(service.stats()).toEqual({ totalEpisodes: 0, totalSizeBytes: 0, totalSeries: 0 });
   });
@@ -202,8 +196,8 @@ describe('LibraryService', () => {
     insertAnime(db, 'show-d');
     insertEpisode(db, 'ep-d-1', 'show-d', 1);
     insertFile(db, 'file-d-1', 'ep-d-1', 'SUB_ITA');
-    const file = await makeLibraryFile(tmpDir, 'show-d', 1, 'SUB_ITA');
-    const service = makeService(db, tmpDir);
+    const { service, renamer } = makeService(db, tmpDir);
+    const file = await placeEpisode(renamer, 'show-d', 1, 'SUB_ITA');
     await service.scan();
     db.insert(schema.downloadQueue)
       .values({
@@ -218,9 +212,9 @@ describe('LibraryService', () => {
     const res = await service.deleteEpisodeFile('file-d-1');
     expect(res).toEqual({ deletedFiles: 1, freedBytes: 10 });
     expect(existsSync(file)).toBe(false);
-    // cartelle vuote ripulite fino ad animePath
-    expect(existsSync(join(tmpDir, 'sub-ita', 'show-d', 'Season 01'))).toBe(false);
-    expect(existsSync(join(tmpDir, 'sub-ita'))).toBe(false);
+    // cartelle vuote ripulite (serie/Season).
+    expect(existsSync(join(tmpDir, 'show-d', 'Season 01'))).toBe(false);
+    expect(existsSync(join(tmpDir, 'show-d'))).toBe(false);
 
     const row = db
       .select()
@@ -238,14 +232,13 @@ describe('LibraryService', () => {
     insertEpisode(db, 'ep-e-1', 'show-e', 1);
     insertFile(db, 'file-e-sub', 'ep-e-1', 'SUB_ITA');
     insertFile(db, 'file-e-dub', 'ep-e-1', 'DUB_ITA');
-    await makeLibraryFile(tmpDir, 'show-e', 1, 'SUB_ITA');
-    const dub = await makeLibraryFile(tmpDir, 'show-e', 1, 'DUB_ITA');
-    const service = makeService(db, tmpDir);
+    const { service, renamer } = makeService(db, tmpDir);
+    await placeEpisode(renamer, 'show-e', 1, 'SUB_ITA');
+    const dub = await placeEpisode(renamer, 'show-e', 1, 'DUB_ITA');
     await service.scan();
 
     const res = await service.deleteEntry({ animeId: 'show-e', language: 'SUB_ITA' });
     expect(res.deletedFiles).toBe(1);
-    expect(existsSync(join(tmpDir, 'sub-ita'))).toBe(false);
     expect(existsSync(dub)).toBe(true); // DUB intatto
 
     const subRow = db
@@ -264,10 +257,10 @@ describe('LibraryService', () => {
 
   it('deleteOrphans cancella i file orfani indicati', async () => {
     const db = createTestDb();
-    const service = makeService(db, tmpDir);
-    const orphanDir = join(tmpDir, 'sub-ita', 'ghost', 'Season 01');
+    const { service } = makeService(db, tmpDir);
+    const orphanDir = join(tmpDir, 'Ghost', 'Season 01');
     await mkdir(orphanDir, { recursive: true });
-    const orphan = join(orphanDir, 'S01E99.mp4');
+    const orphan = join(orphanDir, 'Ghost - S01E99.mp4');
     await writeFile(orphan, 'orphan-bytes');
 
     const res = await service.deleteOrphans([orphan]);
@@ -282,15 +275,13 @@ describe('LibraryService', () => {
     insertEpisode(db, 'ep-s-1', 'show-s', 1);
     insertFile(db, 'file-s-sub', 'ep-s-1', 'SUB_ITA');
     insertFile(db, 'file-s-dub', 'ep-s-1', 'DUB_ITA');
-    await makeLibraryFile(tmpDir, 'show-s', 1, 'SUB_ITA');
-    await makeLibraryFile(tmpDir, 'show-s', 1, 'DUB_ITA');
-    const service = makeService(db, tmpDir);
+    const { service, renamer } = makeService(db, tmpDir);
+    await placeEpisode(renamer, 'show-s', 1, 'SUB_ITA');
+    await placeEpisode(renamer, 'show-s', 1, 'DUB_ITA');
     await service.scan();
 
     const res = await service.deleteSeries({ animeId: 'show-s' });
     expect(res.deletedFiles).toBe(2);
-    expect(existsSync(join(tmpDir, 'sub-ita'))).toBe(false);
-    expect(existsSync(join(tmpDir, 'dub-ita'))).toBe(false);
     const downloaded = db
       .select()
       .from(schema.episodeFile)

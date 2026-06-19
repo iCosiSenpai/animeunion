@@ -93,9 +93,9 @@ describe('DownloadService', () => {
 
   function makeService(catalog: CatalogService = buildStubCatalog()) {
     const config = createConfigService({ db });
-    config.set('animePath', animePath);
+    config.set('seriesPathSub', animePath);
     config.set('autoDownload', true);
-    const renamer = createRenamerService({ db });
+    const renamer = createRenamerService({ db, config });
     const realWorker = createDownloadWorker({
       db,
       catalog,

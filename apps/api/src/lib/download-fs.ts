@@ -5,9 +5,9 @@ import type { Logger } from './logger';
 /**
  * Utility per il download engine: naming FS-safe e atomicità del rename.
  *
- * Il path finale "full" (sub-ita/dub-ita, serie/stagione, fix sequel) è calcolato da
- * RenamerService. Questo file resta utility di basso livello per `tempPath`, `ensureDir`
- * e `atomicMove`.
+ * Il path finale "full" (serie/film, stagione, fix sequel, routing per lingua) è calcolato da
+ * RenamerService. Questo file resta utility di basso livello per `tempPath`, `ensureDir`,
+ * `atomicMove`, cancellazione e sweep.
  */
 
 const UNSAFE_CHARS = /[^\p{L}\p{N}\-_ ]/gu;
@@ -26,28 +26,33 @@ export function sanitizeSlugForFs(slug: string): string {
   );
 }
 
+// Caratteri non ammessi nei nomi file su Windows/NTFS (più il backslash, codice 92).
+const FS_ILLEGAL = new Set(['/', ':', '*', '?', '"', '<', '>', '|', String.fromCharCode(92)]);
+
+/**
+ * Nome leggibile FS-safe: rimuove solo i caratteri illegali e di controllo, MANTENENDO
+ * spazi, maiuscole e accenti (compatibile con Jellyfin/Plex). Es. "Koori no Jouheki".
+ */
+export function sanitizeTitleForFs(title: string): string {
+  let out = '';
+  for (const ch of title) {
+    const code = ch.codePointAt(0) ?? 0;
+    if (code < 0x20 || FS_ILLEGAL.has(ch)) {
+      continue;
+    }
+    out += ch;
+  }
+  const cleaned = out
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/[. ]+$/, '') // niente punto/spazio finale (Windows)
+    .slice(0, 150)
+    .trim();
+  return cleaned || 'Anime';
+}
+
 export function pad2(n: number): string {
   return String(n).padStart(2, '0');
-}
-
-export interface TargetPathInput {
-  animePath: string;
-  animeSlug: string;
-  seasonNumber: number;
-  episodeNumber: number;
-  language: string;
-  ext: string;
-}
-
-export function targetPath(input: TargetPathInput): string {
-  const dir = join(
-    input.animePath,
-    sanitizeSlugForFs(input.animeSlug),
-    `Season ${pad2(input.seasonNumber)}`,
-  );
-  const langSuffix = input.language ? `.${input.language.toLowerCase()}` : '';
-  const file = `S${pad2(input.seasonNumber)}E${pad2(input.episodeNumber)}${langSuffix}.${input.ext}`;
-  return join(dir, file);
 }
 
 export function tempPath(target: string, queueId: string): string {
@@ -90,7 +95,7 @@ export async function deleteFileAndPrune(
   const target = resolve(filePath);
   const rel = relative(root, target);
   if (rel === '' || rel.startsWith('..') || isAbsolute(rel)) {
-    logger?.warn({ filePath, rootPath }, 'Eliminazione fuori da animePath rifiutata');
+    logger?.warn({ filePath, rootPath }, 'Eliminazione fuori dalla cartella di download rifiutata');
     return false;
   }
   let removed = false;

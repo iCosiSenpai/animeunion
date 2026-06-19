@@ -45,7 +45,7 @@ function makeWorker(
   catalog: CatalogService,
   config: ReturnType<typeof createConfigService>,
 ) {
-  const renamer = createRenamerService({ db });
+  const renamer = createRenamerService({ db, config });
   return createDownloadWorker({ db, catalog, config, logger: testLogger, renamer });
 }
 
@@ -114,7 +114,7 @@ describe('DownloadWorker (FSM)', () => {
 
   it('enqueue inserisce in coda e ritorna queueId', () => {
     const config = createConfigService({ db });
-    config.set('animePath', animePath);
+    config.set('seriesPathSub', animePath);
     const worker = makeWorker(db, buildStubCatalog(new Map()), config);
 
     // Setup minimale: anime + episode + episode_file
@@ -169,7 +169,7 @@ describe('DownloadWorker (FSM)', () => {
 
   it('enqueue idempotente: due chiamate per stesso episodeFileId ritornano lo stesso id', () => {
     const config = createConfigService({ db });
-    config.set('animePath', animePath);
+    config.set('seriesPathSub', animePath);
     const worker = makeWorker(db, buildStubCatalog(new Map()), config);
 
     db.insert(schema.anime)
@@ -220,7 +220,7 @@ describe('DownloadWorker (FSM)', () => {
 
   it('cancel su queued è immediato, su completed rifiuta', () => {
     const config = createConfigService({ db });
-    config.set('animePath', animePath);
+    config.set('seriesPathSub', animePath);
     const worker = makeWorker(db, buildStubCatalog(new Map()), config);
 
     const timestamp = new Date().toISOString();
@@ -306,7 +306,7 @@ describe('DownloadWorker (FSM)', () => {
 
   it('retry su failed rimette in coda e resetta retry_count', () => {
     const config = createConfigService({ db });
-    config.set('animePath', animePath);
+    config.set('seriesPathSub', animePath);
     const worker = makeWorker(db, buildStubCatalog(new Map()), config);
 
     const timestamp = new Date().toISOString();
@@ -376,7 +376,7 @@ describe('DownloadWorker (FSM)', () => {
 
   it('retry su non-failed rifiuta', () => {
     const config = createConfigService({ db });
-    config.set('animePath', animePath);
+    config.set('seriesPathSub', animePath);
     const worker = makeWorker(db, buildStubCatalog(new Map()), config);
 
     const timestamp = new Date().toISOString();
@@ -435,7 +435,7 @@ describe('DownloadWorker (FSM)', () => {
 
   it('start + stop sono idempotenti', () => {
     const config = createConfigService({ db });
-    config.set('animePath', animePath);
+    config.set('seriesPathSub', animePath);
     const worker = makeWorker(db, buildStubCatalog(new Map()), config);
     worker.start();
     worker.start(); // noop
@@ -445,7 +445,7 @@ describe('DownloadWorker (FSM)', () => {
 
   it('pause blocca nuovi job, resume li riabilita', () => {
     const config = createConfigService({ db });
-    config.set('animePath', animePath);
+    config.set('seriesPathSub', animePath);
     const worker = makeWorker(db, buildStubCatalog(new Map()), config);
 
     const timestamp = new Date().toISOString();
@@ -521,7 +521,7 @@ describe('DownloadWorker (FSM)', () => {
     const url = `http://127.0.0.1:${port}/ep.mp4`;
 
     const config = createConfigService({ db });
-    config.set('animePath', animePath);
+    config.set('seriesPathSub', animePath);
     const worker = makeWorker(db, buildStubCatalog(new Map([['ef-1', url]])), config);
 
     const timestamp = new Date().toISOString();
@@ -604,7 +604,7 @@ describe('DownloadWorker (FSM)', () => {
 
   it('cancel su downloading orfano (nessun controller in volo) lo segna cancelled', () => {
     const config = createConfigService({ db });
-    config.set('animePath', animePath);
+    config.set('seriesPathSub', animePath);
     const worker = makeWorker(db, buildStubCatalog(new Map()), config);
 
     const t = new Date().toISOString();
@@ -632,7 +632,7 @@ describe('DownloadWorker (FSM)', () => {
 
   it('start reimposta i download orfani (downloading/processing) a failed', () => {
     const config = createConfigService({ db });
-    config.set('animePath', animePath);
+    config.set('seriesPathSub', animePath);
     const worker = makeWorker(db, buildStubCatalog(new Map()), config);
 
     const t = new Date().toISOString();

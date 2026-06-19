@@ -1,5 +1,5 @@
 import { readdir, stat } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve, sep } from 'node:path';
 import type {
   Language,
   LibraryDeleteResult,
@@ -86,7 +86,7 @@ interface ExpectedEntry {
 export function createLibraryService(deps: LibraryServiceDeps): LibraryService {
   const { db, config, renamer, resolver, logger } = deps;
 
-  function buildExpectedEntries(animePath: string): ExpectedEntry[] {
+  function buildExpectedEntries(): ExpectedEntry[] {
     const rows = db
       .select({
         episodeFileId: schema.episodeFile.id,
@@ -113,7 +113,6 @@ export function createLibraryService(deps: LibraryServiceDeps): LibraryService {
         language,
         path: resolve(
           renamer.computeEpisodePath({
-            animePath,
             animeId: row.animeId,
             episodeNumber: row.episodeNumber,
             language,
@@ -123,9 +122,20 @@ export function createLibraryService(deps: LibraryServiceDeps): LibraryService {
     });
   }
 
+  /** Root da usare per il pruning delle cartelle vuote: quella che contiene il file. */
+  function pruneRootFor(filePath: string): string {
+    const abs = resolve(filePath);
+    for (const root of config.distinctDownloadRoots()) {
+      const absRoot = resolve(root);
+      if (abs === absRoot || abs.startsWith(absRoot + sep)) {
+        return root;
+      }
+    }
+    return dirname(abs); // fallback: nessun pruning oltre la cartella diretta
+  }
+
   /** Cancella i file degli episode_file indicati, azzera lo stato e pulisce la coda. */
   async function removeFiles(episodeFileIds: string[]): Promise<LibraryDeleteResult> {
-    const animePath = config.get('animePath');
     let deletedFiles = 0;
     let freedBytes = 0;
     for (const id of episodeFileIds) {
@@ -143,7 +153,6 @@ export function createLibraryService(deps: LibraryServiceDeps): LibraryService {
           .get();
         if (episode) {
           path = renamer.computeEpisodePath({
-            animePath,
             animeId: episode.animeId,
             episodeNumber: episode.number,
             language: file.language as Language,
@@ -152,7 +161,7 @@ export function createLibraryService(deps: LibraryServiceDeps): LibraryService {
       }
       if (path) {
         try {
-          await deleteFileAndPrune(path, animePath, logger);
+          await deleteFileAndPrune(path, pruneRootFor(path), logger);
         } catch (error) {
           logger.error({ err: error, episodeFileId: id }, 'Eliminazione file libreria fallita');
         }
@@ -179,16 +188,16 @@ export function createLibraryService(deps: LibraryServiceDeps): LibraryService {
 
   return {
     async scan() {
-      const animePath = config.get('animePath');
-      const expected = buildExpectedEntries(animePath);
+      const expected = buildExpectedEntries();
       const expectedByPath = new Map<string, ExpectedEntry>();
       for (const entry of expected) {
         expectedByPath.set(entry.path, entry);
       }
 
-      const allFiles = (await walk(animePath, logger))
-        .filter(isVideoFile)
-        .map((file) => resolve(file));
+      // Scansiona tutte le cartelle radice distinte configurate.
+      const roots = config.distinctDownloadRoots();
+      const walked = await Promise.all(roots.map((root) => walk(root, logger)));
+      const allFiles = [...new Set(walked.flat())].filter(isVideoFile).map((file) => resolve(file));
       const foundPaths = new Set(allFiles);
 
       const sizeByPath = new Map<string, number>();
@@ -456,13 +465,12 @@ export function createLibraryService(deps: LibraryServiceDeps): LibraryService {
     },
 
     async deleteOrphans(paths) {
-      const animePath = config.get('animePath');
       let deletedFiles = 0;
       let freedBytes = 0;
       for (const path of paths) {
         try {
           const info = await stat(path).catch(() => null);
-          const removed = await deleteFileAndPrune(path, animePath, logger);
+          const removed = await deleteFileAndPrune(path, pruneRootFor(path), logger);
           if (removed) {
             deletedFiles += 1;
             freedBytes += info ? Number(info.size) : 0;

@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, sep } from 'node:path';
+import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { testLogger } from '../test/helpers';
 import {
@@ -9,8 +9,8 @@ import {
   ensureDir,
   pad2,
   sanitizeSlugForFs,
+  sanitizeTitleForFs,
   sweepPartFiles,
-  targetPath,
   tempPath,
 } from './download-fs';
 
@@ -42,35 +42,15 @@ describe('pad2', () => {
   });
 });
 
-describe('targetPath', () => {
-  it('costruisce <animePath>/<slug>/Season NN/SXXEXY.<lang>.ext', () => {
-    const p = targetPath({
-      animePath: 'C:\\data\\anime',
-      animeSlug: 'Naruto',
-      seasonNumber: 1,
-      episodeNumber: 13,
-      language: 'SUB_ITA',
-      ext: 'mp4',
-    });
-    expect(p).toBe(['C:\\data\\anime', 'naruto', 'Season 01', 'S01E13.sub_ita.mp4'].join(sep));
+describe('sanitizeTitleForFs', () => {
+  it('mantiene spazi e maiuscole, rimuove i caratteri illegali', () => {
+    expect(sanitizeTitleForFs('Koori no Jouheki')).toBe('Koori no Jouheki');
+    expect(sanitizeTitleForFs('Re:Zero / Season?')).toBe('ReZero Season');
   });
 
-  it('slug con caratteri speciali viene sanificato', () => {
-    const p = targetPath({
-      animePath: 'C:\\data\\anime',
-      animeSlug: 'Darling in the FranXX',
-      seasonNumber: 2,
-      episodeNumber: 1,
-      language: 'DUB_ITA',
-      ext: 'mp4',
-    });
-    const expected = join(
-      'C:\\data\\anime',
-      'darling-in-the-franxx',
-      'Season 02',
-      'S02E01.dub_ita.mp4',
-    );
-    expect(p).toBe(expected);
+  it('rimuove punto/spazio finale (Windows) e cade su "Anime" se vuoto', () => {
+    expect(sanitizeTitleForFs('Titolo. ')).toBe('Titolo');
+    expect(sanitizeTitleForFs(':*?')).toBe('Anime');
   });
 });
 

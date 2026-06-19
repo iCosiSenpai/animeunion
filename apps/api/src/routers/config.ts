@@ -15,5 +15,9 @@ export const configRouter = router({
     value: ctx.services.config.set(input.key, input.value),
   })),
 
-  animePathStatus: publicProcedure.query(({ ctx }) => ctx.services.config.animePathStatus()),
+  downloadDirs: publicProcedure.query(({ ctx }) => ctx.services.config.downloadDirsStatus()),
+
+  browseDir: publicProcedure
+    .input(z.object({ path: z.string().optional() }))
+    .query(({ ctx, input }) => ctx.services.config.browseDir(input.path)),
 });

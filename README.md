@@ -46,18 +46,48 @@ lo rinomina (`Sub Ita/NomeSerie/Season 01/S01E01.mp4`) e lo mette in libreria, g
 > **Ti serve solo Docker.** Un account AnimeUnion gratuito si crea su
 > [animeunion.tv/registrati](https://animeunion.tv/registrati).
 
-### Metodo 1 — Immagini pronte (consigliato)
+**1.** Crea una cartella e un file `docker-compose.yml` con questo contenuto:
 
-Nessun build, nessun clone:
+```yaml
+services:
+  api:
+    image: ghcr.io/icosisenpai/animeunion-api:latest
+    restart: unless-stopped
+    expose: ['3001']
+    volumes:
+      - ./data:/data            # database (NON la libreria)
+      - /percorso/del/tuo/media:/media   # ⬅️ MODIFICA con le TUE cartelle (serie, film, SUB/DUB)
+    environment:
+      - DATABASE_PATH=/data/animeunion.db
+      - TZ=Europe/Rome
+  web:
+    image: ghcr.io/icosisenpai/animeunion-web:latest
+    restart: unless-stopped
+    ports: ['7979:3000']        # cambia 7979 se occupata
+    depends_on:
+      api:
+        condition: service_healthy
+```
+
+> ⚠️ **Attenzione al volume `/media`**: ogni NAS è diverso. Monta la cartella che contiene la tua
+> libreria (es. Synology: `/volume2/NASHDD/Media:/media`). Le sottocartelle di serie/film e
+> SUB/DUB le sceglierai **dentro l'app**, non qui.
+
+**2.** Avvia:
 
 ```bash
-mkdir animeunion && cd animeunion
-wget https://raw.githubusercontent.com/iCosiSenpai/animeunion/main/.env.example -O .env
-wget https://raw.githubusercontent.com/iCosiSenpai/animeunion/main/docker-compose.ghcr.yaml -O docker-compose.yml
 docker compose up -d
 ```
 
-### Metodo 2 — Da sorgente (build locale)
+**3.** Apri **`http://<ip-del-server>:7979`**, **accedi con il tuo account AnimeUnion**
+(email/password) e vai in **Impostazioni → Cartelle di download** per scegliere dove salvare serie
+e film (sfoglia le cartelle montate in `/media`).
+
+> 🔑 Niente token da copiare: il login avviene dall'interfaccia. Le credenziali nel `.env` sono
+> opzionali (solo per l'auto-login).
+
+<details>
+<summary>Alternativa: build da sorgente (per sviluppatori)</summary>
 
 ```bash
 git clone https://github.com/iCosiSenpai/animeunion.git
@@ -65,33 +95,17 @@ cd animeunion
 cp .env.example .env
 docker compose up -d --build
 ```
-
-Poi apri **`http://<ip-del-server>:7979`** (o `http://localhost:7979` in locale).
-
-### Primo accesso
-
-Al primo avvio compare la schermata di login: **accedi con email e password del tuo account
-AnimeUnion**. Fatto — il token viene salvato e non devi più rifarlo.
-
-> 🔑 **Le credenziali NON vanno nel `.env`** (a meno che tu non voglia l'auto-login): di default
-> accedi dall'interfaccia. Niente token da copiare a mano.
+</details>
 
 ---
 
 ## ⚙️ Configurazione
 
-Tutto opzionale, nel file `.env` (vedi [`.env.example`](.env.example)):
-
-| Variabile | Default | Descrizione |
-|---|---|---|
-| `WEB_PORT` | `7979` | Porta web sull'host. Cambiala se è occupata. |
-| `DOWNLOAD_PATH` | `./anime` | Cartella host per la libreria scaricata. Punta a un volume capiente. |
-| `ANIMEUNION_EMAIL` / `_PASSWORD` | *(vuote)* | Solo se vuoi l'auto-login senza schermata di accesso. |
-| `LOG_LEVEL` | `info` | `fatal`…`trace`. |
-| `CORS_ORIGINS` | *(vuoto)* | Restringe le origin consentite (vuoto = LAN-friendly). |
-
-**Volumi**: il database SQLite sta in `./data`, la libreria in `./anime` (montata su `/data/anime`,
-l'`animePath` di default). La cartella libreria è impostabile anche dalle Impostazioni dell'app.
+- **Cartelle di download** → si impostano **nell'app** (Impostazioni → Cartelle di download): serie
+  e film, SUB e DUB, ognuno nella sua cartella se vuoi. Basta montarle nel compose sotto `/media`.
+- **`.env`** → solo segreti e deploy: `ANIMEUNION_EMAIL`/`PASSWORD` (opzionali), `WEB_PORT`,
+  `LOG_LEVEL`, `CORS_ORIGINS`. Vedi [`.env.example`](.env.example).
+- **Volumi**: `./data` = database/token; `/media` = la tua libreria.
 
 **Aggiornamento**:
 

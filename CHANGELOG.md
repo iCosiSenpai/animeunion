@@ -7,6 +7,14 @@ e il progetto aderisce al [Semantic Versioning](https://semver.org/lang/it/).
 
 ## [Unreleased]
 
+### Changed
+- **Cartelle di download riviste** (configurabili nelle Impostazioni, non più nel `.env`):
+  routing automatico per **tipo (serie/film) × lingua (SUB/DUB)** su cartelle separate; layout
+  **Jellyfin** `<Titolo>/Season NN/<Titolo> - SxxExx.mp4` con titolo leggibile; film in cartella
+  dedicata; suffisso lingua nel nome solo quando SUB e DUB condividono la stessa cartella. Aggiunto
+  un **browser cartelle** nelle Impostazioni. Il `.env` ora contiene solo segreti + deploy; nel
+  compose si monta il media su `/media`.
+
 ### Da fare
 - Test E2E (Playwright).
 - PWA (manifest + service worker) e notifiche Web Push.

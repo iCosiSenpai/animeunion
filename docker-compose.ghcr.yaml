@@ -16,8 +16,11 @@ services:
     expose:
       - '3001'
     volumes:
-      - ./data:/data # database SQLite + token
-      - ${DOWNLOAD_PATH:-./anime}:/data/anime # libreria download (= animePath di default)
+      - ./data:/data # database SQLite + token (NON la libreria)
+      # ↓ MODIFICA: monta QUI le tue cartelle media (serie, film, SUB/DUB).
+      #   Esempio NAS: - /volume2/NASHDD/Media:/media
+      #   Poi scegli le cartelle dentro l'app: Impostazioni → Cartelle di download.
+      - ./media:/media
     env_file:
       - .env
     environment:

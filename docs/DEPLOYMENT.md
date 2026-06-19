@@ -1,24 +1,20 @@
 # Deployment — AnimeUnion Docker
 
-Guida all'installazione self-hosted. Serve solo **Docker** (con Docker Compose v2) e un account
-gratuito su [animeunion.tv/registrati](https://animeunion.tv/registrati).
+Guida self-hosted. Serve solo **Docker** (con Compose v2) e un account gratuito su
+[animeunion.tv/registrati](https://animeunion.tv/registrati).
 
 ---
 
-## Installazione
+## 1. Installazione
 
-### Metodo 1 — Immagini pronte (consigliato)
-
-Scarica immagini multi-arch da GHCR, senza build:
+Crea un `docker-compose.yml` (vedi il README per il blocco completo con immagini GHCR), montando il
+tuo media sotto `/media`, poi:
 
 ```bash
-mkdir animeunion && cd animeunion
-wget https://raw.githubusercontent.com/iCosiSenpai/animeunion/main/.env.example -O .env
-wget https://raw.githubusercontent.com/iCosiSenpai/animeunion/main/docker-compose.ghcr.yaml -O docker-compose.yml
 docker compose up -d
 ```
 
-### Metodo 2 — Da sorgente
+In alternativa, da sorgente:
 
 ```bash
 git clone https://github.com/iCosiSenpai/animeunion.git
@@ -27,75 +23,86 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-Apri **`http://<ip-del-server>:7979`**.
-
-### Primo accesso
-
-Compare la schermata di login: accedi con **email e password del tuo account AnimeUnion**. Il token
-viene generato e salvato in SQLite; gli accessi successivi sono automatici.
-
-> Per saltare la schermata di accesso puoi compilare `ANIMEUNION_EMAIL`/`ANIMEUNION_PASSWORD` nel
-> `.env` (auto-login). Sono opzionali.
+Apri **`http://<ip-del-server>:7979`** e accedi con il tuo account AnimeUnion (email/password).
 
 ---
 
-## Variabili d'ambiente (`.env`)
+## 2. Cartelle di download (si configurano NELL'APP)
+
+Le cartelle **non** stanno nel `.env`. Funziona così:
+
+1. **Monta** il tuo media nel compose, una sola riga generica:
+   ```yaml
+   volumes:
+     - ./data:/data
+     - /volume2/NASHDD/Media:/media   # ← la TUA libreria
+   ```
+2. **Avvia** e vai in **Impostazioni → Cartelle di download**.
+3. **Scegli** le cartelle con **Sfoglia** (naviga dentro `/media`):
+   - *Serie · SUB ITA* → es. `/media/Video/Anime`
+   - *Serie · DUB ITA* → es. `/media/Video/Anime DUB` (opzionale)
+   - *Film · SUB ITA* → es. `/media/Video/Anime Movie` (opzionale)
+   - *Film · DUB ITA* → es. `/media/Video/Anime Movie DUB` (opzionale)
+
+Regole:
+- I campi vuoti **ereditano** dalla cartella *Serie · SUB ITA*.
+- Il download viene instradato automaticamente in base a **tipo (serie/film) × lingua (SUB/DUB)**.
+- Se SUB e DUB finiscono nella **stessa** cartella, al nome file viene aggiunto un suffisso
+  (` - SUB ITA`/` - DUB ITA`) così i due non si sovrascrivono. Con cartelle separate i nomi restano
+  puliti.
+- Struttura serie: `<cartella>/<Titolo>/Season NN/<Titolo> - S01E01.mp4` (compatibile Jellyfin/Plex).
+  Film: `<cartella>/<Titolo>/<Titolo>.mp4`.
+
+---
+
+## 3. Variabili d'ambiente (`.env`) — solo segreti/deploy
 
 | Variabile | Default | Note |
 |---|---|---|
 | `ANIMEUNION_EMAIL` / `ANIMEUNION_PASSWORD` | *(vuote)* | Opzionali. Vuote = login dalla web UI. |
 | `WEB_PORT` | `7979` | Porta web sull'host. |
-| `DOWNLOAD_PATH` | `./anime` | Cartella host della libreria (montata su `/data/anime`). |
-| `ANIMEUNION_API_URL` | endpoint ufficiale | Di norma non si tocca. |
-| `SOURCE_MODE` | `api` | `api` \| `mock` (offline). |
 | `LOG_LEVEL` | `info` | `fatal`…`trace`. |
-| `CORS_ORIGINS` | *(vuoto)* | Origin consentite separate da virgola; vuoto = riflette l'origin. |
+| `CORS_ORIGINS` | *(vuoto)* | Origin consentite (vuoto = LAN-friendly). |
 
-L'API **non è pubblicata** sull'host (la raggiunge solo il web sulla rete interna). Per debug puoi
-aggiungere `ports: ['3011:3001']` al servizio `api`.
-
----
-
-## Volumi e percorsi
-
-- `./data` → `/data` — database SQLite (`/data/animeunion.db`) e token.
-- `${DOWNLOAD_PATH}` → `/data/anime` — libreria scaricata (è l'`animePath` di default; modificabile
-  anche dalle **Impostazioni** dell'app, es. per puntare a un NAS).
-
-Backup: copia la cartella `./data` (DB) e la libreria. Permessi: su NAS imposta l'utente/gruppo
-proprietario delle cartelle montate se incontri errori di scrittura.
+L'API **non** è pubblicata sull'host (la usa solo il web sulla rete interna).
 
 ---
 
-## Aggiornamento
+## 4. Volumi e backup
+
+- `./data` → `/data` — database SQLite (`/data/animeunion.db`) e token. **Fai il backup di questa cartella.**
+- `/media` → la tua libreria (serie/film). I file scaricati restano leggibili da Jellyfin/Plex.
+
+Permessi su NAS: se vedi errori di scrittura, assicurati che l'utente del container possa scrivere
+nelle cartelle montate.
+
+---
+
+## 5. Aggiornamento
 
 ```bash
-# Immagini pronte
-docker compose pull && docker compose up -d
-
-# Da sorgente
-git pull && docker compose up -d --build
+docker compose pull && docker compose up -d     # immagini pronte
+git pull && docker compose up -d --build         # da sorgente
 ```
 
 ---
 
-## Troubleshooting
+## 6. Troubleshooting
 
-- **`port is already allocated` / porta occupata** — cambia `WEB_PORT` nel `.env` e riavvia
-  (`docker compose up -d`). L'API non espone porte sull'host.
-- **Build lenta su NAS ARM** — la prima build compila `better-sqlite3`; usa il **Metodo 1**
-  (immagini pronte) per evitarlo.
-- **"Nessuno spazio"/download falliti** — il worker rifiuta i download se restano < 500 MiB liberi;
-  libera spazio o sposta `DOWNLOAD_PATH` su un volume più grande.
-- **Login social Google/Discord in errore** — dipende dalla configurazione OAuth lato AnimeUnion;
-  usa email/password.
-- **Log**: `docker compose logs -f api` (backend) e `docker compose logs -f web` (frontend).
-- **Health API**: `docker compose exec api node -e "fetch('http://127.0.0.1:3001/health').then(r=>r.text()).then(console.log)"`.
+- **`port is already allocated`** — cambia `WEB_PORT` in `.env` e riavvia.
+- **Build lenta su NAS ARM** — usa le immagini pronte (GHCR) invece della build da sorgente.
+- **Download falliti per spazio** — il worker rifiuta i download se restano < 500 MiB liberi.
+- **Login Google/Discord in errore** — dipende dalla configurazione OAuth lato AnimeUnion; usa
+  email/password.
+- **Vecchi file `sub-ita/...`** — chi proveniva da una versione precedente troverà i vecchi file
+  nella vecchia struttura: risulteranno "orfani" alla scansione della Libreria e possono essere
+  rimossi da lì (oppure spostati manualmente nella nuova struttura).
+- **Log**: `docker compose logs -f api` / `docker compose logs -f web`.
 
 ---
 
-## Note per piattaforma
+## 7. Note per piattaforma
 
-- **Synology / QNAP** — usa il Metodo 1; imposta `DOWNLOAD_PATH` su una cartella condivisa del NAS.
-- **Ubuntu / Debian / Raspberry Pi** — `docker compose up -d` come sopra (arm64 supportato).
-- **Windows / macOS** — Docker Desktop; il Metodo 1 funziona senza toolchain di build.
+- **Synology / QNAP** — immagini pronte; monta una cartella condivisa su `/media`.
+- **Ubuntu / Debian / Raspberry Pi** — `docker compose up -d` (arm64 supportato).
+- **Windows / macOS** — Docker Desktop.

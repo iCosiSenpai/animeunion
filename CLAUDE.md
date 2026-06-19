@@ -141,12 +141,16 @@ potrebbe bloccare l'accesso, da fare con una scelta UX esplicita.
       persistenti, lingua bandiera+icona, Segui stateful, stato download, gestione file) +
       **quick wins (A)** + **hardening backend (D)**. Vedi Stato. Tutto mergiato in `main`.
       Rimandato: password web UI (opzionale).
-- [~] **STEP 6** — Docker: **`Dockerfile` api/web creati** (api via `tsx`; web Next standalone),
-      `docker-compose` + workflow `docker-publish` (context root) + `.dockerignore` + credenziali
-      AnimeUnion rese **opzionali** (login dalla web UI, anche Google/Discord). **Da validare con un
-      `docker compose build` reale** (qui Docker non era disponibile). **Restano**: PWA (manifest +
-      service worker) e Web Push (PLAN §S7).
-- [ ] **STEP 7** — Test E2E (Playwright) + CHANGELOG + DEPLOYMENT + release v0.1.0 (PLAN §S8).
+- [x] **STEP 6** — Docker: `Dockerfile` api (via `tsx`) e web (Next standalone), `docker-compose`
+      (build) + `docker-compose.ghcr.yaml` (immagini) + workflow `docker-publish` (context root) +
+      `.dockerignore` + credenziali AnimeUnion **opzionali** (login dalla web UI). **Build validata
+      sul NAS** (fix: `.dockerignore` escludeva `src/components/anime`; API non pubblicata sull'host).
+      **Restano (rinviati)**: PWA (manifest + service worker) e Web Push.
+- [~] **STEP 7** — **README user-friendly + logo**, `CHANGELOG` 0.1.0, `DEPLOYMENT` completo, e
+      **release `v0.1.0`** taggata (workflow GHCR multi-arch attivato, `DOCKER_PUBLISH_ENABLED=true`).
+      Login premium (logo + icone Google/Discord). **Rimandati**: test E2E (Playwright).
+      **Nota**: login social Google/Discord bloccato da `redirect_uri_mismatch` lato OAuth AnimeUnion
+      (config di Matteo, non del container); usare email/password.
 
 ## Gotchas operativi
 

@@ -1,0 +1,38 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# AnimeUnion Docker — compose con IMMAGINI PRONTE (GHCR), senza build.
+#
+# Avvio:  wget .env.example -O .env  &&  docker compose up -d
+#         (salva questo file come docker-compose.yml)
+# Web:    http://localhost:${WEB_PORT:-7979}
+#
+# LOGIN al primo avvio dalla web UI (email/password del tuo account AnimeUnion).
+# Le credenziali in .env sono OPZIONALI (solo per l'auto-login).
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  api:
+    image: ghcr.io/icosisenpai/animeunion-api:latest
+    restart: unless-stopped
+    expose:
+      - '3001'
+    volumes:
+      - ./data:/data # database SQLite + token
+      - ${DOWNLOAD_PATH:-./anime}:/data/anime # libreria download (= animePath di default)
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+      - DATABASE_PATH=/data/animeunion.db
+      - SOURCE_MODE=${SOURCE_MODE:-api}
+      - ANIMEUNION_API_URL=${ANIMEUNION_API_URL:-https://api.animeunion.tv/api/v1/integration}
+      - TZ=Europe/Rome
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+
+  web:
+    image: ghcr.io/icosisenpai/animeunion-web:latest
+    restart: unless-stopped
+    ports:
+      - '${WEB_PORT:-7979}:3000'
+    depends_on:
+      api:
+        condition: service_healthy

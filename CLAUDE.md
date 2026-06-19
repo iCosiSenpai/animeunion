@@ -84,7 +84,12 @@ Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
   - **Hardening (D)**: redaction segreti nei log, security headers + CORS allowlist
     (`CORS_ORIGINS`), gestione 429 (Retry-After/backoff), watchdog stallo download (60s),
     guardia spazio disco (500 MiB), script `npm run dev:clean` (libera 3001/3000).
-- **148 test verdi** (17 file).
+- **Download multi-directory (v0.1.1)**: le cartelle di download si configurano nelle
+  **Impostazioni** (non nel `.env`) — Serie/Film × SUB/DUB, con browser cartelle e fallback a
+  cascata; routing per (tipo×lingua); layout Jellyfin `<Titolo>/Season NN/<Titolo> - SxxExx.mp4`
+  (titolo leggibile), film in cartella dedicata, suffisso lingua solo se SUB e DUB condividono la
+  root. Compose: media montato su `/media`; `.env` solo segreti. `config.browseDir`/`downloadDirs`.
+- **147 test verdi** (17 file).
 
 **Endpoint v1.0.3/1.1.0/1.1.1 verificati live (12/13, base path
 `https://api.animeunion.tv/api/v1/integration`):**

@@ -7,6 +7,12 @@ e il progetto aderisce al [Semantic Versioning](https://semver.org/lang/it/).
 
 ## [Unreleased]
 
+### Da fare
+- Test E2E (Playwright).
+- PWA (manifest + service worker) e notifiche Web Push.
+
+## [0.1.1] - 2026-06-19
+
 ### Changed
 - **Cartelle di download riviste** (configurabili nelle Impostazioni, non più nel `.env`):
   routing automatico per **tipo (serie/film) × lingua (SUB/DUB)** su cartelle separate; layout
@@ -15,9 +21,9 @@ e il progetto aderisce al [Semantic Versioning](https://semver.org/lang/it/).
   un **browser cartelle** nelle Impostazioni. Il `.env` ora contiene solo segreti + deploy; nel
   compose si monta il media su `/media`.
 
-### Da fare
-- Test E2E (Playwright).
-- PWA (manifest + service worker) e notifiche Web Push.
+### Migrazione da 0.1.0
+- I file scaricati con la vecchia struttura (`sub-ita/<slug>/Season NN/...`) risultano **orfani**
+  alla scansione della Libreria: rimuovili da lì o spostali nella nuova struttura.
 
 ## [0.1.0] - 2026-06-19
 

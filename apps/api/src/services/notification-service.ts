@@ -3,7 +3,7 @@ import { desc, eq, inArray } from 'drizzle-orm';
 import type { Db } from '../db';
 import { schema } from '../db';
 import type { Logger } from '../lib/logger';
-import type { TelegramNotifier } from '../lib/telegram';
+import type { TelegramCredentials, TelegramNotifier } from '../lib/telegram';
 import type { ConfigService } from './config-service';
 
 export interface CreateNotificationInput {
@@ -19,6 +19,8 @@ export interface NotificationService {
   unreadCount(): number;
   markAllRead(): number;
   clear(): number;
+  /** Invio di prova su Telegram (per il bottone "Invia test" nelle Impostazioni). */
+  testTelegram(override?: TelegramCredentials): Promise<{ ok: boolean; error?: string }>;
 }
 
 export interface NotificationServiceDeps {
@@ -104,6 +106,13 @@ export function createNotificationService(deps: NotificationServiceDeps): Notifi
         .where(inArray(schema.notification.read, [1]))
         .run();
       return result.changes;
+    },
+
+    async testTelegram(override) {
+      if (!telegram) {
+        return { ok: false, error: 'Telegram non disponibile' };
+      }
+      return telegram.sendTest(override);
     },
   };
 }

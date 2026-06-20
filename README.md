@@ -107,10 +107,13 @@ docker compose up -d --build
 
 - **Cartelle di download** → si impostano **nell'app** (Impostazioni → Cartelle di download): serie
   e film, SUB e DUB, ognuno nella sua cartella se vuoi. Basta montarle nel compose sotto `/media`.
-- **Notifiche Telegram** (opzionali) → metti `TELEGRAM_BOT_TOKEN` e `TELEGRAM_CHAT_ID` nel `.env` e
-  attiva l'inoltro in Impostazioni → Notifiche.
+- **Notifiche Telegram** (opzionali) → token e chat id si impostano **nell'app**
+  (Impostazioni → Notifiche), con bottone "Invia test". Guida sotto:
+  [Configurazione Notifiche Telegram](#configurazione-notifiche-telegram). In alternativa restano
+  utilizzabili le env `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID` come fallback.
 - **`.env`** → solo segreti e deploy: `ANIMEUNION_EMAIL`/`PASSWORD` (opzionali), `WEB_PORT`,
-  `LOG_LEVEL`, `CORS_ORIGINS`, `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID`. Vedi [`.env.example`](.env.example).
+  `LOG_LEVEL`, `CORS_ORIGINS`. (`TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID` restano un fallback
+  opzionale: ora i token si configurano nell'app.) Vedi [`.env.example`](.env.example).
 - **Volumi**: `./data` = database/token; `/media` = la tua libreria.
 - **Diagnostica**: Impostazioni → Diagnostica mostra stato worker, spazio disco per cartella e sync.
 
@@ -122,6 +125,25 @@ git pull && docker compose up -d --build         # da sorgente
 ```
 
 Guida completa per piattaforma e troubleshooting in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
+---
+
+## Configurazione Notifiche Telegram
+
+Ricevi le notifiche dell'app (download completati/falliti, nuovi episodi) anche su Telegram.
+
+1. **Crea il bot**: su Telegram apri [@BotFather](https://t.me/BotFather), invia `/newbot`, segui le
+   istruzioni e copia il **token** (formato `123456:ABC-DEF...`).
+2. **Avvia una chat col bot**: cercalo per nome e premi **Start** (necessario perché possa scriverti).
+3. **Ricava il chat id**: il modo più semplice è scrivere a [@userinfobot](https://t.me/userinfobot),
+   che ti risponde con il tuo **Id**. In alternativa, dopo aver scritto al tuo bot, apri
+   `https://api.telegram.org/bot<TOKEN>/getUpdates` e leggi `chat.id`.
+4. **Inserisci tutto nell'app**: vai in **Impostazioni → Notifiche**, incolla **Bot Token** e
+   **Chat ID**, imposta **Notifiche Telegram = Attivo** e premi **Invia messaggio di test**: se
+   arriva il messaggio, è tutto pronto. Ricordati di **Salvare**.
+
+I token sono salvati nel database locale dell'app (`./data`). In alternativa puoi impostarli via env
+`TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID` (fallback usato solo se i campi nell'app sono vuoti).
 
 ---
 

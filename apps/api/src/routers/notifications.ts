@@ -19,4 +19,9 @@ export const notificationsRouter = router({
   clear: publicProcedure.mutation(({ ctx }) => ({
     removed: ctx.services.notifications.clear(),
   })),
+
+  testTelegram: publicProcedure
+    .input(z.object({ botToken: z.string().optional(), chatId: z.string().optional() }).optional())
+    .output(z.object({ ok: z.boolean(), error: z.string().optional() }))
+    .mutation(({ ctx, input }) => ctx.services.notifications.testTelegram(input)),
 });

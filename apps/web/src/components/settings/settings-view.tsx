@@ -22,6 +22,7 @@ import {
 import { Separator } from '@/components/ui/separator';
 import { trpc } from '@/lib/trpc';
 import type { AppConfig } from '@animeunion/shared';
+import { ExternalLink, Send } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useRouter } from 'next/navigation';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
@@ -88,6 +89,7 @@ export function SettingsView() {
   const configQuery = trpc.config.getAll.useQuery();
   const setMutation = trpc.config.set.useMutation();
   const syncMutation = trpc.catalog.sync.useMutation();
+  const testTelegramMutation = trpc.notifications.testTelegram.useMutation();
   const { theme, setTheme } = useTheme();
 
   const [draft, setDraft] = useState<AppConfig | null>(null);
@@ -232,6 +234,22 @@ export function SettingsView() {
       toast.success('Sincronizzazione del catalogo avviata.');
     } catch {
       toast.error('Impossibile avviare la sincronizzazione.');
+    }
+  };
+
+  const onTestTelegram = async () => {
+    try {
+      const res = await testTelegramMutation.mutateAsync({
+        botToken: draft.telegramBotToken,
+        chatId: draft.telegramChatId,
+      });
+      if (res.ok) {
+        toast.success('Messaggio di test inviato su Telegram.');
+      } else {
+        toast.error(res.error ?? 'Invio del messaggio di test non riuscito.');
+      }
+    } catch {
+      toast.error('Invio del messaggio di test non riuscito.');
     }
   };
 
@@ -401,7 +419,7 @@ export function SettingsView() {
         </Field>
         <Field
           label="Notifiche Telegram"
-          hint="Inoltra le notifiche a Telegram. Richiede TELEGRAM_BOT_TOKEN e TELEGRAM_CHAT_ID nel .env."
+          hint="Inoltra le notifiche al tuo bot Telegram. Configura token e chat id qui sotto."
         >
           <Select
             value={draft.notifyTelegram ? 'on' : 'off'}
@@ -415,6 +433,49 @@ export function SettingsView() {
               <SelectItem value="off">Disattivo</SelectItem>
             </SelectContent>
           </Select>
+        </Field>
+        <Field label="Bot Token" hint="Token del bot ottenuto da @BotFather.">
+          <Input
+            type="password"
+            autoComplete="off"
+            placeholder="123456:ABC-DEF…"
+            value={draft.telegramBotToken}
+            onChange={(e) => update('telegramBotToken', e.target.value)}
+          />
+        </Field>
+        <Field
+          label="Chat ID"
+          hint="Id della chat dove ricevere i messaggi (es. con @userinfobot)."
+        >
+          <Input
+            autoComplete="off"
+            placeholder="123456789"
+            value={draft.telegramChatId}
+            onChange={(e) => update('telegramChatId', e.target.value)}
+          />
+        </Field>
+        <Field label="Verifica" hint="Invia un messaggio di prova con i valori inseriti.">
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              variant="outline"
+              onClick={onTestTelegram}
+              disabled={
+                testTelegramMutation.isPending || !draft.telegramBotToken || !draft.telegramChatId
+              }
+            >
+              <Send className="mr-2 h-4 w-4" />
+              {testTelegramMutation.isPending ? 'Invio…' : 'Invia messaggio di test'}
+            </Button>
+            <a
+              href="https://github.com/iCosiSenpai/animeunion#configurazione-notifiche-telegram"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-sm text-primary underline-offset-4 hover:underline"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              Come si configura?
+            </a>
+          </div>
         </Field>
         <Field
           label="Provider futuri"

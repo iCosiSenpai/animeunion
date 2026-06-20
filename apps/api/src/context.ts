@@ -52,10 +52,11 @@ export function createAppContext(options: { env?: Env; databasePath?: string } =
   const library = createLibraryService({ db, config, renamer, resolver, logger });
   const series = createSeriesService({ db, resolver });
   const telegram = createTelegramNotifier({
-    config: {
-      botToken: resolvedEnv.TELEGRAM_BOT_TOKEN,
-      chatId: resolvedEnv.TELEGRAM_CHAT_ID,
-    },
+    // Config-DB (Impostazioni) ha precedenza; env resta fallback per i deploy esistenti.
+    getCredentials: () => ({
+      botToken: config.get('telegramBotToken') || resolvedEnv.TELEGRAM_BOT_TOKEN,
+      chatId: config.get('telegramChatId') || resolvedEnv.TELEGRAM_CHAT_ID,
+    }),
     logger,
   });
   const notifications = createNotificationService({ db, config, telegram, logger });

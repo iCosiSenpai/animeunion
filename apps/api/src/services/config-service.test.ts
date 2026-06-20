@@ -54,6 +54,16 @@ describe('ConfigService', () => {
     expect('chiave_legacy' in all).toBe(false);
   });
 
+  it('credenziali Telegram: default vuote e settabili', () => {
+    const service = createConfigService({ db: createTestDb() });
+    expect(service.get('telegramBotToken')).toBe('');
+    expect(service.get('telegramChatId')).toBe('');
+    service.set('telegramBotToken', '123456:ABC');
+    service.set('telegramChatId', '42');
+    expect(service.get('telegramBotToken')).toBe('123456:ABC');
+    expect(service.get('telegramChatId')).toBe('42');
+  });
+
   it('isConfigured riflette la presenza della cartella base', () => {
     const service = createConfigService({ db: createTestDb() });
     expect(service.isConfigured()).toBe(false);

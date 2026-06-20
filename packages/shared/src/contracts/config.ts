@@ -17,8 +17,13 @@ export const appConfigSchema = z.object({
   languageFallback: z.boolean().default(false),
   queueRetentionDays: z.number().int().positive().default(7),
   notifyOnComplete: z.boolean().default(true),
-  // Inoltro delle notifiche a Telegram (richiede TELEGRAM_BOT_TOKEN/CHAT_ID nel .env).
+  // Inoltro delle notifiche a Telegram. Credenziali configurabili dall'app (qui sotto);
+  // in alternativa via env TELEGRAM_BOT_TOKEN/CHAT_ID (fallback).
   notifyTelegram: z.boolean().default(false),
+  // Token del bot Telegram (da @BotFather) e chat id destinatario. Segreti in SQLite
+  // (coerente con il modello token-in-SQLite); vuoti = usa il fallback da env, se presente.
+  telegramBotToken: z.string().default(''),
+  telegramChatId: z.string().default(''),
 });
 export type AppConfig = z.infer<typeof appConfigSchema>;
 

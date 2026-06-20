@@ -12,7 +12,8 @@ import {
 import { Input } from '@/components/ui/input';
 import { trpc } from '@/lib/trpc';
 import type { SeriesResolved } from '@animeunion/shared';
-import { Loader2 } from 'lucide-react';
+import { ArrowUpRight, Loader2 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { type ReactNode, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -29,6 +30,7 @@ export function useSeasonGate(animeId: string): {
   dialog: ReactNode;
 } {
   const utils = trpc.useUtils();
+  const router = useRouter();
   const setOverride = trpc.series.setOverride.useMutation();
   const [open, setOpen] = useState(false);
   const [info, setInfo] = useState<SeriesResolved | null>(null);
@@ -61,6 +63,14 @@ export function useSeasonGate(animeId: string): {
   const close = () => {
     pending.current = null;
     setOpen(false);
+  };
+
+  const goToSeries = () => {
+    const slug = info?.seriesSlug;
+    close();
+    if (slug) {
+      router.push(`/catalog/${slug}`);
+    }
   };
 
   const onConfirm = () => {
@@ -128,14 +138,25 @@ export function useSeasonGate(animeId: string): {
           </label>
         </div>
 
-        <DialogFooter>
-          <Button variant="ghost" onClick={close} disabled={setOverride.isPending}>
-            Annulla
+        <DialogFooter className="gap-2 sm:justify-between">
+          <Button
+            variant="ghost"
+            onClick={goToSeries}
+            disabled={setOverride.isPending || !info?.seriesSlug}
+            className="gap-1"
+          >
+            <ArrowUpRight className="h-4 w-4" />
+            Vai alla serie
           </Button>
-          <Button onClick={onConfirm} disabled={setOverride.isPending}>
-            {setOverride.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            Conferma e scarica
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="ghost" onClick={close} disabled={setOverride.isPending}>
+              Annulla
+            </Button>
+            <Button onClick={onConfirm} disabled={setOverride.isPending}>
+              {setOverride.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Conferma e scarica
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

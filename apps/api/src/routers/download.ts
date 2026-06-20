@@ -1,5 +1,6 @@
 import {
   downloadActionInputSchema,
+  downloadAddAllBySlugInputSchema,
   downloadAddByRefInputSchema,
   downloadAddInputSchema,
   downloadAddMissingInputSchema,
@@ -25,6 +26,12 @@ export const downloadRouter = router({
   addAll: publicProcedure.input(downloadAddMissingInputSchema).mutation(({ ctx, input }) => ({
     enqueued: ctx.services.download.addAll(input),
   })),
+
+  addAllBySlug: publicProcedure
+    .input(downloadAddAllBySlugInputSchema)
+    .mutation(async ({ ctx, input }) => ({
+      enqueued: await ctx.services.download.addAllBySlug(input),
+    })),
 
   queue: publicProcedure.query(({ ctx }) => ctx.services.download.getQueue()),
 

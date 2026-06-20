@@ -496,6 +496,23 @@ describe('DownloadService', () => {
     expect(enqueueSpy).toHaveBeenCalledWith('ef-1', undefined);
   });
 
+  it('addAllBySlug risolve lo slug, mette in cache e accoda i mancanti', async () => {
+    const catalog = {
+      getBySlug: vi.fn(async () => ({ id: 'a-1' })),
+    } as unknown as CatalogService;
+    const { service } = makeService(catalog);
+    insertAnime(db, 'a-1');
+    insertEpisode(db, 'e-1', 'a-1', 1);
+    insertEpisode(db, 'e-2', 'a-1', 2);
+    insertFile(db, 'ef-1', 'e-1', 'SUB_ITA', 'downloaded'); // salta
+    insertFile(db, 'ef-2', 'e-2', 'SUB_ITA', 'not_downloaded'); // accoda
+
+    const n = await service.addAllBySlug({ slug: 'naruto' });
+    expect(catalog.getBySlug).toHaveBeenCalledWith('naruto');
+    expect(n).toBe(1);
+    expect(enqueueSpy).toHaveBeenCalledWith('ef-2');
+  });
+
   it('addEpisodeByRef lancia NOT_FOUND se la lingua non esiste', async () => {
     const catalog = {
       getBySlug: vi.fn(async () => ({ id: 'a-1' })),

@@ -39,6 +39,7 @@ import { ChevronDown, Download, FolderTree, Loader2, Star } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { RelationsDownloadDialog } from './relations-download-dialog';
 import { useSeasonGate } from './season-gate';
 
 const STATUS_LABELS: Record<string, string> = {
@@ -263,6 +264,9 @@ function Hero({
 
 function EpisodeList({ anime }: { anime: AnimeDetailType }) {
   const grouped = groupEpisodes(anime.episodes);
+  const availableLangs = new Set<Language>(grouped.flatMap((e) => e.languages));
+  const hasSub = availableLangs.has('SUB_ITA');
+  const hasDub = availableLangs.has('DUB_ITA');
   const utils = trpc.useUtils();
   const queue = trpc.download.queue.useQuery(undefined, { refetchInterval: 2000 });
   const queueMap = new Map<string, DownloadStatus>(
@@ -283,13 +287,21 @@ function EpisodeList({ anime }: { anime: AnimeDetailType }) {
     onError: () => toast.error('Impossibile accodare i download'),
   });
   const { ensureConfirmed, dialog: seasonDialog } = useSeasonGate(anime.id);
+  const [relOpen, setRelOpen] = useState(false);
+  const [relLang, setRelLang] = useState<Language | undefined>(undefined);
 
   function onDownloadEpisode(episodeFileId: string) {
     ensureConfirmed(() => addEpisodeMutation.mutate({ episodeFileId }));
   }
 
   function onDownloadAll(language?: Language) {
-    ensureConfirmed(() => addAllMutation.mutate({ animeId: anime.id, language }));
+    ensureConfirmed(() => {
+      addAllMutation.mutate({ animeId: anime.id, language });
+      if (anime.relatedAnime.length > 0) {
+        setRelLang(language);
+        setRelOpen(true);
+      }
+    });
   }
 
   if (grouped.length === 0) {
@@ -298,6 +310,12 @@ function EpisodeList({ anime }: { anime: AnimeDetailType }) {
   return (
     <div className="space-y-3">
       {seasonDialog}
+      <RelationsDownloadDialog
+        related={anime.relatedAnime}
+        language={relLang}
+        open={relOpen}
+        onOpenChange={setRelOpen}
+      />
       <div className="flex justify-end">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -313,13 +331,19 @@ function EpisodeList({ anime }: { anime: AnimeDetailType }) {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onSelect={() => onDownloadAll()}>Qualsiasi lingua</DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => onDownloadAll('SUB_ITA')}>
-              Solo SUB ITA
+            <DropdownMenuItem onSelect={() => onDownloadAll()}>
+              {hasSub && hasDub ? 'Qualsiasi lingua' : 'Scarica tutti'}
             </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => onDownloadAll('DUB_ITA')}>
-              Solo DUB ITA
-            </DropdownMenuItem>
+            {hasSub && hasDub ? (
+              <DropdownMenuItem onSelect={() => onDownloadAll('SUB_ITA')}>
+                Solo SUB ITA
+              </DropdownMenuItem>
+            ) : null}
+            {hasDub ? (
+              <DropdownMenuItem onSelect={() => onDownloadAll('DUB_ITA')}>
+                Solo DUB ITA
+              </DropdownMenuItem>
+            ) : null}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

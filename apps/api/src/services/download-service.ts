@@ -50,6 +50,8 @@ export interface DownloadService {
   addMissing(input: { animeId: string; language?: Language }): number;
   /** Sinonimo esplicito di addMissing, per la UI ("Scarica tutti gli episodi mancanti"). */
   addAll(input: { animeId: string; language?: Language }): number;
+  /** Come addMissing ma identifica l'anime via slug (mette prima gli episodi in cache). */
+  addAllBySlug(input: { slug: string; language?: Language }): Promise<number>;
   /** Lista la coda joinata con episode/anime per la UI. */
   getQueue(): DownloadQueueItem[];
   /** Cancella un job (queued: immediato; downloading: abort). */
@@ -195,6 +197,15 @@ export function createDownloadService(deps: DownloadServiceDeps): DownloadServic
 
     addAll({ animeId, language }) {
       return this.addMissing({ animeId, language });
+    },
+
+    async addAllBySlug({ slug, language }) {
+      if (!config.isConfigured()) {
+        throw new PreconditionError(NOT_CONFIGURED_MSG);
+      }
+      // Garantisce anime + episodi in cache, poi accoda i mancanti dell'entry.
+      const detail = await catalog.getBySlug(slug);
+      return this.addMissing({ animeId: detail.id, language });
     },
 
     getQueue() {

@@ -40,6 +40,14 @@ export const downloadAddMissingInputSchema = z.object({
 });
 export type DownloadAddMissingInput = z.infer<typeof downloadAddMissingInputSchema>;
 
+// Accoda i mancanti di un anime identificato dallo slug (mette prima gli episodi in cache).
+// Usato per scaricare le serie correlate (sequel/prequel/special) dalla pagina dettaglio.
+export const downloadAddAllBySlugInputSchema = z.object({
+  slug: z.string(),
+  language: languageSchema.optional(),
+});
+export type DownloadAddAllBySlugInput = z.infer<typeof downloadAddAllBySlugInputSchema>;
+
 export const downloadActionInputSchema = z.object({
   queueId: z.string(),
 });

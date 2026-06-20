@@ -313,6 +313,7 @@ function EpisodeList({ anime }: { anime: AnimeDetailType }) {
       <RelationsDownloadDialog
         related={anime.relatedAnime}
         language={relLang}
+        slug={anime.slug}
         open={relOpen}
         onOpenChange={setRelOpen}
       />

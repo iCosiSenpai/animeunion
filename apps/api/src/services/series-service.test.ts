@@ -1,11 +1,51 @@
+import type { AnimeDetail, RelatedAnime } from '@animeunion/shared';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { schema } from '../db';
 import { createTestDb } from '../test/helpers';
+import type { CatalogService } from './catalog-service';
 import { createSeriesResolver } from './series-resolver';
 import { createSeriesService } from './series-service';
 
-function makeService(db: ReturnType<typeof createTestDb>) {
-  return createSeriesService({ db, resolver: createSeriesResolver({ db }) });
+const stubCatalog = {
+  getBySlug: async () => {
+    throw new Error('catalog non usato in questo test');
+  },
+} as unknown as CatalogService;
+
+function makeService(db: ReturnType<typeof createTestDb>, catalog: CatalogService = stubCatalog) {
+  return createSeriesService({ db, resolver: createSeriesResolver({ db }), catalog });
+}
+
+function rel(id: string, relationType: string): RelatedAnime {
+  return {
+    id,
+    slug: id,
+    title: id,
+    titleIta: null,
+    coverImage: null,
+    type: 'TV',
+    seasonYear: null,
+    relationType,
+    seriesId: null,
+    seasonNumber: null,
+  };
+}
+
+function detail(id: string, relatedAnime: RelatedAnime[]): AnimeDetail {
+  return { id, slug: id, relatedAnime } as unknown as AnimeDetail;
+}
+
+function fakeCatalog(map: Record<string, AnimeDetail>, calls: string[]): CatalogService {
+  return {
+    async getBySlug(slug: string) {
+      calls.push(slug);
+      const d = map[slug];
+      if (!d) {
+        throw new Error(`not found: ${slug}`);
+      }
+      return d;
+    },
+  } as unknown as CatalogService;
 }
 
 function insertAnime(db: ReturnType<typeof createTestDb>, id: string, slug = id) {
@@ -85,5 +125,52 @@ describe('SeriesService.confirmed', () => {
       })
       .run();
     expect(makeService(db).getResolved('a-1').confirmed).toBe(true);
+  });
+});
+
+describe('SeriesService.franchise', () => {
+  it('scopre transitivamente le stagioni e fa fetch+cache dei nodi intermedi', async () => {
+    const db = createTestDb();
+    const calls: string[] = [];
+    const map = {
+      s1: detail('s1', [rel('s2', 'SEQUEL')]),
+      s2: detail('s2', [rel('s1', 'PREQUEL'), rel('s3', 'SEQUEL')]),
+      s3: detail('s3', [rel('s2', 'PREQUEL')]),
+    };
+    const res = await makeService(db, fakeCatalog(map, calls)).franchise('s1');
+
+    expect(res.map((r) => r.slug).sort()).toEqual(['s2', 's3']);
+    // fetch-and-cache: getBySlug chiamato anche per i nodi intermedi (s3 emerge via s2)
+    expect(calls).toContain('s1');
+    expect(calls).toContain('s2');
+    expect(calls).toContain('s3');
+  });
+
+  it('non segue relazioni fuori dal franchise (ALTERNATIVE)', async () => {
+    const db = createTestDb();
+    const calls: string[] = [];
+    const map = {
+      s1: detail('s1', [rel('alt', 'ALTERNATIVE')]),
+      alt: detail('alt', []),
+    };
+    const res = await makeService(db, fakeCatalog(map, calls)).franchise('s1');
+
+    expect(res).toHaveLength(0);
+    expect(calls).not.toContain('alt');
+  });
+
+  it('rispetta maxNodes (non espande oltre il limite)', async () => {
+    const db = createTestDb();
+    const calls: string[] = [];
+    const map = {
+      s1: detail('s1', [rel('s2', 'SEQUEL')]),
+      s2: detail('s2', [rel('s3', 'SEQUEL')]),
+      s3: detail('s3', [rel('s4', 'SEQUEL')]),
+      s4: detail('s4', []),
+    };
+    const res = await makeService(db, fakeCatalog(map, calls)).franchise('s1', 2);
+
+    expect(res.map((r) => r.slug)).not.toContain('s4');
+    expect(calls).not.toContain('s4');
   });
 });

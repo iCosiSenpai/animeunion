@@ -1,9 +1,25 @@
-import type { SeriesOverrideInput, SeriesResolved } from '@animeunion/shared';
+import type {
+  AnimeDetail,
+  RelatedAnime,
+  SeriesOverrideInput,
+  SeriesResolved,
+} from '@animeunion/shared';
 import { and, eq } from 'drizzle-orm';
 import type { Db } from '../db';
 import { schema } from '../db';
 import { NotFoundError } from '../lib/errors';
+import type { CatalogService } from './catalog-service';
 import type { SeriesResolver } from './series-resolver';
+
+// Relazioni che fanno parte della "stessa saga" (espanse dalla BFS franchise). NON
+// ALTERNATIVE/CHARACTER/SUMMARY/OTHER, che porterebbero a opere diverse.
+const FRANCHISE_RELATIONS = new Set([
+  'PREQUEL',
+  'SEQUEL',
+  'SPIN_OFF',
+  'SIDE_STORY',
+  'PARENT_STORY',
+]);
 
 export interface SeriesService {
   /** Stagione/serie correnti per un anime (dopo override/euristica). */
@@ -12,16 +28,23 @@ export interface SeriesService {
   setOverride(input: SeriesOverrideInput): SeriesResolved;
   /** Rimuove l'override: si torna a euristica/API. */
   clearOverride(animeId: string): SeriesResolved;
+  /**
+   * Scopre l'intero franchise partendo da uno slug: BFS che segue le relazioni di "stessa saga"
+   * e fa fetch+cache di ogni nodo (cosi' emergono anche le stagioni transitive S3/S4...).
+   * Ritorna le entry correlate (escluso lo start) con seasonNumber risolto, ordinate.
+   */
+  franchise(startSlug: string, maxNodes?: number): Promise<RelatedAnime[]>;
 }
 
 export interface SeriesServiceDeps {
   db: Db;
   resolver: SeriesResolver;
+  catalog: CatalogService;
   now?: () => Date;
 }
 
 export function createSeriesService(deps: SeriesServiceDeps): SeriesService {
-  const { db, resolver } = deps;
+  const { db, resolver, catalog } = deps;
   const now = deps.now ?? (() => new Date());
 
   // L'utente ha gia' scaricato/accodato da questa serie? Allora la stagione e' di
@@ -134,6 +157,49 @@ export function createSeriesService(deps: SeriesServiceDeps): SeriesService {
     clearOverride(animeId) {
       db.delete(schema.seriesOverride).where(eq(schema.seriesOverride.animeId, animeId)).run();
       return resolved(animeId);
+    },
+
+    async franchise(startSlug, maxNodes = 30) {
+      const start = await catalog.getBySlug(startSlug);
+      const visited = new Set<string>([start.id]);
+      const result = new Map<string, RelatedAnime>();
+      const queue: AnimeDetail[] = [start];
+
+      while (queue.length > 0 && visited.size <= maxNodes) {
+        const node = queue.shift();
+        if (!node) {
+          continue;
+        }
+        for (const rel of node.relatedAnime) {
+          if (!FRANCHISE_RELATIONS.has(rel.relationType) || visited.has(rel.id)) {
+            continue;
+          }
+          visited.add(rel.id);
+          result.set(rel.id, rel);
+          try {
+            // Fetch+cache delle SUE relazioni: cosi' la BFS raggiunge le stagioni transitive.
+            const detail = await catalog.getBySlug(rel.slug);
+            queue.push(detail);
+          } catch {
+            // Link scaduto/404/source giu': resta foglia dal summary, non aborta la scoperta.
+          }
+        }
+      }
+
+      // Grafo ora completo in cache: risolvo la stagione di ogni entry e ordino.
+      const entries = [...result.values()].map((rel) => ({
+        ...rel,
+        seasonNumber: resolver.resolve(rel.id).seasonNumber,
+      }));
+      entries.sort((a, b) => {
+        const sa = a.seasonNumber ?? Number.POSITIVE_INFINITY;
+        const sb = b.seasonNumber ?? Number.POSITIVE_INFINITY;
+        if (sa !== sb) {
+          return sa - sb;
+        }
+        return (a.seasonYear ?? 0) - (b.seasonYear ?? 0);
+      });
+      return entries;
     },
   };
 }

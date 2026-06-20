@@ -35,7 +35,7 @@ function makeCaller() {
   const resolver = createSeriesResolver({ db });
   const renamer = createRenamerService({ db, config, seriesResolver: resolver });
   const library = createLibraryService({ db, config, renamer, resolver, logger: testLogger });
-  const series = createSeriesService({ db, resolver });
+  const series = createSeriesService({ db, resolver, catalog });
   const notifications = createNotificationService({ db, config });
   const download = createDownloadService({
     db,

@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/dialog';
 import { trpc } from '@/lib/trpc';
 import type { Language, RelatedAnime } from '@animeunion/shared';
-import { Film, Loader2 } from 'lucide-react';
+import { Film, Layers, Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -28,35 +28,53 @@ const RELATION_LABELS: Record<string, string> = {
   OTHER: 'Correlato',
 };
 
+function isTv(type: string): boolean {
+  return type === 'TV' || type === 'TV_SHORT';
+}
+
 export function RelationsDownloadDialog({
   related,
   language,
+  slug,
   open,
   onOpenChange,
 }: {
   related: RelatedAnime[];
   language?: Language;
+  /** Slug dell'anime corrente: punto di partenza per scoprire l'intero franchise. */
+  slug: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [triggered, setTriggered] = useState(false);
   const addAllBySlug = trpc.download.addAllBySlug.useMutation();
   const utils = trpc.useUtils();
 
-  // Reset della selezione a ogni apertura.
+  // Scoperta profonda dell'intero franchise (stagioni transitive + correlati), on-demand.
+  const franchise = trpc.series.franchise.useQuery(
+    { slug },
+    { enabled: triggered, staleTime: 5 * 60_000 },
+  );
+
+  // Reset a ogni apertura.
   useEffect(() => {
     if (open) {
       setSelected(new Set());
+      setTriggered(false);
     }
   }, [open]);
 
-  const toggle = (slug: string) => {
+  // La lista mostrata: il franchise (se caricato) include gia' le relazioni dirette.
+  const items = franchise.data ?? related;
+
+  const toggle = (slugId: string) => {
     setSelected((prev) => {
       const next = new Set(prev);
-      if (next.has(slug)) {
-        next.delete(slug);
+      if (next.has(slugId)) {
+        next.delete(slugId);
       } else {
-        next.add(slug);
+        next.add(slugId);
       }
       return next;
     });
@@ -67,9 +85,9 @@ export function RelationsDownloadDialog({
     setWorking(true);
     let total = 0;
     try {
-      for (const slug of selected) {
+      for (const s of selected) {
         try {
-          const res = await addAllBySlug.mutateAsync({ slug, language });
+          const res = await addAllBySlug.mutateAsync({ slug: s, language });
           total += res.enqueued;
         } catch {
           // continua con gli altri
@@ -98,10 +116,28 @@ export function RelationsDownloadDialog({
           </DialogDescription>
         </DialogHeader>
 
+        {!triggered ? (
+          <Button
+            variant="outline"
+            className="w-full gap-2"
+            onClick={() => setTriggered(true)}
+            disabled={working}
+          >
+            <Layers className="h-4 w-4" />
+            Trova tutte le stagioni e i correlati
+          </Button>
+        ) : franchise.isFetching ? (
+          <div className="flex items-center justify-center gap-2 rounded-md border border-dashed py-3 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Esploro l'intera saga…
+          </div>
+        ) : null}
+
         <ul className="max-h-80 space-y-2 overflow-y-auto">
-          {related.map((r) => {
+          {items.map((r) => {
             const title = r.titleIta ?? r.title;
             const checked = selected.has(r.slug);
+            const seasonBadge = isTv(r.type) && (r.seasonNumber ?? 0) > 1;
             return (
               <li key={`${r.id}_${r.relationType}`}>
                 <label
@@ -135,6 +171,9 @@ export function RelationsDownloadDialog({
                       <Badge variant="secondary">
                         {RELATION_LABELS[r.relationType] ?? r.relationType}
                       </Badge>
+                      {seasonBadge ? (
+                        <Badge variant="outline">Stagione {r.seasonNumber}</Badge>
+                      ) : null}
                       <span>{r.type}</span>
                       {r.seasonYear ? <span>· {r.seasonYear}</span> : null}
                     </span>

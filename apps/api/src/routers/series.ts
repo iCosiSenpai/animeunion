@@ -1,4 +1,8 @@
-import { seriesOverrideInputSchema, seriesResolvedSchema } from '@animeunion/shared';
+import {
+  relatedAnimeSchema,
+  seriesOverrideInputSchema,
+  seriesResolvedSchema,
+} from '@animeunion/shared';
 import { z } from 'zod';
 import { publicProcedure, router } from '../trpc';
 
@@ -8,6 +12,12 @@ export const seriesRouter = router({
     .input(z.object({ animeId: z.string() }))
     .output(seriesResolvedSchema)
     .query(({ ctx, input }) => ctx.services.series.getResolved(input.animeId)),
+
+  // Scopre l'intero franchise (stagioni transitive + correlati) partendo da uno slug.
+  franchise: publicProcedure
+    .input(z.object({ slug: z.string(), maxNodes: z.number().int().positive().max(50).optional() }))
+    .output(relatedAnimeSchema.array())
+    .query(({ ctx, input }) => ctx.services.series.franchise(input.slug, input.maxNodes)),
 
   setOverride: publicProcedure
     .input(seriesOverrideInputSchema)

@@ -71,7 +71,7 @@ export function createAppContext(options: { env?: Env; databasePath?: string } =
   const resolver = createSeriesResolver({ db });
   const renamer = createRenamerService({ db, config, seriesResolver: resolver });
   const library = createLibraryService({ db, config, renamer, resolver, logger });
-  const series = createSeriesService({ db, resolver });
+  const series = createSeriesService({ db, resolver, catalog });
 
   function animeTitleOf(animeId: string): string {
     const row = db

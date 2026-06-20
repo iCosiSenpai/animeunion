@@ -58,4 +58,8 @@
     @apply bg-background text-foreground;
     color-scheme: dark;
   }
+  /* Tema con sfondo wallpaper: body trasparente cosi' il backdrop fisso (AppTheme) traspare. */
+  html.theme-has-bg body {
+    background-color: transparent;
+  }
 }

@@ -1,6 +1,8 @@
 'use client';
 
+import { AccentPicker } from '@/components/settings/accent-picker';
 import { FolderInput } from '@/components/settings/folder-picker';
+import { WallpaperPicker } from '@/components/settings/wallpaper-picker';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import {
@@ -517,6 +519,21 @@ export function SettingsView() {
               <SelectItem value="system">Sistema</SelectItem>
             </SelectContent>
           </Select>
+        </Field>
+        <Field
+          label="Colore accent"
+          hint="Il colore principale dell'app. Si applica dopo il salvataggio."
+        >
+          <AccentPicker value={draft.themeAccent} onChange={(v) => update('themeAccent', v)} />
+        </Field>
+        <Field
+          label="Sfondo"
+          hint="Un wallpaper anime soffuso su tutta l'app (SFW, via wallhaven)."
+        >
+          <WallpaperPicker
+            value={draft.themeBackgroundUrl}
+            onChange={(url) => update('themeBackgroundUrl', url)}
+          />
         </Field>
       </Section>
 

@@ -14,6 +14,7 @@ import { notificationsRouter } from './notifications';
 import { profileRouter } from './profile';
 import { seriesRouter } from './series';
 import { statsRouter } from './stats';
+import { themeRouter } from './theme';
 
 export const appRouter = router({
   auth: authRouter,
@@ -30,6 +31,7 @@ export const appRouter = router({
   series: seriesRouter,
   notifications: notificationsRouter,
   health: healthRouter,
+  theme: themeRouter,
   stats: statsRouter,
 });
 

@@ -64,6 +64,16 @@ describe('ConfigService', () => {
     expect(service.get('telegramChatId')).toBe('42');
   });
 
+  it('tema: default e set di accent/sfondo', () => {
+    const service = createConfigService({ db: createTestDb() });
+    expect(service.get('themeAccent')).toBe('green');
+    expect(service.get('themeBackgroundUrl')).toBe('');
+    service.set('themeAccent', 'blue');
+    service.set('themeBackgroundUrl', 'https://example.test/x.jpg');
+    expect(service.get('themeAccent')).toBe('blue');
+    expect(service.get('themeBackgroundUrl')).toBe('https://example.test/x.jpg');
+  });
+
   it('isConfigured riflette la presenza della cartella base', () => {
     const service = createConfigService({ db: createTestDb() });
     expect(service.isConfigured()).toBe(false);

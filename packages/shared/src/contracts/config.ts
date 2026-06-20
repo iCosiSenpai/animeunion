@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { languageSchema } from './enums';
+import { themeAccentSchema } from './theme';
 
 export const appConfigSchema = z.object({
   // Cartelle di download (impostate nelle Impostazioni dell'app, NON nel .env).
@@ -24,6 +25,9 @@ export const appConfigSchema = z.object({
   // (coerente con il modello token-in-SQLite); vuoti = usa il fallback da env, se presente.
   telegramBotToken: z.string().default(''),
   telegramChatId: z.string().default(''),
+  // Tema: colore accent (palette) e wallpaper di sfondo (URL; vuoto = nessuno sfondo).
+  themeAccent: themeAccentSchema.default('green'),
+  themeBackgroundUrl: z.string().default(''),
 });
 export type AppConfig = z.infer<typeof appConfigSchema>;
 

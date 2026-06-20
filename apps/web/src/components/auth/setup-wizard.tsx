@@ -1,9 +1,11 @@
 'use client';
 
+import { AccentPicker } from '@/components/settings/accent-picker';
 import { FolderInput } from '@/components/settings/folder-picker';
+import { WallpaperPicker } from '@/components/settings/wallpaper-picker';
 import { Button } from '@/components/ui/button';
 import { trpc } from '@/lib/trpc';
-import { Check, FolderTree, Loader2, RefreshCw, Sparkles } from 'lucide-react';
+import { Check, FolderTree, Loader2, Palette, RefreshCw, Sparkles } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
@@ -28,7 +30,7 @@ const DIR_FIELDS: { key: PathKey; label: string; hint: string; required?: boolea
 function StepDots({ step }: { step: number }) {
   return (
     <div className="flex items-center justify-center gap-2">
-      {[0, 1, 2].map((i) => (
+      {[0, 1, 2, 3].map((i) => (
         <span
           key={i}
           className={`h-1.5 rounded-full transition-all ${
@@ -90,6 +92,13 @@ export function SetupWizard() {
     if (!seriesReady) return;
     const ok = await saveFolders();
     if (ok) setStep(2);
+  };
+
+  const accent = configQuery.data?.themeAccent ?? 'green';
+  const background = configQuery.data?.themeBackgroundUrl ?? '';
+  const applyTheme = async (key: 'themeAccent' | 'themeBackgroundUrl', value: string) => {
+    await setMutation.mutateAsync({ key, value });
+    await utils.config.getAll.invalidate();
   };
 
   const finish = async () => {
@@ -180,6 +189,46 @@ export function SetupWizard() {
           ) : null}
 
           {step === 2 ? (
+            <div className="space-y-5">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                  <Palette className="h-5 w-5" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold">Aspetto</h2>
+                  <p className="text-xs text-muted-foreground">
+                    Scegli un colore e, se vuoi, uno sfondo. Modificabili quando vuoi nelle
+                    Impostazioni.
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="space-y-1.5">
+                  <p className="text-sm font-medium">Colore accent</p>
+                  <AccentPicker value={accent} onChange={(v) => applyTheme('themeAccent', v)} />
+                </div>
+                <div className="space-y-1.5">
+                  <p className="text-sm font-medium">Sfondo (opzionale)</p>
+                  <WallpaperPicker
+                    value={background}
+                    onChange={(url) => applyTheme('themeBackgroundUrl', url)}
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <Button variant="ghost" onClick={() => setStep(1)}>
+                  Indietro
+                </Button>
+                <Button className="flex-1" onClick={() => setStep(3)}>
+                  Continua
+                </Button>
+              </div>
+            </div>
+          ) : null}
+
+          {step === 3 ? (
             <div className="flex flex-col items-center gap-5 text-center">
               <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-500/10 text-green-500">
                 <Check className="h-6 w-6" />

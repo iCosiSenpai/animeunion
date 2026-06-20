@@ -1,5 +1,6 @@
 'use client';
 
+import { AppTheme } from '@/components/layout/app-theme';
 import { Toaster } from '@/components/ui/sonner';
 import { trpc } from '@/lib/trpc';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -35,6 +36,7 @@ export function Providers({ children }: { children: ReactNode }) {
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
       <trpc.Provider client={trpcClient} queryClient={queryClient}>
         <QueryClientProvider client={queryClient}>
+          <AppTheme />
           {children}
           <Toaster richColors position="top-right" />
         </QueryClientProvider>

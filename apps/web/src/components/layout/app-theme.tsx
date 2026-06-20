@@ -1,0 +1,42 @@
+'use client';
+
+import { ACCENT_THEMES } from '@/lib/themes';
+import { trpc } from '@/lib/trpc';
+import { useEffect } from 'react';
+
+// Applica il tema (accent + sfondo) leggendo la config. Montato in alto (Providers)
+// cosi' vale su login, wizard e app.
+export function AppTheme() {
+  const config = trpc.config.getAll.useQuery(undefined, { staleTime: 60_000 });
+  const accent = config.data?.themeAccent ?? 'green';
+  const backgroundUrl = config.data?.themeBackgroundUrl ?? '';
+
+  // Accent: override delle CSS var su <html> (vince su :root/.dark).
+  useEffect(() => {
+    const theme = ACCENT_THEMES[accent] ?? ACCENT_THEMES.green;
+    const root = document.documentElement;
+    root.style.setProperty('--primary', theme.primary);
+    root.style.setProperty('--ring', theme.primary);
+    root.style.setProperty('--primary-foreground', theme.primaryForeground);
+  }, [accent]);
+
+  // Sfondo: classe su <html> (rende il body trasparente, vedi globals.css).
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.toggle('theme-has-bg', Boolean(backgroundUrl));
+    return () => root.classList.remove('theme-has-bg');
+  }, [backgroundUrl]);
+
+  if (!backgroundUrl) {
+    return null;
+  }
+  return (
+    <div aria-hidden="true" className="pointer-events-none fixed inset-0 -z-10">
+      <div
+        className="absolute inset-0 bg-cover bg-center"
+        style={{ backgroundImage: `url(${backgroundUrl})` }}
+      />
+      <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
+    </div>
+  );
+}

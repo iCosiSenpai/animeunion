@@ -28,6 +28,8 @@ export const appConfigSchema = z.object({
   // Tema: colore accent (palette) e wallpaper di sfondo (URL; vuoto = nessuno sfondo).
   themeAccent: themeAccentSchema.default('green'),
   themeBackgroundUrl: z.string().default(''),
+  // Animazioni e micro-interazioni dell'interfaccia (off = movimento ridotto).
+  animationsEnabled: z.boolean().default(true),
 });
 export type AppConfig = z.infer<typeof appConfigSchema>;
 

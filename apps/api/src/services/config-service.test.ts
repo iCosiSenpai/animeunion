@@ -74,6 +74,13 @@ describe('ConfigService', () => {
     expect(service.get('themeBackgroundUrl')).toBe('https://example.test/x.jpg');
   });
 
+  it('animazioni: default true e set', () => {
+    const service = createConfigService({ db: createTestDb() });
+    expect(service.get('animationsEnabled')).toBe(true);
+    service.set('animationsEnabled', false);
+    expect(service.get('animationsEnabled')).toBe(false);
+  });
+
   it('isConfigured riflette la presenza della cartella base', () => {
     const service = createConfigService({ db: createTestDb() });
     expect(service.isConfigured()).toBe(false);

@@ -96,7 +96,11 @@ export function SetupWizard() {
 
   const accent = configQuery.data?.themeAccent ?? 'green';
   const background = configQuery.data?.themeBackgroundUrl ?? '';
-  const applyTheme = async (key: 'themeAccent' | 'themeBackgroundUrl', value: string) => {
+  const animationsEnabled = configQuery.data?.animationsEnabled ?? true;
+  const applyTheme = async (
+    key: 'themeAccent' | 'themeBackgroundUrl' | 'animationsEnabled',
+    value: unknown,
+  ) => {
     await setMutation.mutateAsync({ key, value });
     await utils.config.getAll.invalidate();
   };
@@ -215,6 +219,15 @@ export function SetupWizard() {
                     onChange={(url) => applyTheme('themeBackgroundUrl', url)}
                   />
                 </div>
+                <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 accent-primary"
+                    checked={animationsEnabled}
+                    onChange={(e) => applyTheme('animationsEnabled', e.target.checked)}
+                  />
+                  Attiva transizioni e micro-animazioni
+                </label>
               </div>
 
               <div className="flex gap-2">

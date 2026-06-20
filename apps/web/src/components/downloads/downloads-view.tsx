@@ -1,10 +1,12 @@
 'use client';
 
+import { useAnimationsOn } from '@/components/layout/animation-provider';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { trpc } from '@/lib/trpc';
 import type { DownloadQueueItem } from '@animeunion/shared';
+import { AnimatePresence, motion } from 'framer-motion';
 import { AlertCircle, Download, Pause, Play, RefreshCw, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -30,6 +32,7 @@ function matchesFilter(item: DownloadQueueItem, filter: Filter): boolean {
 
 export function DownloadsView() {
   const utils = trpc.useUtils();
+  const animationsOn = useAnimationsOn();
   const [filter, setFilter] = useState<Filter>('all');
 
   const queueQuery = trpc.download.queue.useQuery(undefined, {
@@ -233,15 +236,24 @@ export function DownloadsView() {
       ) : (
         <ScrollArea className="h-[calc(100vh-16rem)]">
           <div className="space-y-3 pr-3">
-            {groups.map((group) => (
-              <DownloadGroupCard
-                key={group.animeId}
-                group={group}
-                onCancel={(id) => cancelMutation.mutate({ queueId: id })}
-                onRetry={(id) => retryMutation.mutate({ queueId: id })}
-                onPrioritize={(id) => priorityMutation.mutate({ queueId: id, priority: 100 })}
-              />
-            ))}
+            <AnimatePresence initial={false}>
+              {groups.map((group) => (
+                <motion.div
+                  key={group.animeId}
+                  initial={animationsOn ? { opacity: 0, y: 8 } : false}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={animationsOn ? { opacity: 0 } : undefined}
+                  transition={{ duration: 0.18 }}
+                >
+                  <DownloadGroupCard
+                    group={group}
+                    onCancel={(id) => cancelMutation.mutate({ queueId: id })}
+                    onRetry={(id) => retryMutation.mutate({ queueId: id })}
+                    onPrioritize={(id) => priorityMutation.mutate({ queueId: id, priority: 100 })}
+                  />
+                </motion.div>
+              ))}
+            </AnimatePresence>
           </div>
         </ScrollArea>
       )}

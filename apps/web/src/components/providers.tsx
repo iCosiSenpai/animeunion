@@ -1,5 +1,6 @@
 'use client';
 
+import { AnimationProvider } from '@/components/layout/animation-provider';
 import { AppTheme } from '@/components/layout/app-theme';
 import { Toaster } from '@/components/ui/sonner';
 import { trpc } from '@/lib/trpc';
@@ -37,7 +38,7 @@ export function Providers({ children }: { children: ReactNode }) {
       <trpc.Provider client={trpcClient} queryClient={queryClient}>
         <QueryClientProvider client={queryClient}>
           <AppTheme />
-          {children}
+          <AnimationProvider>{children}</AnimationProvider>
           <Toaster richColors position="top-right" />
         </QueryClientProvider>
       </trpc.Provider>

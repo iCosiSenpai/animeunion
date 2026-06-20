@@ -535,6 +535,20 @@ export function SettingsView() {
             onChange={(url) => update('themeBackgroundUrl', url)}
           />
         </Field>
+        <Field label="Animazioni" hint="Transizioni e micro-interazioni dell'interfaccia.">
+          <Select
+            value={draft.animationsEnabled ? 'on' : 'off'}
+            onValueChange={(v) => update('animationsEnabled', v === 'on')}
+          >
+            <SelectTrigger className="w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="on">Attivo</SelectItem>
+              <SelectItem value="off">Disattivo</SelectItem>
+            </SelectContent>
+          </Select>
+        </Field>
       </Section>
 
       <div className="fixed inset-x-0 bottom-0 border-t bg-background/95 p-4 backdrop-blur">

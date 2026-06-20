@@ -9,12 +9,15 @@ export const seriesResolvedSchema = z.object({
   seriesSlug: z.string(),
   seriesTitle: z.string(),
   hasOverride: z.boolean(),
+  // true = stagione gia' confermata o serie gia' scaricata: niente piu' prompt al download.
+  confirmed: z.boolean(),
 });
 export type SeriesResolved = z.infer<typeof seriesResolvedSchema>;
 
 export const seriesOverrideInputSchema = z.object({
   animeId: z.string(),
-  seasonNumber: z.number().int().min(1).max(99).nullable().optional(),
+  // 0 = Special (cartella "Specials"); 1..99 = stagione normale.
+  seasonNumber: z.number().int().min(0).max(99).nullable().optional(),
   seriesAnimeId: z.string().nullable().optional(),
 });
 export type SeriesOverrideInput = z.infer<typeof seriesOverrideInputSchema>;

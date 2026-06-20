@@ -39,6 +39,7 @@ import { ChevronDown, Download, FolderTree, Loader2, Star } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { useSeasonGate } from './season-gate';
 
 const STATUS_LABELS: Record<string, string> = {
   ONGOING: 'In corso',
@@ -281,13 +282,14 @@ function EpisodeList({ anime }: { anime: AnimeDetailType }) {
     },
     onError: () => toast.error('Impossibile accodare i download'),
   });
+  const { ensureConfirmed, dialog: seasonDialog } = useSeasonGate(anime.id);
 
   function onDownloadEpisode(episodeFileId: string) {
-    addEpisodeMutation.mutate({ episodeFileId });
+    ensureConfirmed(() => addEpisodeMutation.mutate({ episodeFileId }));
   }
 
   function onDownloadAll(language?: Language) {
-    addAllMutation.mutate({ animeId: anime.id, language });
+    ensureConfirmed(() => addAllMutation.mutate({ animeId: anime.id, language }));
   }
 
   if (grouped.length === 0) {
@@ -295,6 +297,7 @@ function EpisodeList({ anime }: { anime: AnimeDetailType }) {
   }
   return (
     <div className="space-y-3">
+      {seasonDialog}
       <div className="flex justify-end">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

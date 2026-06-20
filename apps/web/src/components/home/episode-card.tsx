@@ -1,6 +1,7 @@
 'use client';
 
 import { LanguageBadge } from '@/components/anime/language-badge';
+import { useSeasonGate } from '@/components/catalog/season-gate';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -44,12 +45,18 @@ export function EpisodeCard({ episode }: { episode: LatestEpisode }) {
     },
   });
 
+  const { ensureConfirmed, dialog: seasonDialog } = useSeasonGate(episode.animeId);
+
   function onDownload() {
-    addEpisodeRef.mutate({
-      slug: episode.slug,
-      episodeNumber: episode.episodeNumber,
-      language: episode.language,
-    });
+    // Chiudiamo il popup info: la conferma stagione (se serve) apre il suo dialog.
+    setOpen(false);
+    ensureConfirmed(() =>
+      addEpisodeRef.mutate({
+        slug: episode.slug,
+        episodeNumber: episode.episodeNumber,
+        language: episode.language,
+      }),
+    );
   }
 
   return (
@@ -101,6 +108,8 @@ export function EpisodeCard({ episode }: { episode: LatestEpisode }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {seasonDialog}
     </>
   );
 }

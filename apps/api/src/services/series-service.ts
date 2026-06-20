@@ -1,5 +1,5 @@
 import type { SeriesOverrideInput, SeriesResolved } from '@animeunion/shared';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import type { Db } from '../db';
 import { schema } from '../db';
 import { NotFoundError } from '../lib/errors';
@@ -24,6 +24,33 @@ export function createSeriesService(deps: SeriesServiceDeps): SeriesService {
   const { db, resolver } = deps;
   const now = deps.now ?? (() => new Date());
 
+  // L'utente ha gia' scaricato/accodato da questa serie? Allora la stagione e' di
+  // fatto gia' decisa: non serve richiedere la conferma.
+  function hasExistingDownload(animeId: string): boolean {
+    const downloaded = db
+      .select({ id: schema.episodeFile.id })
+      .from(schema.episodeFile)
+      .innerJoin(schema.episode, eq(schema.episode.id, schema.episodeFile.episodeId))
+      .where(
+        and(
+          eq(schema.episode.animeId, animeId),
+          eq(schema.episodeFile.downloadStatus, 'downloaded'),
+        ),
+      )
+      .get();
+    if (downloaded) {
+      return true;
+    }
+    const queued = db
+      .select({ id: schema.downloadQueue.id })
+      .from(schema.downloadQueue)
+      .innerJoin(schema.episodeFile, eq(schema.episodeFile.id, schema.downloadQueue.episodeFileId))
+      .innerJoin(schema.episode, eq(schema.episode.id, schema.episodeFile.episodeId))
+      .where(eq(schema.episode.animeId, animeId))
+      .get();
+    return !!queued;
+  }
+
   function resolved(animeId: string): SeriesResolved {
     const info = resolver.resolve(animeId);
     const root = db
@@ -36,13 +63,15 @@ export function createSeriesService(deps: SeriesServiceDeps): SeriesService {
       .from(schema.seriesOverride)
       .where(eq(schema.seriesOverride.animeId, animeId))
       .get();
+    const hasOverride = !!override;
     return {
       animeId,
       seasonNumber: info.seasonNumber,
       seriesAnimeId: info.seriesId,
       seriesSlug: info.seriesSlug,
       seriesTitle: root?.titleIta ?? root?.title ?? info.seriesSlug,
-      hasOverride: !!override,
+      hasOverride,
+      confirmed: hasOverride || hasExistingDownload(animeId),
     };
   }
 

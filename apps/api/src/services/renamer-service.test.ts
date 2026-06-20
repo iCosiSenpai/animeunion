@@ -107,6 +107,22 @@ describe('RenamerService', () => {
     ).toBe(join('/data/anime', 'Attack on Titan', 'Season 02', 'Attack on Titan - S02E01.mp4'));
   });
 
+  it('special (stagione 0 via override): cartella Specials, nome S00EXX', () => {
+    insertAnime(db, { id: 'sp', slug: 'my-show', title: 'My Show' });
+    const ts = new Date().toISOString();
+    db.insert(schema.seriesOverride)
+      .values({ animeId: 'sp', seriesAnimeId: null, seasonNumber: 0, updatedAt: ts })
+      .run();
+    const renamer = makeRenamer(db, {
+      seriesPathSub: '/data/anime',
+      seriesPathDub: '/data/anime-dub',
+    });
+
+    expect(
+      renamer.computeEpisodePath({ animeId: 'sp', episodeNumber: 2, language: 'SUB_ITA' }),
+    ).toBe(join('/data/anime', 'My Show', 'Specials', 'My Show - S00E02.mp4'));
+  });
+
   it('sequel via euristica slug: usa titolo e cartella della serie madre, Season 02', () => {
     // L'API non fornisce seriesId/relazioni: solo lo slug "-2nd-season".
     insertAnime(db, {

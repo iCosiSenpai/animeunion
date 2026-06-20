@@ -96,7 +96,9 @@ export function createRenamerService(deps: RenamerServiceDeps): RenamerService {
       );
       const seasonNumber = series.seasonNumber;
       const displayNumber = relativeEpisodeNumber(series, episodeNumber);
-      const dir = join(root, title, `Season ${pad2(seasonNumber)}`);
+      // Stagione 0 = speciali: cartella "Specials" (convenzione Jellyfin), nome file S00EXX.
+      const seasonDir = seasonNumber === 0 ? 'Specials' : `Season ${pad2(seasonNumber)}`;
+      const dir = join(root, title, seasonDir);
       const file = `${title} - S${pad2(seasonNumber)}E${pad2(displayNumber)}${tag}.mp4`;
       return join(dir, file);
     },

@@ -25,19 +25,22 @@
 ## ✨ Cosa fa
 
 Cerchi un anime, clicchi **Segui**, e basta: quando esce un nuovo episodio il container lo scarica,
-lo rinomina (`Sub Ita/NomeSerie/Season 01/S01E01.mp4`) e lo mette in libreria, già pronto per
-**Jellyfin, Plex o Emby**. Tutto da un'interfaccia web, senza aprire il sito ogni giorno.
+lo rinomina con layout **Jellyfin/Plex** (`<Titolo>/Season 02/<Titolo> - S02E01.mp4`) e lo mette in
+libreria, già pronto da guardare. Tutto da un'interfaccia web, senza aprire il sito ogni giorno.
 
 | | |
 |---|---|
-| 🔍 **Catalogo** | Ricerca e filtri per genere, anno, stagione, lingua |
-| 📌 **Segui & scarica** | Auto-download dei nuovi episodi degli anime che segui (un episodio alla volta) |
-| 📁 **Libreria organizzata** | Naming compatibile Jellyfin/Plex, con **gestione file** (elimina episodio/stagione/serie dall'app) |
-| 🌍 **SUB / DUB ITA** | Indicatore lingua con bandiera, scelta della lingua per il download |
+| 🧭 **Primo avvio guidato** | Un wizard ti fa scegliere le cartelle di download prima di iniziare |
+| 🔍 **Ricerca & catalogo** | Ricerca stile Spotlight + filtri per genere, anno, stagione, lingua; **command palette ⌘K** |
+| 📌 **Segui con opzioni** | Stato, auto-download per-serie e "scarica subito i già usciti" al volo |
+| ⬇️ **Download "a contenitori"** | Pagina stile qBittorrent: un riquadro per anime con avanzamento, **velocità ed ETA**, resume dei download interrotti |
+| 🎬 **Stagioni intelligenti** | Rilevamento sequel/stagione (anche quando l'API non lo fornisce) + conferma/correzione manuale e cartella `Specials` |
+| 📁 **Libreria organizzata** | Naming Jellyfin/Plex, **gestione file** (elimina episodio/stagione/serie dall'app) |
+| 🔔 **Notifiche** | Centro notifiche in-app (completati/falliti/nuovi episodi) + inoltro **Telegram** opzionale |
+| 🩺 **Diagnostica** | Stato worker, spazio disco per cartella, ultima sync, connessione |
 | 🐳 **Docker multi-arch** | Synology, QNAP, Ubuntu, Raspberry Pi, Windows, macOS (amd64 + arm64) |
-| 🔒 **Robusto** | Validazione dei download, guardia spazio disco, gestione rate-limit, header di sicurezza |
 
-> 🛣️ **In arrivo**: PWA installabile, notifiche push, login social Google/Discord.
+> 🛣️ **In arrivo**: PWA installabile e notifiche Web Push.
 
 ---
 
@@ -79,9 +82,10 @@ services:
 docker compose up -d
 ```
 
-**3.** Apri **`http://<ip-del-server>:7979`**, **accedi con il tuo account AnimeUnion**
-(email/password) e vai in **Impostazioni → Cartelle di download** per scegliere dove salvare serie
-e film (sfoglia le cartelle montate in `/media`).
+**3.** Apri **`http://<ip-del-server>:7979`** e **accedi con il tuo account AnimeUnion**
+(email/password). Al primo accesso un **wizard** ti guida a scegliere le cartelle di download
+(sfogliando quelle montate in `/media`): finché non le imposti, i download restano bloccati — niente
+file salvati nel posto sbagliato.
 
 > 🔑 Niente token da copiare: il login avviene dall'interfaccia. Le credenziali nel `.env` sono
 > opzionali (solo per l'auto-login).
@@ -103,9 +107,12 @@ docker compose up -d --build
 
 - **Cartelle di download** → si impostano **nell'app** (Impostazioni → Cartelle di download): serie
   e film, SUB e DUB, ognuno nella sua cartella se vuoi. Basta montarle nel compose sotto `/media`.
+- **Notifiche Telegram** (opzionali) → metti `TELEGRAM_BOT_TOKEN` e `TELEGRAM_CHAT_ID` nel `.env` e
+  attiva l'inoltro in Impostazioni → Notifiche.
 - **`.env`** → solo segreti e deploy: `ANIMEUNION_EMAIL`/`PASSWORD` (opzionali), `WEB_PORT`,
-  `LOG_LEVEL`, `CORS_ORIGINS`. Vedi [`.env.example`](.env.example).
+  `LOG_LEVEL`, `CORS_ORIGINS`, `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID`. Vedi [`.env.example`](.env.example).
 - **Volumi**: `./data` = database/token; `/media` = la tua libreria.
+- **Diagnostica**: Impostazioni → Diagnostica mostra stato worker, spazio disco per cartella e sync.
 
 **Aggiornamento**:
 

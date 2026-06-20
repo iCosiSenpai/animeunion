@@ -63,8 +63,13 @@ Regole:
 | `WEB_PORT` | `7979` | Porta web sull'host. |
 | `LOG_LEVEL` | `info` | `fatal`…`trace`. |
 | `CORS_ORIGINS` | *(vuoto)* | Origin consentite (vuoto = LAN-friendly). |
+| `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | *(vuote)* | Opzionali. Notifiche Telegram; poi attiva l'inoltro in Impostazioni → Notifiche. |
 
 L'API **non** è pubblicata sull'host (la usa solo il web sulla rete interna).
+
+> Al **primo avvio** la web UI mostra un **wizard** per scegliere le cartelle di download (sfogliando
+> `/media`). Stato del sistema, spazio disco per cartella e ultima sync sono in
+> **Impostazioni → Diagnostica**.
 
 ---
 

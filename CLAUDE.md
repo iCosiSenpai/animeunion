@@ -100,7 +100,21 @@ Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
   (C) **Pagina Download stile qBittorrent**: una card per anime con avanzamento/velocità/ETA, righe
   per-episodio espandibili, clic → scheda anime, filtro stati; nuove colonne
   `bytes_downloaded`/`total_bytes`/`speed_bps` su `download_queue`. Migrazione `0004` auto all'avvio.
-- **156 test verdi** (17 file).
+- **Lotto migliorie (v0.2.0)**: (1) **coda robusta** — retention automatica (`queueRetentionDays`
+  applicata da un tick scheduler), **retry intelligente** (4xx/link scaduto/contenuto non video
+  falliscono subito; solo 5xx/stallo/rete riprovano — `PermanentDownloadError`), "Scarica prima"
+  (`download.setPriority`). (2) **Resume download** via HTTP Range (`resumeFrom`, append su 206; i
+  `.part` dei job riavviabili sopravvivono allo sweep). (3) **Centro notifiche** in-app (tabella
+  `notification`, router, campanella) + canale **Telegram** (`lib/telegram`, env
+  `TELEGRAM_BOT_TOKEN/CHAT_ID`, toggle `notifyTelegram`); hook sugli eventi del worker.
+  (4) **Follow con opzioni** — colonna `follow.auto_download` (per-serie, null=default dallo stato),
+  dialog Segui con "scarica subito i già usciti" (via conferma stagione) e toggle auto;
+  `enqueueForAutoFollows` rispetta flag+stato+master; notifica `new_episode` all'auto-enqueue.
+  (5) **Diagnostica** — router `health.status` (worker, spazio disco per cartella via `freeDiskBytes`,
+  sync, auth) + pagina `/diagnostica`. (6) **Command palette ⌘K** (ricerca + azioni rapide) e
+  **conferma stagione** obbligatoria al primo download (override + cartella `Specials`).
+  Migrazioni `0004`/`0005`/`0006` auto all'avvio.
+- **169 test verdi** (19 file).
 
 **Endpoint v1.0.3/1.1.0/1.1.1 verificati live (12/13, base path
 `https://api.animeunion.tv/api/v1/integration`):**

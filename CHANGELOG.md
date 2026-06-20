@@ -11,6 +11,34 @@ e il progetto aderisce al [Semantic Versioning](https://semver.org/lang/it/).
 - Test E2E (Playwright).
 - PWA (manifest + service worker) e notifiche Web Push.
 
+## [0.2.0] - 2026-06-20
+
+### Added
+- **Conferma stagione al download**: alla prima richiesta di una serie/episodio l'app chiede
+  "Confermi che è la Stagione X?" (numero modificabile, opzione **Special** → cartella `Specials`).
+  Non si ripete se hai già scaricato da quella serie; pulsante "Vai alla serie".
+- **Ricerca stile Spotlight** + **command palette ⌘K** (ricerca anime + azioni rapide).
+- **Pagina Download "a contenitori"** stile qBittorrent: un riquadro per anime con avanzamento,
+  **velocità ed ETA**, episodi espandibili, filtri di stato, "Scarica prima".
+- **Resume dei download** interrotti (HTTP Range): non riscarica da capo dopo un'interruzione.
+- **Centro notifiche in-app** (completati/falliti/nuovi episodi) con badge, più inoltro **Telegram**
+  opzionale (`TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID` nel `.env`).
+- **Follow con opzioni**: stato + auto-download **per-serie** + "scarica subito i già usciti";
+  azioni rapide e badge "Auto" nella pagina Seguiti.
+- **Pagina Diagnostica**: stato worker, **spazio libero per cartella**, ultima sync, connessione.
+
+### Changed
+- **Rilevamento stagioni/sequel** dallo slug quando l'API non fornisce `seriesId`/relazioni
+  (con guardia anti-falsi-positivi), così i sequel finiscono nella serie/stagione corretta.
+- **Retry intelligente**: gli errori permanenti (4xx, link scaduto, contenuto non video) falliscono
+  subito; solo gli errori transitori vengono riprovati.
+- **Pulizia automatica della coda**: i download terminati più vecchi di `queueRetentionDays`
+  vengono rimossi periodicamente.
+
+### Migrazione da 0.1.x
+- Nuove tabelle/colonne (`series_override`, `notification`, `follow.auto_download`, progressi coda)
+  applicate **in automatico** all'avvio. Nessuna azione manuale.
+
 ## [0.1.2] - 2026-06-20
 
 ### Added

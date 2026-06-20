@@ -59,6 +59,8 @@ export interface DownloadOptions {
   headers?: Record<string, string>;
   /** Aborta se non arrivano dati per questo intervallo (default 60s). */
   stallTimeoutMs?: number;
+  /** Byte già presenti su disco: se >0 prova a riprendere via header Range. */
+  resumeFrom?: number;
 }
 
 const DEFAULT_PROGRESS_INTERVAL_MS = 200;
@@ -73,6 +75,7 @@ export async function downloadToFile(options: DownloadOptions): Promise<Download
     progressIntervalMs = DEFAULT_PROGRESS_INTERVAL_MS,
     stallTimeoutMs = DEFAULT_STALL_TIMEOUT_MS,
     headers,
+    resumeFrom = 0,
   } = options;
 
   // Controller interno: abortito sia dal segnale esterno (cancel utente) sia dallo stall watchdog.
@@ -86,11 +89,22 @@ export async function downloadToFile(options: DownloadOptions): Promise<Download
   }
 
   const start = Date.now();
+  const reqHeaders: Record<string, string> = { ...headers };
+  if (resumeFrom > 0) {
+    reqHeaders.range = `bytes=${resumeFrom}-`;
+  }
   const response = await request(url, {
     method: 'GET',
     signal: internal.signal,
-    headers,
+    headers: reqHeaders,
   });
+
+  // 416 = il .part è già >= della sorgente: riparti pulito (transitorio).
+  if (response.statusCode === 416) {
+    await response.body.dump().catch(() => {});
+    await rm(destPath).catch(() => {});
+    throw new Error('Range non soddisfacibile (riavvio download da zero)');
+  }
 
   if (response.statusCode >= 400) {
     const body = await response.body.text().catch(() => '');
@@ -100,6 +114,10 @@ export async function downloadToFile(options: DownloadOptions): Promise<Download
     throw response.statusCode < 500 ? new PermanentDownloadError(message) : new Error(message);
   }
 
+  // Resume effettivo solo se il server risponde 206; con 200 ha ignorato il Range → da zero.
+  const resuming = resumeFrom > 0 && response.statusCode === 206;
+  const startAt = resuming ? resumeFrom : 0;
+
   const contentType: string | null = (() => {
     const raw = response.headers['content-type'];
     if (raw == null) {
@@ -107,9 +125,21 @@ export async function downloadToFile(options: DownloadOptions): Promise<Download
     }
     return Array.isArray(raw) ? (raw[0] ?? null) : raw;
   })();
-  const totalHeader = response.headers['content-length'];
-  const totalHeaderValue = Array.isArray(totalHeader) ? totalHeader[0] : totalHeader;
-  const totalBytes = totalHeaderValue ? Number.parseInt(totalHeaderValue, 10) : null;
+  const totalBytes: number | null = (() => {
+    if (resuming) {
+      // Content-Range: bytes start-end/total
+      const cr = response.headers['content-range'];
+      const value = Array.isArray(cr) ? cr[0] : cr;
+      const match = value?.match(/\/(\d+)\s*$/);
+      if (match?.[1]) {
+        return Number.parseInt(match[1], 10);
+      }
+    }
+    const totalHeader = response.headers['content-length'];
+    const totalHeaderValue = Array.isArray(totalHeader) ? totalHeader[0] : totalHeader;
+    const len = totalHeaderValue ? Number.parseInt(totalHeaderValue, 10) : null;
+    return len != null ? len + startAt : null;
+  })();
 
   // Il server può rispondere 200 con una pagina HTML ("link scaduto") invece del video:
   // la rifiutiamo prima di creare il file, così non finisce in libreria come .mp4 rotto.
@@ -121,13 +151,15 @@ export async function downloadToFile(options: DownloadOptions): Promise<Download
   }
 
   if (onProgress) {
-    onProgress({ bytesDownloaded: 0, totalBytes });
+    onProgress({ bytesDownloaded: startAt, totalBytes });
   }
 
-  const fileStream = createWriteStream(destPath);
-  let bytesDownloaded = 0;
+  // Append se stiamo riprendendo (206); altrimenti tronca/sovrascrive.
+  const fileStream = createWriteStream(destPath, { flags: resuming ? 'a' : 'w' });
+  let bytesDownloaded = startAt;
   let lastEmit = 0;
-  let sniffed = false;
+  // In resume non sniffiamo il primo chunk: non è l'inizio del file.
+  let sniffed = resuming;
   let lastActivity = Date.now();
   let stalled = false;
 
@@ -176,8 +208,13 @@ export async function downloadToFile(options: DownloadOptions): Promise<Download
   try {
     await pipeline(body, counter, fileStream);
   } catch (error) {
-    // Rimuove il file parziale rimasto, qualunque sia la causa (abort o errore).
-    await rm(destPath).catch(() => {});
+    // Conserva il .part sugli errori TRANSITORI (stallo/rete/5xx) per poter riprendere;
+    // rimuovilo solo se il contenuto è invalido (permanente) o se l'utente ha annullato.
+    const permanent = error instanceof PermanentDownloadError;
+    const userAbort = !stalled && signal?.aborted === true;
+    if (permanent || userAbort) {
+      await rm(destPath).catch(() => {});
+    }
     if (stalled) {
       throw new DownloadStalledError(stallTimeoutMs);
     }

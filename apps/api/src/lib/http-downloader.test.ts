@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { MockAgent, setGlobalDispatcher } from 'undici';
@@ -116,6 +116,76 @@ describe('downloadToFile', () => {
         /non valido/i,
       );
       expect(existsSync(dest)).toBe(false);
+    } finally {
+      await rm(work, { recursive: true, force: true });
+    }
+  });
+
+  it('resume: con 206 riprende dal .part senza riscaricare i byte già presenti', async () => {
+    const work = await mkdtemp(join(tmpdir(), 'au-dl-'));
+    try {
+      const body = Buffer.from('fake-mp4-bytes-0123456789'); // 25 byte
+      const have = 10;
+      const dest = join(work, 'r.mp4');
+      await writeFile(dest, body.subarray(0, have)); // .part già con i primi 10 byte
+
+      let seenRange: string | undefined;
+      agent
+        .get(BASE)
+        .intercept({ path: '/r.mp4', method: 'GET' })
+        .reply((opts) => {
+          seenRange = (opts.headers as Record<string, string>)?.range;
+          return {
+            statusCode: 206,
+            data: body.subarray(have),
+            responseOptions: {
+              headers: {
+                'content-type': 'video/mp4',
+                'content-range': `bytes ${have}-${body.length - 1}/${body.length}`,
+                'content-length': String(body.length - have),
+              },
+            },
+          };
+        });
+
+      const result = await downloadToFile({
+        url: `${BASE}/r.mp4`,
+        destPath: dest,
+        resumeFrom: have,
+      });
+
+      expect(seenRange).toBe(`bytes=${have}-`);
+      expect(result.bytes).toBe(body.length);
+      const written = await readFile(dest);
+      expect(written.equals(body)).toBe(true);
+    } finally {
+      await rm(work, { recursive: true, force: true });
+    }
+  });
+
+  it('resume: se il server ignora il Range (200) riparte pulito da zero', async () => {
+    const work = await mkdtemp(join(tmpdir(), 'au-dl-'));
+    try {
+      const body = Buffer.from('fresh-full-content-9876');
+      const dest = join(work, 'r2.mp4');
+      await writeFile(dest, Buffer.from('XXXXXXXXXX')); // parziale "sbagliato"
+
+      agent
+        .get(BASE)
+        .intercept({ path: '/r2.mp4', method: 'GET' })
+        .reply(200, body, {
+          headers: { 'content-type': 'video/mp4', 'content-length': String(body.length) },
+        });
+
+      const result = await downloadToFile({
+        url: `${BASE}/r2.mp4`,
+        destPath: dest,
+        resumeFrom: 10,
+      });
+
+      expect(result.bytes).toBe(body.length);
+      const written = await readFile(dest);
+      expect(written.equals(body)).toBe(true); // sovrascritto, non appeso
     } finally {
       await rm(work, { recursive: true, force: true });
     }

@@ -131,10 +131,15 @@ export async function freeDiskBytes(path: string): Promise<number | null> {
 }
 
 /**
- * Rimuove i file temporanei `.part.<id>` rimasti sotto `rootPath` (es. dopo un crash a metà
- * download). Ritorna quanti ne ha cancellati. Tollerante a cartella inesistente.
+ * Rimuove i file temporanei `.part.<queueId>` rimasti sotto `rootPath` (es. dopo un crash a metà
+ * download). Se `keepQueueIds` è passato, conserva i `.part` dei job ancora riavviabili (per il
+ * resume). Ritorna quanti ne ha cancellati. Tollerante a cartella inesistente.
  */
-export async function sweepPartFiles(rootPath: string, logger?: Logger): Promise<number> {
+export async function sweepPartFiles(
+  rootPath: string,
+  logger?: Logger,
+  keepQueueIds?: Set<string>,
+): Promise<number> {
   let removed = 0;
   async function walk(dir: string): Promise<void> {
     try {
@@ -144,6 +149,10 @@ export async function sweepPartFiles(rootPath: string, logger?: Logger): Promise
         if (entry.isDirectory()) {
           await walk(full);
         } else if (entry.isFile() && entry.name.includes('.part.')) {
+          const queueId = entry.name.slice(entry.name.lastIndexOf('.part.') + '.part.'.length);
+          if (keepQueueIds?.has(queueId)) {
+            continue; // job riavviabile: conserva per il resume
+          }
           try {
             await rm(full);
             removed += 1;

@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events';
+import { stat } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import type { Language } from '@animeunion/shared';
 import { and, asc, desc, eq, inArray } from 'drizzle-orm';
@@ -241,11 +242,17 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
         });
       };
 
+      // Resume: se è rimasto un .part da un tentativo precedente, riprendi da lì.
+      const resumeFrom = await stat(partial)
+        .then((s) => s.size)
+        .catch(() => 0);
+
       const result = await downloadToFile({
         url,
         destPath: partial,
         signal: controller.signal,
         onProgress,
+        resumeFrom,
       });
 
       updateQueue(queueId, { status: 'processing', progress: 1, speedBps: null });
@@ -397,8 +404,18 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
       stopped = false;
       paused = false;
       reconcileOrphans();
-      // Pulizia best-effort dei .part rimasti da un crash precedente (su tutte le root).
-      void Promise.all(config.distinctDownloadRoots().map((root) => sweepPartFiles(root, logger)))
+      // Conserva i .part dei job riavviabili (queued/failed) per poter riprendere; rimuove gli orfani.
+      const restartable = new Set(
+        db
+          .select({ id: schema.downloadQueue.id })
+          .from(schema.downloadQueue)
+          .where(inArray(schema.downloadQueue.status, ['queued', 'failed']))
+          .all()
+          .map((r) => r.id),
+      );
+      void Promise.all(
+        config.distinctDownloadRoots().map((root) => sweepPartFiles(root, logger, restartable)),
+      )
         .then((counts) => {
           const n = counts.reduce((sum, c) => sum + c, 0);
           if (n > 0) {

@@ -167,6 +167,9 @@ export const downloadQueue = sqliteTable(
     retryCount: integer('retry_count').default(0),
     retryMax: integer('retry_max').default(3),
     priority: integer('priority').default(50),
+    bytesDownloaded: integer('bytes_downloaded').default(0),
+    totalBytes: integer('total_bytes'),
+    speedBps: real('speed_bps'),
     createdAt: text('created_at').notNull(),
   },
   (table) => [
@@ -174,6 +177,17 @@ export const downloadQueue = sqliteTable(
     index('idx_download_priority').on(sql`${table.priority} DESC`),
   ],
 );
+
+// Override manuale di stagione/serie: l'utente corregge il rilevamento quando
+// l'API non collega un sequel alla serie madre (vedi series-resolver).
+export const seriesOverride = sqliteTable('series_override', {
+  animeId: text('anime_id')
+    .primaryKey()
+    .references(() => anime.id, { onDelete: 'cascade' }),
+  seriesAnimeId: text('series_anime_id').references(() => anime.id, { onDelete: 'set null' }),
+  seasonNumber: integer('season_number'),
+  updatedAt: text('updated_at').notNull(),
+});
 
 export const config = sqliteTable('config', {
   key: text('key').primaryKey(),
@@ -208,6 +222,7 @@ export const schema = {
   episodeFile,
   follow,
   downloadQueue,
+  seriesOverride,
   config,
   stats,
   auth,

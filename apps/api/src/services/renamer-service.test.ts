@@ -106,4 +106,38 @@ describe('RenamerService', () => {
       renamer.computeEpisodePath({ animeId: 's2', episodeNumber: 26, language: 'SUB_ITA' }),
     ).toBe(join('/data/anime', 'Attack on Titan', 'Season 02', 'Attack on Titan - S02E01.mp4'));
   });
+
+  it('sequel via euristica slug: usa titolo e cartella della serie madre, Season 02', () => {
+    // L'API non fornisce seriesId/relazioni: solo lo slug "-2nd-season".
+    insertAnime(db, {
+      id: 'angel-1',
+      slug: 'otonari-ken',
+      title: 'Otonari no Tenshi-sama',
+      titleIta: 'The Angel Next Door Spoils Me Rotten',
+      episodeCount: 0,
+    });
+    insertAnime(db, {
+      id: 'angel-2',
+      slug: 'otonari-ken-2nd-season',
+      title: 'Otonari no Tenshi-sama 2nd Season',
+      titleIta: 'The Angel Next Door Spoils Me Rotten 2',
+      episodeCount: 12,
+    });
+    const renamer = makeRenamer(db, {
+      seriesPathSub: '/media/Anime',
+      seriesPathDub: '/media/Anime ITA',
+    });
+
+    // Episodio 1 (il sito riparte da 1) → Season 02 E01, cartella = titolo della radice (senza "2").
+    expect(
+      renamer.computeEpisodePath({ animeId: 'angel-2', episodeNumber: 1, language: 'SUB_ITA' }),
+    ).toBe(
+      join(
+        '/media/Anime',
+        'The Angel Next Door Spoils Me Rotten',
+        'Season 02',
+        'The Angel Next Door Spoils Me Rotten - S02E01.mp4',
+      ),
+    );
+  });
 });

@@ -127,6 +127,17 @@ describe('DownloadService', () => {
     expect(enqueueSpy).toHaveBeenCalledWith('ef-1', undefined);
   });
 
+  it('addEpisode lancia se le cartelle non sono configurate', () => {
+    const { service, config } = makeService();
+    config.set('seriesPathSub', '');
+    insertAnime(db, 'a-1');
+    insertEpisode(db, 'e-1', 'a-1', 1);
+    insertFile(db, 'ef-1', 'e-1', 'SUB_ITA');
+
+    expect(() => service.addEpisode({ episodeFileId: 'ef-1' })).toThrow(/Configura le cartelle/);
+    expect(enqueueSpy).not.toHaveBeenCalled();
+  });
+
   it('addEpisode idempotente: ritorna id esistente se già in coda', () => {
     const { service } = makeService();
     insertAnime(db, 'a-1');

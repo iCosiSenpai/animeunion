@@ -7,12 +7,22 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { trpc } from '@/lib/trpc';
@@ -25,7 +35,7 @@ import type {
   Language,
   RelatedAnime,
 } from '@animeunion/shared';
-import { ChevronDown, Download, Star } from 'lucide-react';
+import { ChevronDown, Download, FolderTree, Loader2, Star } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -152,7 +162,10 @@ export function AnimeDetail({ slug }: { slug: string }) {
       <Hero anime={data} expanded={expanded} onToggle={() => setExpanded((value) => !value)} />
 
       <section className="space-y-3">
-        <h2 className="text-xl font-semibold">Episodi</h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-xl font-semibold">Episodi</h2>
+          <SeriesOrganizationPanel animeId={data.id} />
+        </div>
         <EpisodeList anime={data} />
       </section>
 
@@ -378,6 +391,181 @@ function EpisodeList({ anime }: { anime: AnimeDetailType }) {
         })}
       </div>
     </div>
+  );
+}
+
+function SeriesOrganizationPanel({ animeId }: { animeId: string }) {
+  const utils = trpc.useUtils();
+  const resolved = trpc.series.getResolved.useQuery({ animeId });
+  const [open, setOpen] = useState(false);
+  const [season, setSeason] = useState('');
+  const [parentId, setParentId] = useState<string | null>(null);
+  const [parentTitle, setParentTitle] = useState('');
+  const [search, setSearch] = useState('');
+
+  const searchQuery = trpc.catalog.search.useQuery(
+    { query: search },
+    { enabled: open && search.trim().length >= 2 },
+  );
+
+  const refresh = () => {
+    void utils.series.getResolved.invalidate({ animeId });
+  };
+  const setOverride = trpc.series.setOverride.useMutation({
+    onSuccess: () => {
+      toast.success('Organizzazione aggiornata');
+      refresh();
+      setOpen(false);
+    },
+    onError: (e) => toast.error(e.message || 'Salvataggio non riuscito'),
+  });
+  const clearOverride = trpc.series.clearOverride.useMutation({
+    onSuccess: () => {
+      toast.success('Override rimosso: torno al rilevamento automatico');
+      refresh();
+      setOpen(false);
+    },
+    onError: () => toast.error('Operazione non riuscita'),
+  });
+
+  const data = resolved.data;
+
+  function onOpenChange(next: boolean) {
+    if (next && data) {
+      setSeason(String(data.seasonNumber));
+      setParentId(data.seriesAnimeId === animeId ? null : data.seriesAnimeId);
+      setParentTitle(data.seriesAnimeId === animeId ? '' : data.seriesTitle);
+      setSearch('');
+    }
+    setOpen(next);
+  }
+
+  function onSave() {
+    const n = Number(season);
+    setOverride.mutate({
+      animeId,
+      seasonNumber: Number.isFinite(n) && n >= 1 ? n : null,
+      seriesAnimeId: parentId,
+    });
+  }
+
+  if (!data) {
+    return null;
+  }
+
+  const pending = setOverride.isPending || clearOverride.isPending;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogTrigger asChild>
+        <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground">
+          <FolderTree className="h-4 w-4" />
+          Stagione {data.seasonNumber}
+          {data.hasOverride ? (
+            <Badge variant="outline" className="ml-1">
+              manuale
+            </Badge>
+          ) : null}
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Organizzazione file</DialogTitle>
+          <DialogDescription>
+            Come questo titolo viene salvato: numero di stagione e serie a cui appartiene. Correggi
+            qui se il rilevamento automatico sbaglia (l'API a volte non collega i sequel).
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <p className="text-sm font-medium">Numero di stagione</p>
+            <Input
+              type="number"
+              min={1}
+              max={99}
+              className="w-28"
+              value={season}
+              onChange={(e) => setSeason(e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <p className="text-sm font-medium">Serie madre (cartella)</p>
+            {parentId ? (
+              <div className="flex items-center justify-between rounded-md border px-3 py-2 text-sm">
+                <span className="truncate">{parentTitle}</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setParentId(null);
+                    setParentTitle('');
+                  }}
+                >
+                  Rimuovi
+                </Button>
+              </div>
+            ) : (
+              <>
+                <Input
+                  placeholder="Cerca la serie principale (min. 2 caratteri)…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+                {searchQuery.isFetching ? (
+                  <div className="flex items-center gap-2 p-2 text-xs text-muted-foreground">
+                    <Loader2 className="h-3 w-3 animate-spin" /> Cerco…
+                  </div>
+                ) : null}
+                {search.trim().length >= 2 && searchQuery.data ? (
+                  <ul className="max-h-44 divide-y overflow-y-auto rounded-md border text-sm">
+                    {searchQuery.data.data.slice(0, 8).map((a) => (
+                      <li key={a.id}>
+                        <button
+                          type="button"
+                          className="flex w-full items-center gap-2 p-2 text-left hover:bg-muted"
+                          onClick={() => {
+                            setParentId(a.id);
+                            setParentTitle(a.titleIta ?? a.title);
+                          }}
+                        >
+                          {a.titleIta ?? a.title}
+                        </button>
+                      </li>
+                    ))}
+                    {searchQuery.data.data.length === 0 ? (
+                      <li className="p-2 text-xs text-muted-foreground">Nessun risultato.</li>
+                    ) : null}
+                  </ul>
+                ) : null}
+                <p className="text-xs text-muted-foreground">
+                  Lascia vuoto per tenere questo titolo come cartella a sé.
+                </p>
+              </>
+            )}
+          </div>
+        </div>
+
+        <DialogFooter className="gap-2 sm:justify-between">
+          {data.hasOverride ? (
+            <Button
+              variant="ghost"
+              onClick={() => clearOverride.mutate({ animeId })}
+              disabled={pending}
+            >
+              Ripristina automatico
+            </Button>
+          ) : (
+            <span />
+          )}
+          <Button onClick={onSave} disabled={pending}>
+            {pending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            Salva
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

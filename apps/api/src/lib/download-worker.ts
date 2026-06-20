@@ -73,6 +73,11 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
   const { db, catalog, config, logger, renamer } = deps;
   const emitter = new EventEmitter();
   const inFlight = new Map<string, InFlight>();
+  // Campionamento per stima velocità (in memoria, non persistito).
+  const samples = new Map<
+    string,
+    { lastBytes: number; lastTs: number; lastWriteTs: number; speed: number }
+  >();
 
   let timer: NodeJS.Timeout | null = null;
   let stopped = true;
@@ -144,6 +149,23 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
       return;
     }
 
+    if (!config.isConfigured()) {
+      // Niente cartelle: fallisci subito con messaggio chiaro, senza retry inutili.
+      updateQueue(queueId, {
+        status: 'failed',
+        error: 'Configura le cartelle di download nelle Impostazioni prima di scaricare.',
+        completedAt: new Date().toISOString(),
+      });
+      emitter.emit('failed', {
+        queueId,
+        episodeFileId: item.episodeFileId,
+        error: 'Cartelle di download non configurate',
+        retry: false,
+      });
+      void tryStartNext();
+      return;
+    }
+
     emitter.emit('start', { queueId, episodeFileId: item.episodeFileId });
 
     const controller = new AbortController();
@@ -173,11 +195,37 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
       }
 
       const onProgress = (p: DownloadProgress): void => {
-        const total = p.totalBytes ?? 0;
-        const ratio = total > 0 ? p.bytesDownloaded / total : 0;
-        updateQueue(queueId, {
-          progress: Math.min(Math.max(ratio, 0), 1),
+        const total = p.totalBytes ?? null;
+        const ratio = total && total > 0 ? p.bytesDownloaded / total : 0;
+        const ts = Date.now();
+        const prev = samples.get(queueId);
+        let speed = prev?.speed ?? 0;
+        if (prev) {
+          const dt = (ts - prev.lastTs) / 1000;
+          const deltaBytes = p.bytesDownloaded - prev.lastBytes;
+          if (dt > 0 && deltaBytes >= 0) {
+            const inst = deltaBytes / dt;
+            // Media esponenziale per evitare numeri ballerini.
+            speed = prev.speed > 0 ? prev.speed * 0.6 + inst * 0.4 : inst;
+          }
+        }
+        const lastWriteTs = prev?.lastWriteTs ?? 0;
+        const shouldWrite = ts - lastWriteTs >= 1000;
+        samples.set(queueId, {
+          lastBytes: p.bytesDownloaded,
+          lastTs: ts,
+          lastWriteTs: shouldWrite ? ts : lastWriteTs,
+          speed,
         });
+        // Throttle delle scritture su SQLite (~1/s); la UI fa polling più lento.
+        if (shouldWrite) {
+          updateQueue(queueId, {
+            progress: Math.min(Math.max(ratio, 0), 1),
+            bytesDownloaded: p.bytesDownloaded,
+            totalBytes: total,
+            speedBps: speed,
+          });
+        }
         emitter.emit('progress', {
           queueId,
           episodeFileId: item.episodeFileId,
@@ -193,7 +241,7 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
         onProgress,
       });
 
-      updateQueue(queueId, { status: 'processing', progress: 1 });
+      updateQueue(queueId, { status: 'processing', progress: 1, speedBps: null });
       await atomicMove(partial, finalPath, logger);
 
       const completedAt = new Date().toISOString();
@@ -209,7 +257,15 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
           .where(eq(schema.episodeFile.id, item.episodeFileId))
           .run();
         tx.update(schema.downloadQueue)
-          .set({ status: 'completed', progress: 1, completedAt, error: null })
+          .set({
+            status: 'completed',
+            progress: 1,
+            completedAt,
+            error: null,
+            bytesDownloaded: result.bytes,
+            totalBytes: result.bytes,
+            speedBps: null,
+          })
           .where(eq(schema.downloadQueue.id, queueId))
           .run();
       });
@@ -225,7 +281,11 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
       const message = error instanceof Error ? error.message : String(error);
       const wasInFlight = inFlight.delete(queueId);
       if (aborted && wasInFlight) {
-        updateQueue(queueId, { status: 'cancelled', completedAt: new Date().toISOString() });
+        updateQueue(queueId, {
+          status: 'cancelled',
+          completedAt: new Date().toISOString(),
+          speedBps: null,
+        });
         emitter.emit('cancelled', { queueId, episodeFileId: item.episodeFileId });
         return;
       }
@@ -238,6 +298,8 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
           retryCount: nextRetry,
           error: message,
           progress: 0,
+          bytesDownloaded: 0,
+          speedBps: null,
         });
         emitter.emit('failed', {
           queueId,
@@ -254,6 +316,7 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
           status: 'failed',
           error: message,
           completedAt: new Date().toISOString(),
+          speedBps: null,
         });
         emitter.emit('failed', {
           queueId,
@@ -264,6 +327,7 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
       }
     } finally {
       inFlight.delete(queueId);
+      samples.delete(queueId);
       void tryStartNext();
     }
   }
@@ -451,7 +515,14 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
       if (!item || item.status !== 'failed') {
         return false;
       }
-      updateQueue(queueId, { status: 'queued', retryCount: 0, error: null, progress: 0 });
+      updateQueue(queueId, {
+        status: 'queued',
+        retryCount: 0,
+        error: null,
+        progress: 0,
+        bytesDownloaded: 0,
+        speedBps: null,
+      });
       emitter.emit('enqueue', { queueId, episodeFileId: item.episodeFileId });
       void tryStartNext();
       return true;

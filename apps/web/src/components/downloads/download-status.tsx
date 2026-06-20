@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { trpc } from '@/lib/trpc';
-import { cn } from '@/lib/utils';
+import { cn, formatSpeed } from '@/lib/utils';
 import { CheckCircle2, Download, Loader2, Pause, Play, Trash2, XCircle } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
@@ -137,12 +137,17 @@ export function DownloadStatus() {
                     </span>
                   </div>
                   <ProgressBar progress={item.progress} />
-                  <p className="text-xs text-muted-foreground">
-                    {item.status === 'queued'
-                      ? 'In attesa'
-                      : item.status === 'downloading'
-                        ? 'In download'
-                        : 'In elaborazione'}
+                  <p className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>
+                      {item.status === 'queued'
+                        ? 'In attesa'
+                        : item.status === 'downloading'
+                          ? 'In download'
+                          : 'In elaborazione'}
+                    </span>
+                    {item.status === 'downloading' && item.speedBps ? (
+                      <span className="tabular-nums">{formatSpeed(item.speedBps)}</span>
+                    ) : null}
                   </p>
                 </div>
               ))}

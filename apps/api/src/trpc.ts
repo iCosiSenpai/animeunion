@@ -2,7 +2,7 @@ import type { AnimeSource } from '@animeunion/shared';
 import { TRPCError, initTRPC } from '@trpc/server';
 import { ZodError } from 'zod';
 import type { Db } from './db';
-import { NotFoundError } from './lib/errors';
+import { NotFoundError, PreconditionError } from './lib/errors';
 import { ApiError, AuthError } from './lib/http-client';
 import type { Logger } from './lib/logger';
 import type { AuthService } from './services/auth-service';
@@ -14,6 +14,7 @@ import type { FollowService } from './services/follow-service';
 import type { HomeService } from './services/home-service';
 import type { LibraryService } from './services/library-service';
 import type { ProfileService } from './services/profile-service';
+import type { SeriesService } from './services/series-service';
 
 export interface Context {
   db: Db;
@@ -28,6 +29,7 @@ export interface Context {
     auth: AuthService;
     download: DownloadService;
     library: LibraryService;
+    series: SeriesService;
   };
   logger: Logger;
 }
@@ -41,6 +43,9 @@ function mapTrpcError(error: TRPCError, logger: Logger): TRPCError {
   const cause = error.cause;
   if (cause instanceof NotFoundError) {
     return new TRPCError({ code: 'NOT_FOUND', message: cause.message, cause });
+  }
+  if (cause instanceof PreconditionError) {
+    return new TRPCError({ code: 'BAD_REQUEST', message: cause.message, cause });
   }
   if (cause instanceof AuthError) {
     return new TRPCError({

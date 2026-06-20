@@ -29,6 +29,8 @@ export interface ConfigService {
   set<K extends ConfigKey>(key: K, value: unknown): AppConfig[K];
   /** Cartella di destinazione per (film? × lingua), con i fallback. */
   resolveDownloadRoot(isMovie: boolean, language: Language): string;
+  /** True se l'utente ha impostato almeno la cartella base (Serie · SUB ITA). */
+  isConfigured(): boolean;
   /** Tutte le cartelle radice distinte effettivamente in uso (per scan/sweep). */
   distinctDownloadRoots(): string[];
   /** Stato (esistenza/scrivibilità) delle 4 cartelle configurabili. */
@@ -95,6 +97,10 @@ export function createConfigService(deps: { db: Db }): ConfigService {
     return [...new Set([r.seriesSub, r.seriesDub, r.movieSub, r.movieDub])].filter(Boolean);
   }
 
+  function isConfigured(): boolean {
+    return getAll().seriesPathSub.trim() !== '';
+  }
+
   return {
     getAll,
 
@@ -118,6 +124,7 @@ export function createConfigService(deps: { db: Db }): ConfigService {
     },
 
     resolveDownloadRoot,
+    isConfigured,
     distinctDownloadRoots,
 
     async downloadDirsStatus(): Promise<DownloadDirStatus[]> {

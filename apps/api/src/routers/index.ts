@@ -10,6 +10,7 @@ import { homeRouter } from './home';
 import { libraryRouter } from './library';
 import { meRouter } from './me';
 import { profileRouter } from './profile';
+import { seriesRouter } from './series';
 import { statsRouter } from './stats';
 
 export const appRouter = router({
@@ -24,6 +25,7 @@ export const appRouter = router({
   profile: profileRouter,
   config: configRouter,
   download: downloadRouter,
+  series: seriesRouter,
   stats: statsRouter,
 });
 

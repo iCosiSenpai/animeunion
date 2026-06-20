@@ -15,6 +15,7 @@ import { createLibraryService } from './services/library-service';
 import { createProfileService } from './services/profile-service';
 import { createRenamerService } from './services/renamer-service';
 import { createSeriesResolver } from './services/series-resolver';
+import { createSeriesService } from './services/series-service';
 import { createSource } from './sources';
 import type { Context } from './trpc';
 
@@ -43,15 +44,27 @@ export function createAppContext(options: { env?: Env; databasePath?: string } =
   const favorites = createFavoritesService({ db, source, catalog, config, logger });
   const profile = createProfileService({ source, logger });
   const home = createHomeService({ source, logger });
-  const renamer = createRenamerService({ db, config });
   const resolver = createSeriesResolver({ db });
+  const renamer = createRenamerService({ db, config, seriesResolver: resolver });
   const library = createLibraryService({ db, config, renamer, resolver, logger });
+  const series = createSeriesService({ db, resolver });
   const worker = createDownloadWorker({ db, catalog, config, logger, renamer });
   const download = createDownloadService({ db, worker, catalog, config, logger });
   return {
     db,
     source,
-    services: { catalog, follow, favorites, profile, home, config, auth, download, library },
+    services: {
+      catalog,
+      follow,
+      favorites,
+      profile,
+      home,
+      config,
+      auth,
+      download,
+      library,
+      series,
+    },
     logger,
   };
 }

@@ -25,3 +25,21 @@ export function formatDate(iso: string | null | undefined): string {
 export function pad2(n: number): string {
   return String(n).padStart(2, '0');
 }
+
+export function formatSpeed(bytesPerSecond: number | null | undefined): string {
+  if (!bytesPerSecond || bytesPerSecond <= 0) return '';
+  return `${formatBytes(bytesPerSecond)}/s`;
+}
+
+/** Durata leggibile a partire dai secondi (per l'ETA dei download). */
+export function formatDuration(seconds: number | null | undefined): string {
+  if (seconds == null || !Number.isFinite(seconds) || seconds <= 0) return '';
+  const s = Math.round(seconds);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ${s % 60}s`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ${m % 60}m`;
+  const d = Math.floor(h / 24);
+  return `${d}g ${h % 24}h`;
+}

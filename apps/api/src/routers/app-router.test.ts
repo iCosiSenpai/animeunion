@@ -13,6 +13,7 @@ import { createLibraryService } from '../services/library-service';
 import { createProfileService } from '../services/profile-service';
 import { createRenamerService } from '../services/renamer-service';
 import { createSeriesResolver } from '../services/series-resolver';
+import { createSeriesService } from '../services/series-service';
 import { createMockSource } from '../sources/mock-source';
 import { createTestDb, testLogger } from '../test/helpers';
 import { type Context, createCallerFactory } from '../trpc';
@@ -30,9 +31,10 @@ function makeCaller() {
   const profile = createProfileService({ source, logger: testLogger });
   const home = createHomeService({ source, logger: testLogger });
   const auth = createAuthService({ db, baseUrl: 'https://api.test', logger: testLogger });
-  const renamer = createRenamerService({ db, config });
   const resolver = createSeriesResolver({ db });
+  const renamer = createRenamerService({ db, config, seriesResolver: resolver });
   const library = createLibraryService({ db, config, renamer, resolver, logger: testLogger });
+  const series = createSeriesService({ db, resolver });
   const download = createDownloadService({
     db,
     worker: {
@@ -49,7 +51,18 @@ function makeCaller() {
   const ctx: Context = {
     db,
     source,
-    services: { catalog, follow, favorites, profile, home, config, auth, download, library },
+    services: {
+      catalog,
+      follow,
+      favorites,
+      profile,
+      home,
+      config,
+      auth,
+      download,
+      library,
+      series,
+    },
     logger: testLogger,
   };
   return { caller: createCallerFactory(appRouter)(ctx), ctx };

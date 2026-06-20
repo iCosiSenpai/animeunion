@@ -102,4 +102,79 @@ describe('SeriesResolver', () => {
       seriesSlug: 'missing',
     });
   });
+
+  it('euristica slug: -2nd-season collega alla serie madre esistente', () => {
+    insertAnime(db, { id: 'angel-1', slug: 'otonari-ken', title: 'The Angel S1' });
+    insertAnime(db, { id: 'angel-2', slug: 'otonari-ken-2nd-season', title: 'The Angel S2' });
+
+    const resolver = createSeriesResolver({ db });
+    expect(resolver.resolve('angel-2')).toMatchObject({
+      seriesId: 'angel-1',
+      seasonNumber: 2,
+      seriesSlug: 'otonari-ken',
+    });
+  });
+
+  it('euristica slug: -season-3 e numero romano -ii', () => {
+    insertAnime(db, { id: 'b1', slug: 'aharen-san-wa-hakarenai', title: 'Aharen' });
+    insertAnime(db, { id: 'b3', slug: 'aharen-san-wa-hakarenai-season-3', title: 'Aharen S3' });
+    insertAnime(db, { id: 'c1', slug: 'aishen-qiaokeli-ing', title: 'Aishen' });
+    insertAnime(db, { id: 'c2', slug: 'aishen-qiaokeli-ing-ii', title: 'Aishen II' });
+
+    const resolver = createSeriesResolver({ db });
+    expect(resolver.resolve('b3')).toMatchObject({
+      seasonNumber: 3,
+      seriesSlug: 'aharen-san-wa-hakarenai',
+    });
+    expect(resolver.resolve('c2')).toMatchObject({
+      seasonNumber: 2,
+      seriesSlug: 'aishen-qiaokeli-ing',
+    });
+  });
+
+  it('euristica slug: trailing -N usa anche la base con suffisso -1', () => {
+    insertAnime(db, { id: 'r1', slug: 'aggressive-retsuko-1', title: 'Retsuko 1' });
+    insertAnime(db, { id: 'r2', slug: 'aggressive-retsuko-2', title: 'Retsuko 2' });
+
+    const resolver = createSeriesResolver({ db });
+    expect(resolver.resolve('r2')).toMatchObject({
+      seriesId: 'r1',
+      seasonNumber: 2,
+      seriesSlug: 'aggressive-retsuko-1',
+    });
+  });
+
+  it('euristica slug: nessun falso positivo se la base non esiste', () => {
+    // "22-7" (idol group) e "attack-no-1" non devono diventare stagioni.
+    insertAnime(db, { id: 'x1', slug: '22-7', title: '22/7' });
+    insertAnime(db, { id: 'x2', slug: 'attack-no-1', title: 'Attack No.1' });
+    insertAnime(db, { id: 'x3', slug: 'standalone-2', title: 'Standalone 2' });
+
+    const resolver = createSeriesResolver({ db });
+    expect(resolver.resolve('x1')).toMatchObject({ seriesId: 'x1', seasonNumber: 1 });
+    expect(resolver.resolve('x2')).toMatchObject({ seriesId: 'x2', seasonNumber: 1 });
+    expect(resolver.resolve('x3')).toMatchObject({ seriesId: 'x3', seasonNumber: 1 });
+  });
+
+  it('override manuale vince su euristica e dati API', () => {
+    insertAnime(db, { id: 'root', slug: 'my-series', title: 'My Series' });
+    insertAnime(db, {
+      id: 'spin',
+      slug: 'unrelated-spinoff',
+      title: 'Spinoff',
+      seriesId: 'other',
+      seasonNumber: 5,
+    });
+    const ts = new Date().toISOString();
+    db.insert(schema.seriesOverride)
+      .values({ animeId: 'spin', seriesAnimeId: 'root', seasonNumber: 3, updatedAt: ts })
+      .run();
+
+    const resolver = createSeriesResolver({ db });
+    expect(resolver.resolve('spin')).toMatchObject({
+      seriesId: 'root',
+      seasonNumber: 3,
+      seriesSlug: 'my-series',
+    });
+  });
 });

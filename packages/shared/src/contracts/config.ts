@@ -4,7 +4,8 @@ import { languageSchema } from './enums';
 export const appConfigSchema = z.object({
   // Cartelle di download (impostate nelle Impostazioni dell'app, NON nel .env).
   // Routing per (tipo × lingua); le DUB/film, se vuote, ricadono sulla serie SUB.
-  seriesPathSub: z.string().default('/data/anime'),
+  // seriesPathSub vuota = "non configurato": innesca il wizard e blocca i download.
+  seriesPathSub: z.string().default(''),
   seriesPathDub: z.string().default(''),
   moviePathSub: z.string().default(''),
   moviePathDub: z.string().default(''),

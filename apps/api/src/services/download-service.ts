@@ -3,7 +3,7 @@ import { and, desc, eq, inArray } from 'drizzle-orm';
 import type { Db } from '../db';
 import { schema } from '../db';
 import type { DownloadWorker } from '../lib/download-worker';
-import { NotFoundError } from '../lib/errors';
+import { NotFoundError, PreconditionError } from '../lib/errors';
 import type { Logger } from '../lib/logger';
 import type { CatalogService } from './catalog-service';
 import type { ConfigService } from './config-service';
@@ -13,6 +13,9 @@ export interface DownloadQueueItem {
   episodeFileId: string;
   status: 'queued' | 'downloading' | 'processing' | 'completed' | 'failed' | 'cancelled';
   progress: number;
+  bytesDownloaded: number;
+  totalBytes: number | null;
+  speedBps: number | null;
   startedAt: string | null;
   completedAt: string | null;
   error: string | null;
@@ -80,6 +83,9 @@ export interface DownloadServiceDeps {
 
 const RETRY_MAX = 3;
 
+const NOT_CONFIGURED_MSG =
+  'Configura le cartelle di download nelle Impostazioni prima di scaricare.';
+
 function isTerminal(status: string): boolean {
   return status === 'completed' || status === 'cancelled' || status === 'failed';
 }
@@ -113,6 +119,9 @@ export function createDownloadService(deps: DownloadServiceDeps): DownloadServic
     },
 
     addEpisode({ episodeFileId, priority }) {
+      if (!config.isConfigured()) {
+        throw new PreconditionError(NOT_CONFIGURED_MSG);
+      }
       const existing = alreadyInQueue(episodeFileId);
       if (existing) {
         return existing;
@@ -146,6 +155,9 @@ export function createDownloadService(deps: DownloadServiceDeps): DownloadServic
     },
 
     addMissing({ animeId, language }) {
+      if (!config.isConfigured()) {
+        throw new PreconditionError(NOT_CONFIGURED_MSG);
+      }
       const files = db
         .select({
           id: schema.episodeFile.id,
@@ -182,6 +194,9 @@ export function createDownloadService(deps: DownloadServiceDeps): DownloadServic
           episodeFileId: schema.downloadQueue.episodeFileId,
           status: schema.downloadQueue.status,
           progress: schema.downloadQueue.progress,
+          bytesDownloaded: schema.downloadQueue.bytesDownloaded,
+          totalBytes: schema.downloadQueue.totalBytes,
+          speedBps: schema.downloadQueue.speedBps,
           startedAt: schema.downloadQueue.startedAt,
           completedAt: schema.downloadQueue.completedAt,
           error: schema.downloadQueue.error,
@@ -212,6 +227,9 @@ export function createDownloadService(deps: DownloadServiceDeps): DownloadServic
         episodeFileId: r.episodeFileId,
         status: r.status as DownloadQueueItem['status'],
         progress: r.progress ?? 0,
+        bytesDownloaded: r.bytesDownloaded ?? 0,
+        totalBytes: r.totalBytes ?? null,
+        speedBps: r.speedBps ?? null,
         startedAt: r.startedAt,
         completedAt: r.completedAt,
         error: r.error,
@@ -310,7 +328,7 @@ export function createDownloadService(deps: DownloadServiceDeps): DownloadServic
     },
 
     enqueueForWatchingFollows() {
-      if (!config.get('autoDownload')) {
+      if (!config.get('autoDownload') || !config.isConfigured()) {
         return 0;
       }
       const watching = db

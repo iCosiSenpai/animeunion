@@ -1,5 +1,6 @@
 'use client';
 
+import { FolderInput } from '@/components/settings/folder-picker';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import {
@@ -21,7 +22,6 @@ import {
 import { Separator } from '@/components/ui/separator';
 import { trpc } from '@/lib/trpc';
 import type { AppConfig } from '@animeunion/shared';
-import { Folder, FolderOpen, Loader2 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useRouter } from 'next/navigation';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
@@ -94,12 +94,6 @@ export function SettingsView() {
   const [saving, setSaving] = useState(false);
   const [showLeaveDialog, setShowLeaveDialog] = useState(false);
   const [pendingHref, setPendingHref] = useState<string | null>(null);
-  const [browseKey, setBrowseKey] = useState<PathKey | null>(null);
-  const [browsePath, setBrowsePath] = useState('');
-  const browseQuery = trpc.config.browseDir.useQuery(
-    { path: browsePath || undefined },
-    { enabled: browseKey !== null },
-  );
 
   // Inizializza il form quando arriva la config dal backend.
   useEffect(() => {
@@ -180,27 +174,6 @@ export function SettingsView() {
     setDraft((prev) => (prev ? { ...prev, [key]: value } : prev));
   };
 
-  const openBrowse = (key: PathKey) => {
-    setBrowsePath((draft[key] as string) || '');
-    setBrowseKey(key);
-  };
-  const navigateInto = (name: string) => {
-    if (browseQuery.data) {
-      setBrowsePath(`${browseQuery.data.path.replace(/\/$/, '')}/${name}`);
-    }
-  };
-  const navigateUp = () => {
-    if (browseQuery.data?.parent) {
-      setBrowsePath(browseQuery.data.parent);
-    }
-  };
-  const selectBrowsed = () => {
-    if (browseKey && browseQuery.data) {
-      update(browseKey, browseQuery.data.path as AppConfig[PathKey]);
-    }
-    setBrowseKey(null);
-  };
-
   const saveChanges = async (): Promise<boolean> => {
     if (!original) return false;
     if (dirtyKeys.length === 0) {
@@ -279,25 +252,13 @@ export function SettingsView() {
         </p>
         {DIR_FIELDS.map((f) => (
           <Field key={f.key} label={f.label} hint={f.hint}>
-            <div className="flex gap-2">
-              <Input
-                value={(draft[f.key] as string) ?? ''}
-                placeholder={
-                  f.key === 'seriesPathSub' ? '/data/anime' : '(eredita da Serie · SUB ITA)'
-                }
-                onChange={(e) => update(f.key, e.target.value as AppConfig[PathKey])}
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                className="shrink-0"
-                aria-label="Sfoglia"
-                onClick={() => openBrowse(f.key)}
-              >
-                <Folder className="h-4 w-4" />
-              </Button>
-            </div>
+            <FolderInput
+              value={(draft[f.key] as string) ?? ''}
+              placeholder={
+                f.key === 'seriesPathSub' ? '/media/Anime' : '(eredita da Serie · SUB ITA)'
+              }
+              onChange={(path) => update(f.key, path as AppConfig[PathKey])}
+            />
           </Field>
         ))}
         <Field label="Download simultanei" hint="Quanti episodi scaricare in parallelo (1-3).">
@@ -482,62 +443,6 @@ export function SettingsView() {
           </Button>
         </div>
       </div>
-
-      <Dialog open={browseKey !== null} onOpenChange={(open) => !open && setBrowseKey(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Scegli una cartella</DialogTitle>
-            <DialogDescription className="break-all font-mono text-xs">
-              {browseQuery.data?.path ?? '…'}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="max-h-72 overflow-y-auto rounded-md border">
-            {browseQuery.isLoading ? (
-              <div className="flex items-center justify-center p-6 text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-              </div>
-            ) : (
-              <ul className="divide-y text-sm">
-                {browseQuery.data?.parent ? (
-                  <li>
-                    <button
-                      type="button"
-                      className="flex w-full items-center gap-2 p-2 text-left hover:bg-muted"
-                      onClick={navigateUp}
-                    >
-                      <FolderOpen className="h-4 w-4 text-muted-foreground" />
-                      .. (cartella superiore)
-                    </button>
-                  </li>
-                ) : null}
-                {(browseQuery.data?.dirs ?? []).map((name) => (
-                  <li key={name}>
-                    <button
-                      type="button"
-                      className="flex w-full items-center gap-2 p-2 text-left hover:bg-muted"
-                      onClick={() => navigateInto(name)}
-                    >
-                      <Folder className="h-4 w-4 text-muted-foreground" />
-                      {name}
-                    </button>
-                  </li>
-                ))}
-                {browseQuery.data && browseQuery.data.dirs.length === 0 ? (
-                  <li className="p-3 text-xs text-muted-foreground">Nessuna sottocartella.</li>
-                ) : null}
-              </ul>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setBrowseKey(null)}>
-              Annulla
-            </Button>
-            <Button onClick={selectBrowsed} disabled={!browseQuery.data}>
-              Usa questa cartella
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <Dialog open={showLeaveDialog} onOpenChange={setShowLeaveDialog}>
         <DialogContent>

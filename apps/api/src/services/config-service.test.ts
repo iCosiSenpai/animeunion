@@ -50,7 +50,25 @@ describe('ConfigService', () => {
     const service = createConfigService({ db });
     const all = service.getAll();
 
-    expect(all.seriesPathSub).toBe('/data/anime');
+    expect(all.seriesPathSub).toBe('');
     expect('chiave_legacy' in all).toBe(false);
+  });
+
+  it('isConfigured riflette la presenza della cartella base', () => {
+    const service = createConfigService({ db: createTestDb() });
+    expect(service.isConfigured()).toBe(false);
+    service.set('seriesPathSub', '/media/Anime');
+    expect(service.isConfigured()).toBe(true);
+  });
+
+  it('resolveDownloadRoot ritorna stringa vuota finché non configurato', () => {
+    const service = createConfigService({ db: createTestDb() });
+    expect(service.resolveDownloadRoot(false, 'SUB_ITA')).toBe('');
+    expect(service.distinctDownloadRoots()).toEqual([]);
+    service.set('seriesPathSub', '/media/Anime');
+    expect(service.resolveDownloadRoot(false, 'SUB_ITA')).toBe('/media/Anime');
+    // DUB e film ereditano dalla base finché non hanno una cartella propria.
+    expect(service.resolveDownloadRoot(false, 'DUB_ITA')).toBe('/media/Anime');
+    expect(service.resolveDownloadRoot(true, 'SUB_ITA')).toBe('/media/Anime');
   });
 });

@@ -113,8 +113,10 @@ Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
   (5) **Diagnostica** — router `health.status` (worker, spazio disco per cartella via `freeDiskBytes`,
   sync, auth) + pagina `/diagnostica`. (6) **Command palette ⌘K** (ricerca + azioni rapide) e
   **conferma stagione** obbligatoria al primo download (override + cartella `Specials`).
-  Migrazioni `0004`/`0005`/`0006` auto all'avvio.
-- **169 test verdi** (19 file).
+  Migrazioni `0004`/`0005`/`0006` auto all'avvio. Più rifiniture: DUB nascosto se assente, menu
+  profilo (link a `animeunion.tv/profilo` + logout), segnalazione errori opt-in (GitHub issue
+  precompilato, no telemetria), e finestra "scarica anche le relazioni" (`download.addAllBySlug`).
+- **170 test verdi** (19 file).
 
 **Endpoint v1.0.3/1.1.0/1.1.1 verificati live (12/13, base path
 `https://api.animeunion.tv/api/v1/integration`):**

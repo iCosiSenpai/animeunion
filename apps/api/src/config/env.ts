@@ -11,6 +11,9 @@ const envSchema = z.object({
   // Lista di origin CORS consentiti (separati da virgola). Se vuoto, riflette l'origin
   // (comodo per LAN/self-hosted); impostare per restringere.
   CORS_ORIGINS: z.string().optional(),
+  // Notifiche Telegram (opzionali): bot token + chat id. Segreti → solo env/.env.
+  TELEGRAM_BOT_TOKEN: z.string().optional(),
+  TELEGRAM_CHAT_ID: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

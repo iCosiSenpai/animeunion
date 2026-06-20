@@ -17,6 +17,8 @@ export const appConfigSchema = z.object({
   languageFallback: z.boolean().default(false),
   queueRetentionDays: z.number().int().positive().default(7),
   notifyOnComplete: z.boolean().default(true),
+  // Inoltro delle notifiche a Telegram (richiede TELEGRAM_BOT_TOKEN/CHAT_ID nel .env).
+  notifyTelegram: z.boolean().default(false),
 });
 export type AppConfig = z.infer<typeof appConfigSchema>;
 

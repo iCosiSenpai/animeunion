@@ -10,6 +10,7 @@ import { createFavoritesService } from '../services/favorites-service';
 import { createFollowService } from '../services/follow-service';
 import { createHomeService } from '../services/home-service';
 import { createLibraryService } from '../services/library-service';
+import { createNotificationService } from '../services/notification-service';
 import { createProfileService } from '../services/profile-service';
 import { createRenamerService } from '../services/renamer-service';
 import { createSeriesResolver } from '../services/series-resolver';
@@ -35,6 +36,7 @@ function makeCaller() {
   const renamer = createRenamerService({ db, config, seriesResolver: resolver });
   const library = createLibraryService({ db, config, renamer, resolver, logger: testLogger });
   const series = createSeriesService({ db, resolver });
+  const notifications = createNotificationService({ db, config });
   const download = createDownloadService({
     db,
     worker: {
@@ -62,6 +64,7 @@ function makeCaller() {
       download,
       library,
       series,
+      notifications,
     },
     logger: testLogger,
   };

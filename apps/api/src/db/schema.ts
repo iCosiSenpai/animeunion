@@ -189,6 +189,23 @@ export const seriesOverride = sqliteTable('series_override', {
   updatedAt: text('updated_at').notNull(),
 });
 
+export const notification = sqliteTable(
+  'notification',
+  {
+    id: text('id').primaryKey(),
+    type: text('type').notNull(),
+    title: text('title').notNull(),
+    body: text('body'),
+    animeId: text('anime_id'),
+    read: integer('read').notNull().default(0),
+    createdAt: text('created_at').notNull(),
+  },
+  (table) => [
+    index('idx_notification_read').on(table.read),
+    index('idx_notification_created').on(table.createdAt),
+  ],
+);
+
 export const config = sqliteTable('config', {
   key: text('key').primaryKey(),
   value: text('value').notNull(),
@@ -223,6 +240,7 @@ export const schema = {
   follow,
   downloadQueue,
   seriesOverride,
+  notification,
   config,
   stats,
   auth,

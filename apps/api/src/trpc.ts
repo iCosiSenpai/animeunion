@@ -13,6 +13,7 @@ import type { FavoritesService } from './services/favorites-service';
 import type { FollowService } from './services/follow-service';
 import type { HomeService } from './services/home-service';
 import type { LibraryService } from './services/library-service';
+import type { NotificationService } from './services/notification-service';
 import type { ProfileService } from './services/profile-service';
 import type { SeriesService } from './services/series-service';
 
@@ -30,6 +31,7 @@ export interface Context {
     download: DownloadService;
     library: LibraryService;
     series: SeriesService;
+    notifications: NotificationService;
   };
   logger: Logger;
 }

@@ -400,11 +400,28 @@ export function SettingsView() {
           </Select>
         </Field>
         <Field
+          label="Notifiche Telegram"
+          hint="Inoltra le notifiche a Telegram. Richiede TELEGRAM_BOT_TOKEN e TELEGRAM_CHAT_ID nel .env."
+        >
+          <Select
+            value={draft.notifyTelegram ? 'on' : 'off'}
+            onValueChange={(v) => update('notifyTelegram', v === 'on')}
+          >
+            <SelectTrigger className="w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="on">Attivo</SelectItem>
+              <SelectItem value="off">Disattivo</SelectItem>
+            </SelectContent>
+          </Select>
+        </Field>
+        <Field
           label="Provider futuri"
-          hint="Web Push, Telegram e Discord saranno disponibili in una prossima release."
+          hint="Web Push e Discord saranno disponibili in una prossima release."
         >
           <div className="flex flex-wrap gap-2">
-            {['Web Push', 'Telegram', 'Discord'].map((name) => (
+            {['Web Push', 'Discord'].map((name) => (
               <span
                 key={name}
                 className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs text-muted-foreground"

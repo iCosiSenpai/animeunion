@@ -10,4 +10,5 @@ export * from './library';
 export * from './calendar';
 export * from './config';
 export * from './series';
+export * from './notification';
 export * from './stats';

@@ -1,6 +1,7 @@
 'use client';
 
 import { DownloadStatus } from '@/components/downloads/download-status';
+import { NotificationBell } from '@/components/layout/notification-bell';
 import { SearchBar } from '@/components/shared/search-bar';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
@@ -66,6 +67,7 @@ export function Navbar() {
           </div>
 
           <DownloadStatus />
+          <NotificationBell />
 
           <ProfileBadge />
           <ThemeToggle />

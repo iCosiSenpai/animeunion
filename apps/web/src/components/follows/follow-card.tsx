@@ -1,5 +1,6 @@
 'use client';
 
+import { useSeasonGate } from '@/components/catalog/season-gate';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import {
@@ -15,7 +16,7 @@ import {
 import { FOLLOW_STATUSES } from '@/lib/follow';
 import { trpc } from '@/lib/trpc';
 import type { FollowWithAnime } from '@animeunion/shared';
-import { MoreVertical } from 'lucide-react';
+import { Download, MoreVertical } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 
@@ -39,8 +40,24 @@ export function FollowCard({ follow }: { follow: FollowWithAnime }) {
     },
     onError: (error) => toast.error(error.message),
   });
+  const setAuto = trpc.follow.setAutoDownload.useMutation({
+    onSuccess: () => {
+      toast.success('Auto-download aggiornato');
+      invalidate();
+    },
+    onError: (error) => toast.error(error.message),
+  });
+  const addAll = trpc.download.addAll.useMutation({
+    onSuccess: (res) => {
+      toast.success(`${res.enqueued} episodi accodati`);
+      void utils.download.queue.invalidate();
+    },
+    onError: (error) => toast.error(error.message || 'Impossibile accodare i download'),
+  });
 
   const anime = follow.anime;
+  const { ensureConfirmed, dialog: seasonDialog } = useSeasonGate(anime.id);
+  const autoEffective = follow.autoDownload ?? follow.status === 'watching';
 
   return (
     <Card className="group overflow-hidden border border-border/50 shadow-sm transition-all duration-300 hover:border-primary/30 hover:shadow-lg">
@@ -82,6 +99,16 @@ export function FollowCard({ follow }: { follow: FollowWithAnime }) {
                   ))}
                 </DropdownMenuSubContent>
               </DropdownMenuSub>
+              <DropdownMenuItem
+                onClick={() => ensureConfirmed(() => addAll.mutate({ animeId: anime.id }))}
+              >
+                Scarica episodi mancanti
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => setAuto.mutate({ animeId: anime.id, autoDownload: !autoEffective })}
+              >
+                {autoEffective ? 'Disattiva auto-download' : 'Attiva auto-download'}
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 className="text-destructive"
@@ -92,7 +119,15 @@ export function FollowCard({ follow }: { follow: FollowWithAnime }) {
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
+        {autoEffective ? (
+          <span className="absolute left-1 top-1 inline-flex items-center gap-1 rounded-full bg-primary/90 px-1.5 py-0.5 text-[10px] font-medium text-primary-foreground shadow-sm">
+            <Download className="h-3 w-3" />
+            Auto
+          </span>
+        ) : null}
       </div>
+
+      {seasonDialog}
       <div className="p-3">
         <Link
           href={`/catalog/${anime.slug}`}

@@ -72,8 +72,12 @@ export interface DownloadService {
   resumeQueue(): boolean;
   /** Ritorna true se la coda è in pausa. */
   isQueuePaused(): boolean;
-  /** Accoda nuovi episodi per tutti i follow con status='watching' (chiamato dallo scheduler). */
-  enqueueForWatchingFollows(): number;
+  /**
+   * Accoda nuovi episodi per i follow con auto-download attivo (chiamato dallo scheduler).
+   * Effettivo = follow.autoDownload, oppure (se null) status==='watching'. Richiede il master
+   * config.autoDownload.
+   */
+  enqueueForAutoFollows(): number;
 }
 
 export interface DownloadServiceDeps {
@@ -83,6 +87,8 @@ export interface DownloadServiceDeps {
   config: ConfigService;
   logger: Logger;
   now?: () => Date;
+  /** Callback opzionale: nuovi episodi accodati automaticamente per un anime (per notifiche). */
+  onAutoEnqueued?: (animeId: string, count: number) => void;
 }
 
 const RETRY_MAX = 3;
@@ -357,21 +363,32 @@ export function createDownloadService(deps: DownloadServiceDeps): DownloadServic
       return result.changes;
     },
 
-    enqueueForWatchingFollows() {
+    enqueueForAutoFollows() {
       if (!config.get('autoDownload') || !config.isConfigured()) {
         return 0;
       }
-      const watching = db
-        .select({ id: schema.follow.animeId })
+      const follows = db
+        .select({
+          animeId: schema.follow.animeId,
+          status: schema.follow.status,
+          autoDownload: schema.follow.autoDownload,
+        })
         .from(schema.follow)
-        .where(eq(schema.follow.status, 'watching'))
         .all();
       let count = 0;
-      for (const f of watching) {
-        count += this.addMissing({ animeId: f.id });
+      for (const f of follows) {
+        const effective = f.autoDownload != null ? f.autoDownload === 1 : f.status === 'watching';
+        if (!effective) {
+          continue;
+        }
+        const added = this.addMissing({ animeId: f.animeId });
+        if (added > 0) {
+          count += added;
+          deps.onAutoEnqueued?.(f.animeId, added);
+        }
       }
       if (count > 0) {
-        logger.info({ count, shows: watching.length }, 'Auto-enqueue watching: nuovi accodati');
+        logger.info({ count }, 'Auto-enqueue follow: nuovi episodi accodati');
       }
       return count;
     },

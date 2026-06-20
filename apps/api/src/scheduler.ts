@@ -45,9 +45,9 @@ export function createScheduler(ctx: Context): Scheduler {
       const dlTimer = setInterval(
         () => {
           try {
-            const enqueued = services.download.enqueueForWatchingFollows();
+            const enqueued = services.download.enqueueForAutoFollows();
             if (enqueued > 0) {
-              logger.info({ enqueued }, 'Auto-enqueue watching: nuovi episodi accodati');
+              logger.info({ enqueued }, 'Auto-enqueue follow: nuovi episodi accodati');
             }
           } catch (error) {
             logger.debug({ err: error }, 'Tick auto-enqueue watching fallito');

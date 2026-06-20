@@ -1,0 +1,1 @@
+ALTER TABLE `follow` ADD `auto_download` integer;

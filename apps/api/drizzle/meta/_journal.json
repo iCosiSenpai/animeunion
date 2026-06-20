@@ -43,6 +43,13 @@
       "when": 1781959313712,
       "tag": "0005_sad_cyclops",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1781959901335,
+      "tag": "0006_equal_zarda",
+      "breakpoints": true
     }
   ]
 }

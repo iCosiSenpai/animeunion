@@ -325,7 +325,7 @@ describe('DownloadService', () => {
     expect(ids).toEqual(['q-new', 'q-queued']);
   });
 
-  it('enqueueForWatchingFollows salta se autoDownload=false', () => {
+  it('enqueueForAutoFollows salta se il master autoDownload=false', () => {
     const { service, config } = makeService();
     config.set('autoDownload', false);
     insertAnime(db, 'a-1');
@@ -342,12 +342,54 @@ describe('DownloadService', () => {
         notes: null,
       })
       .run();
-    const n = service.enqueueForWatchingFollows();
+    const n = service.enqueueForAutoFollows();
     expect(n).toBe(0);
     expect(enqueueSpy).not.toHaveBeenCalled();
   });
 
-  it('enqueueForWatchingFollows accoda solo per watching', () => {
+  it('enqueueForAutoFollows rispetta autoDownload per-follow (override dello stato)', () => {
+    const { service } = makeService();
+    insertAnime(db, 'a-1');
+    insertAnime(db, 'a-2');
+    insertEpisode(db, 'e-1', 'a-1', 1);
+    insertEpisode(db, 'e-2', 'a-2', 1);
+    insertFile(db, 'ef-1', 'e-1', 'SUB_ITA');
+    insertFile(db, 'ef-2', 'e-2', 'SUB_ITA');
+    const ts = new Date().toISOString();
+    // watching ma auto-download disattivato esplicitamente → NON accoda.
+    db.insert(schema.follow)
+      .values({
+        id: 'f-1',
+        animeId: 'a-1',
+        status: 'watching',
+        autoDownload: 0,
+        addedAt: ts,
+        updatedAt: ts,
+        lastCheckAt: null,
+        notes: null,
+      })
+      .run();
+    // plan_to_watch ma auto-download attivato esplicitamente → accoda.
+    db.insert(schema.follow)
+      .values({
+        id: 'f-2',
+        animeId: 'a-2',
+        status: 'plan_to_watch',
+        autoDownload: 1,
+        addedAt: ts,
+        updatedAt: ts,
+        lastCheckAt: null,
+        notes: null,
+      })
+      .run();
+
+    const n = service.enqueueForAutoFollows();
+    expect(n).toBe(1);
+    expect(enqueueSpy).toHaveBeenCalledWith('ef-2');
+    expect(enqueueSpy).not.toHaveBeenCalledWith('ef-1');
+  });
+
+  it('enqueueForAutoFollows accoda per watching (default) non per plan_to_watch', () => {
     const { service } = makeService();
     insertAnime(db, 'a-1');
     insertAnime(db, 'a-2');
@@ -379,7 +421,7 @@ describe('DownloadService', () => {
       })
       .run();
 
-    const n = service.enqueueForWatchingFollows();
+    const n = service.enqueueForAutoFollows();
     expect(n).toBe(1);
     expect(enqueueSpy).toHaveBeenCalledWith('ef-1');
   });

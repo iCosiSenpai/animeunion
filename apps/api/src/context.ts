@@ -51,9 +51,6 @@ export function createAppContext(options: { env?: Env; databasePath?: string } =
   const renamer = createRenamerService({ db, config, seriesResolver: resolver });
   const library = createLibraryService({ db, config, renamer, resolver, logger });
   const series = createSeriesService({ db, resolver });
-  const worker = createDownloadWorker({ db, catalog, config, logger, renamer });
-  const download = createDownloadService({ db, worker, catalog, config, logger });
-
   const telegram = createTelegramNotifier({
     config: {
       botToken: resolvedEnv.TELEGRAM_BOT_TOKEN,
@@ -62,6 +59,32 @@ export function createAppContext(options: { env?: Env; databasePath?: string } =
     logger,
   });
   const notifications = createNotificationService({ db, config, telegram, logger });
+
+  function animeTitleOf(animeId: string): string {
+    const row = db
+      .select({ title: schema.anime.title, titleIta: schema.anime.titleIta })
+      .from(schema.anime)
+      .where(eq(schema.anime.id, animeId))
+      .get();
+    return row?.titleIta ?? row?.title ?? 'Anime';
+  }
+
+  const worker = createDownloadWorker({ db, catalog, config, logger, renamer });
+  const download = createDownloadService({
+    db,
+    worker,
+    catalog,
+    config,
+    logger,
+    onAutoEnqueued: (animeId, count) => {
+      notifications.create({
+        type: 'new_episode',
+        title: `Nuovi episodi: ${animeTitleOf(animeId)}`,
+        body: `${count} episod${count === 1 ? 'io' : 'i'} accodati automaticamente`,
+        animeId,
+      });
+    },
+  });
 
   // Notifiche dagli eventi del worker (rispetta i toggle di config).
   function describeEpisode(episodeFileId: string): {

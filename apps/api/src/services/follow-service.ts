@@ -2,6 +2,7 @@ import {
   type AnimeSource,
   type Follow,
   type FollowAddInput,
+  type FollowSetAutoDownloadInput,
   type FollowUpdateStatusInput,
   type FollowWithAnime,
   followStatusSchema,
@@ -20,6 +21,7 @@ export interface FollowService {
   add(input: FollowAddInput): Follow;
   remove(animeId: string): void;
   updateStatus(input: FollowUpdateStatusInput): Follow;
+  setAutoDownload(input: FollowSetAutoDownloadInput): Follow;
 }
 
 export interface FollowServiceDeps {
@@ -35,10 +37,15 @@ function toFollow(row: FollowRow): Follow {
     animeId: row.animeId,
     status: followStatusSchema.parse(row.status),
     notes: row.notes,
+    autoDownload: row.autoDownload == null ? null : row.autoDownload === 1,
     addedAt: row.addedAt,
     updatedAt: row.updatedAt,
     lastCheckAt: row.lastCheckAt,
   };
+}
+
+function toInt(value: boolean | undefined): number | null {
+  return value === undefined ? null : value ? 1 : 0;
 }
 
 export function createFollowService(deps: FollowServiceDeps): FollowService {
@@ -90,19 +97,27 @@ export function createFollowService(deps: FollowServiceDeps): FollowService {
         throw new NotFoundError(`Anime non trovato: ${input.animeId}`);
       }
       const timestamp = new Date().toISOString();
+      const autoDownload = toInt(input.autoDownload);
       const existing = findByAnimeId(input.animeId);
       if (existing) {
+        const nextAuto = input.autoDownload === undefined ? existing.autoDownload : autoDownload;
         db.update(schema.follow)
-          .set({ status: input.status, updatedAt: timestamp })
+          .set({ status: input.status, autoDownload: nextAuto, updatedAt: timestamp })
           .where(eq(schema.follow.id, existing.id))
           .run();
-        return toFollow({ ...existing, status: input.status, updatedAt: timestamp });
+        return toFollow({
+          ...existing,
+          status: input.status,
+          autoDownload: nextAuto,
+          updatedAt: timestamp,
+        });
       }
       const row: FollowRow = {
         id: crypto.randomUUID(),
         animeId: input.animeId,
         status: input.status,
         notes: null,
+        autoDownload,
         addedAt: timestamp,
         updatedAt: timestamp,
         lastCheckAt: null,
@@ -132,6 +147,20 @@ export function createFollowService(deps: FollowServiceDeps): FollowService {
         .where(eq(schema.follow.id, existing.id))
         .run();
       return toFollow({ ...existing, status: input.status, updatedAt: timestamp });
+    },
+
+    setAutoDownload(input: FollowSetAutoDownloadInput): Follow {
+      const existing = findByAnimeId(input.animeId);
+      if (!existing) {
+        throw new NotFoundError(`Follow non trovato per anime: ${input.animeId}`);
+      }
+      const timestamp = new Date().toISOString();
+      const autoDownload = input.autoDownload ? 1 : 0;
+      db.update(schema.follow)
+        .set({ autoDownload, updatedAt: timestamp })
+        .where(eq(schema.follow.id, existing.id))
+        .run();
+      return toFollow({ ...existing, autoDownload, updatedAt: timestamp });
     },
   };
 }

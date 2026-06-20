@@ -142,6 +142,8 @@ export const follow = sqliteTable(
       .references(() => anime.id, { onDelete: 'cascade' }),
     status: text('status').notNull().default('plan_to_watch'),
     notes: text('notes'),
+    // null = comportamento di default in base allo stato (watching = on). 0/1 = scelta esplicita.
+    autoDownload: integer('auto_download'),
     addedAt: text('added_at').notNull(),
     updatedAt: text('updated_at').notNull(),
     lastCheckAt: text('last_check_at'),

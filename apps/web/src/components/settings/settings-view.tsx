@@ -433,6 +433,17 @@ export function SettingsView() {
         </Field>
       </Section>
 
+      <Section title="Diagnostica">
+        <Field
+          label="Stato del sistema"
+          hint="Download, cartelle, spazio disco, catalogo e connessione."
+        >
+          <Button variant="outline" onClick={() => router.push('/diagnostica')}>
+            Apri diagnostica
+          </Button>
+        </Field>
+      </Section>
+
       <Section title="Aspetto">
         <Field label="Tema" hint="Chiaro, scuro o come il sistema.">
           <Select value={theme ?? 'system'} onValueChange={setTheme}>

@@ -630,6 +630,65 @@ describe('DownloadWorker (FSM)', () => {
     expect(row?.status).toBe('cancelled');
   });
 
+  it('setPriority aggiorna la priorità di un job in coda', () => {
+    const config = createConfigService({ db });
+    config.set('seriesPathSub', animePath);
+    const worker = makeWorker(db, buildStubCatalog(new Map()), config);
+
+    const t = new Date().toISOString();
+    seedEpisodeFiles(db, ['ef-p']);
+    db.insert(schema.downloadQueue)
+      .values({ id: 'q-p', episodeFileId: 'ef-p', status: 'queued', priority: 50, createdAt: t })
+      .run();
+
+    expect(worker.setPriority('q-p', 100)).toBe(true);
+    const row = db
+      .select()
+      .from(schema.downloadQueue)
+      .where(eq(schema.downloadQueue.id, 'q-p'))
+      .get();
+    expect(row?.priority).toBe(100);
+    expect(worker.setPriority('missing', 100)).toBe(false);
+  });
+
+  it('errore permanente (404) fallisce subito senza retry', async () => {
+    const server = createServer((_req, res) => {
+      res.writeHead(404, { 'content-type': 'text/html' });
+      res.end('<html>link scaduto</html>');
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const { port } = server.address() as AddressInfo;
+    const url = `http://127.0.0.1:${port}/ep.mp4`;
+
+    const config = createConfigService({ db });
+    config.set('seriesPathSub', animePath);
+    const worker = makeWorker(db, buildStubCatalog(new Map([['ef-1', url]])), config);
+    seedEpisodeFiles(db, ['ef-1']);
+
+    try {
+      worker.start();
+      const id = worker.enqueue('ef-1');
+      await worker.tryStartNext();
+
+      const deadline = Date.now() + 4000;
+      let q = db.select().from(schema.downloadQueue).where(eq(schema.downloadQueue.id, id)).get();
+      while (q && q.status !== 'completed' && q.status !== 'failed') {
+        if (Date.now() > deadline) {
+          throw new Error(`timeout: stato '${q.status}'`);
+        }
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        q = db.select().from(schema.downloadQueue).where(eq(schema.downloadQueue.id, id)).get();
+      }
+
+      expect(q?.status).toBe('failed');
+      // Permanente: nessun retry effettuato.
+      expect(q?.retryCount).toBe(0);
+    } finally {
+      worker.stop();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+
   it('start reimposta i download orfani (downloading/processing) a failed', () => {
     const config = createConfigService({ db });
     config.set('seriesPathSub', animePath);

@@ -46,6 +46,12 @@ export function DownloadsView() {
   const invalidate = () => void utils.download.queue.invalidate();
   const cancelMutation = trpc.download.cancel.useMutation({ onSuccess: invalidate });
   const retryMutation = trpc.download.retry.useMutation({ onSuccess: invalidate });
+  const priorityMutation = trpc.download.setPriority.useMutation({
+    onSuccess: () => {
+      toast.success('Spostato in cima alla coda');
+      invalidate();
+    },
+  });
 
   const clearMutation = trpc.download.clearCompleted.useMutation({
     onSuccess: (res) => {
@@ -233,6 +239,7 @@ export function DownloadsView() {
                 group={group}
                 onCancel={(id) => cancelMutation.mutate({ queueId: id })}
                 onRetry={(id) => retryMutation.mutate({ queueId: id })}
+                onPrioritize={(id) => priorityMutation.mutate({ queueId: id, priority: 100 })}
               />
             ))}
           </div>

@@ -8,7 +8,12 @@ import type { CatalogService } from '../services/catalog-service';
 import type { ConfigService } from '../services/config-service';
 import type { RenamerService } from '../services/renamer-service';
 import { atomicMove, ensureDir, freeDiskBytes, sweepPartFiles, tempPath } from './download-fs';
-import { DownloadAbortedError, type DownloadProgress, downloadToFile } from './http-downloader';
+import {
+  DownloadAbortedError,
+  type DownloadProgress,
+  PermanentDownloadError,
+  downloadToFile,
+} from './http-downloader';
 import type { Logger } from './logger';
 
 export type WorkerEvent = 'enqueue' | 'start' | 'progress' | 'complete' | 'failed' | 'cancelled';
@@ -44,6 +49,8 @@ export interface DownloadWorker {
   cancel(queueId: string): boolean;
   /** Riavvia un job in failed (azzera retry_count). */
   retry(queueId: string): boolean;
+  /** Cambia la priorità di un job in coda (il worker preleva per priorità desc). */
+  setPriority(queueId: string, priority: number): boolean;
   /** Mette in pausa la coda: i job in corso continuano, non ne partono di nuovi. */
   pause(): void;
   /** Riprende la coda. */
@@ -292,7 +299,9 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
       const retryCount = item.retryCount ?? 0;
       const retryMax = item.retryMax ?? 3;
       const nextRetry = retryCount + 1;
-      if (nextRetry < retryMax) {
+      // Errore permanente (4xx, link scaduto, contenuto non video): niente retry.
+      const permanent = error instanceof PermanentDownloadError;
+      if (!permanent && nextRetry < retryMax) {
         updateQueue(queueId, {
           status: 'queued',
           retryCount: nextRetry,
@@ -524,6 +533,20 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
         speedBps: null,
       });
       emitter.emit('enqueue', { queueId, episodeFileId: item.episodeFileId });
+      void tryStartNext();
+      return true;
+    },
+
+    setPriority(queueId, priority) {
+      const clamped = Math.max(0, Math.min(100, Math.round(priority)));
+      const result = db
+        .update(schema.downloadQueue)
+        .set({ priority: clamped })
+        .where(eq(schema.downloadQueue.id, queueId))
+        .run();
+      if (result.changes === 0) {
+        return false;
+      }
       void tryStartNext();
       return true;
     },

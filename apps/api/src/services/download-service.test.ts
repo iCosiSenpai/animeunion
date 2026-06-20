@@ -273,6 +273,58 @@ describe('DownloadService', () => {
     expect(remaining[0]?.id).toBe('q-queued');
   });
 
+  it('purgeOldTerminal rimuove solo i terminali più vecchi della retention', () => {
+    const { service, config } = makeService();
+    config.set('queueRetentionDays', 7);
+    insertAnime(db, 'a-1');
+    insertEpisode(db, 'e-1', 'a-1', 1);
+    insertEpisode(db, 'e-2', 'a-1', 2);
+    insertEpisode(db, 'e-3', 'a-1', 3);
+    insertFile(db, 'ef-1', 'e-1', 'SUB_ITA');
+    insertFile(db, 'ef-2', 'e-2', 'SUB_ITA');
+    insertFile(db, 'ef-3', 'e-3', 'SUB_ITA');
+    const old = new Date(Date.now() - 10 * 24 * 3600 * 1000).toISOString();
+    const recent = new Date().toISOString();
+    db.insert(schema.downloadQueue)
+      .values({
+        id: 'q-old',
+        episodeFileId: 'ef-1',
+        status: 'completed',
+        completedAt: old,
+        priority: 50,
+        createdAt: old,
+      })
+      .run();
+    db.insert(schema.downloadQueue)
+      .values({
+        id: 'q-new',
+        episodeFileId: 'ef-2',
+        status: 'completed',
+        completedAt: recent,
+        priority: 50,
+        createdAt: recent,
+      })
+      .run();
+    db.insert(schema.downloadQueue)
+      .values({
+        id: 'q-queued',
+        episodeFileId: 'ef-3',
+        status: 'queued',
+        priority: 50,
+        createdAt: old,
+      })
+      .run();
+
+    expect(service.purgeOldTerminal()).toBe(1);
+    const ids = db
+      .select()
+      .from(schema.downloadQueue)
+      .all()
+      .map((r) => r.id)
+      .sort();
+    expect(ids).toEqual(['q-new', 'q-queued']);
+  });
+
   it('enqueueForWatchingFollows salta se autoDownload=false', () => {
     const { service, config } = makeService();
     config.set('autoDownload', false);

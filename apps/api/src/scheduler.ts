@@ -6,6 +6,7 @@ export interface Scheduler {
 }
 
 const DOWNLOAD_AUTODOWNLOAD_MINUTES = 30;
+const QUEUE_PURGE_HOURS = 6;
 
 /**
  * Scheduler di polling dei preferiti del sito (v1.0.3) + auto-download per i follow
@@ -56,6 +57,19 @@ export function createScheduler(ctx: Context): Scheduler {
       );
       dlTimer.unref?.();
       timers.push(dlTimer);
+
+      // Pulizia coda: rimuove i job terminali più vecchi di queueRetentionDays.
+      const purge = () => {
+        try {
+          services.download.purgeOldTerminal();
+        } catch (error) {
+          logger.debug({ err: error }, 'Tick pulizia coda fallito');
+        }
+      };
+      purge();
+      const purgeTimer = setInterval(purge, QUEUE_PURGE_HOURS * 60 * 60 * 1000);
+      purgeTimer.unref?.();
+      timers.push(purgeTimer);
 
       logger.info(
         {

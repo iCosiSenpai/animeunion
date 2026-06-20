@@ -3,6 +3,7 @@ import {
   downloadAddByRefInputSchema,
   downloadAddInputSchema,
   downloadAddMissingInputSchema,
+  downloadSetPriorityInputSchema,
 } from '@animeunion/shared';
 import { publicProcedure, router } from '../trpc';
 
@@ -33,6 +34,10 @@ export const downloadRouter = router({
 
   retry: publicProcedure.input(downloadActionInputSchema).mutation(({ ctx, input }) => ({
     retried: ctx.services.download.retry(input.queueId),
+  })),
+
+  setPriority: publicProcedure.input(downloadSetPriorityInputSchema).mutation(({ ctx, input }) => ({
+    ok: ctx.services.download.setPriority(input.queueId, input.priority),
   })),
 
   clearCompleted: publicProcedure.mutation(({ ctx }) => ({

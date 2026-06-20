@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronUp,
+  ChevronsUp,
   Film,
   Gauge,
   RefreshCw,
@@ -100,10 +101,12 @@ export function DownloadGroupCard({
   group,
   onCancel,
   onRetry,
+  onPrioritize,
 }: {
   group: DownloadGroup;
   onCancel: (queueId: string) => void;
   onRetry: (queueId: string) => void;
+  onPrioritize: (queueId: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const { items } = group;
@@ -242,6 +245,7 @@ export function DownloadGroupCard({
               hideNumber={isMovie}
               onCancel={onCancel}
               onRetry={onRetry}
+              onPrioritize={onPrioritize}
             />
           ))}
         </ul>
@@ -256,12 +260,14 @@ function EpisodeRow({
   hideNumber,
   onCancel,
   onRetry,
+  onPrioritize,
 }: {
   item: DownloadQueueItem;
   href: string;
   hideNumber: boolean;
   onCancel: (queueId: string) => void;
   onRetry: (queueId: string) => void;
+  onPrioritize: (queueId: string) => void;
 }) {
   const isActive = ACTIVE.includes(item.status);
   const remaining =
@@ -310,7 +316,19 @@ function EpisodeRow({
         {eta ? <span className="hidden sm:inline">{formatDuration(eta)}</span> : null}
       </div>
 
-      <div className="flex shrink-0 items-center">
+      <div className="flex shrink-0 items-center gap-0.5">
+        {item.status === 'queued' ? (
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-7 w-7"
+            aria-label="Scarica prima"
+            title="Scarica prima"
+            onClick={() => onPrioritize(item.id)}
+          >
+            <ChevronsUp className="h-3.5 w-3.5" />
+          </Button>
+        ) : null}
         {isActive ? (
           <Button
             size="icon"

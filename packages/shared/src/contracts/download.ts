@@ -45,6 +45,12 @@ export const downloadActionInputSchema = z.object({
 });
 export type DownloadActionInput = z.infer<typeof downloadActionInputSchema>;
 
+export const downloadSetPriorityInputSchema = z.object({
+  queueId: z.string(),
+  priority: z.number().int().min(0).max(100),
+});
+export type DownloadSetPriorityInput = z.infer<typeof downloadSetPriorityInputSchema>;
+
 // Accoda un episodio identificato da (slug serie, numero, lingua) — usato dalla home
 // "Ultimi episodi", dove non si dispone dell'episodeFileId.
 export const downloadAddByRefInputSchema = z.object({

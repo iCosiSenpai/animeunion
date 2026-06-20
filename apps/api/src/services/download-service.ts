@@ -1,5 +1,5 @@
 import type { DownloadAddByRefInput, Language } from '@animeunion/shared';
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, lt } from 'drizzle-orm';
 import type { Db } from '../db';
 import { schema } from '../db';
 import type { DownloadWorker } from '../lib/download-worker';
@@ -62,6 +62,10 @@ export interface DownloadService {
   retryAllFailed(): number;
   /** Rimuove dalla tabella gli item terminali. */
   clearCompleted(): number;
+  /** Cambia la priorità di un job (0..100); usato da "Scarica prima". */
+  setPriority(queueId: string, priority: number): boolean;
+  /** Rimuove i job terminali più vecchi di `queueRetentionDays` (chiamato dallo scheduler). */
+  purgeOldTerminal(): number;
   /** Mette in pausa la coda (i job attivi terminano, non ne partono altri). */
   pauseQueue(): boolean;
   /** Riprende la coda. */
@@ -323,6 +327,32 @@ export function createDownloadService(deps: DownloadServiceDeps): DownloadServic
         .run();
       if (result.changes > 0) {
         logger.info({ removed: result.changes }, 'Coda download ripulita');
+      }
+      return result.changes;
+    },
+
+    setPriority(queueId, priority) {
+      const ok = worker.setPriority(queueId, priority);
+      if (ok) {
+        logger.info({ queueId, priority }, 'Priorità download aggiornata');
+      }
+      return ok;
+    },
+
+    purgeOldTerminal() {
+      const days = config.get('queueRetentionDays');
+      const cutoff = new Date(now().getTime() - days * 24 * 60 * 60 * 1000).toISOString();
+      const result = db
+        .delete(schema.downloadQueue)
+        .where(
+          and(
+            inArray(schema.downloadQueue.status, ['completed', 'cancelled', 'failed']),
+            lt(schema.downloadQueue.completedAt, cutoff),
+          ),
+        )
+        .run();
+      if (result.changes > 0) {
+        logger.info({ removed: result.changes, days }, 'Coda: rimossi job terminali scaduti');
       }
       return result.changes;
     },

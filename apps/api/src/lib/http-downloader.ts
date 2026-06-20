@@ -39,6 +39,17 @@ export class DownloadStalledError extends Error {
   }
 }
 
+/**
+ * Errore "permanente": riprovare non ha senso (4xx, link scaduto che torna HTML/JSON,
+ * contenuto non video). Il worker NON deve fare retry su questi.
+ */
+export class PermanentDownloadError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'PermanentDownloadError';
+  }
+}
+
 export interface DownloadOptions {
   url: string;
   destPath: string;
@@ -83,9 +94,10 @@ export async function downloadToFile(options: DownloadOptions): Promise<Download
 
   if (response.statusCode >= 400) {
     const body = await response.body.text().catch(() => '');
-    throw new Error(
-      `Download fallito (HTTP ${response.statusCode}): ${body.slice(0, 200) || 'no body'}`,
-    );
+    const message = `Download fallito (HTTP ${response.statusCode}): ${body.slice(0, 200) || 'no body'}`;
+    // 4xx = errore permanente (link scaduto/non autorizzato): inutile riprovare.
+    // 5xx = transitorio: lascia che il worker riprovi.
+    throw response.statusCode < 500 ? new PermanentDownloadError(message) : new Error(message);
   }
 
   const contentType: string | null = (() => {
@@ -103,7 +115,7 @@ export async function downloadToFile(options: DownloadOptions): Promise<Download
   // la rifiutiamo prima di creare il file, così non finisce in libreria come .mp4 rotto.
   if (contentType && /^(?:text\/|application\/(?:json|xml|xhtml))/i.test(contentType)) {
     const preview = await response.body.text().catch(() => '');
-    throw new Error(
+    throw new PermanentDownloadError(
       `Risposta non video (content-type: ${contentType})${preview ? `: ${preview.slice(0, 120)}` : ''}`,
     );
   }
@@ -126,7 +138,11 @@ export async function downloadToFile(options: DownloadOptions): Promise<Download
         sniffed = true;
         // '<' = HTML, '{' = JSON: non è un contenuto binario/video.
         if (chunk[0] === 0x3c || chunk[0] === 0x7b) {
-          cb(new Error('Contenuto scaricato non valido (sembra HTML/JSON, non un video)'));
+          cb(
+            new PermanentDownloadError(
+              'Contenuto scaricato non valido (sembra HTML/JSON, non un video)',
+            ),
+          );
           return;
         }
       }

@@ -5,7 +5,7 @@ import { trpc } from '@/lib/trpc';
 import type { AnimeType } from '@animeunion/shared';
 import { Film, Loader2, Search, Star } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { type KeyboardEvent, useEffect, useRef, useState } from 'react';
+import { type KeyboardEvent, useRef, useState } from 'react';
 
 const TYPE_LABELS: Record<AnimeType, string> = {
   TV: 'Serie TV',
@@ -27,23 +27,6 @@ export function SearchBar() {
   const enabled = query.trim().length >= 2;
   const search = trpc.catalog.search.useQuery({ query, page: 1 }, { enabled });
   const results = (search.data?.data ?? []).slice(0, 8);
-
-  useEffect(() => {
-    const onKey = (event: globalThis.KeyboardEvent) => {
-      if ((event.ctrlKey || event.metaKey) && event.key === 'k') {
-        event.preventDefault();
-        inputRef.current?.focus();
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
-
-  // Riparti dal primo risultato a ogni nuova ricerca.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reset voluto sul cambio query
-  useEffect(() => {
-    setActive(0);
-  }, [query]);
 
   function goTo(slug: string) {
     router.push(`/catalog/${slug}`);

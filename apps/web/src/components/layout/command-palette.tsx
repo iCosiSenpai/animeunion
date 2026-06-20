@@ -1,5 +1,6 @@
 'use client';
 
+import { useCommandPalette } from '@/lib/command-palette-store';
 import { trpc } from '@/lib/trpc';
 import {
   Calendar,
@@ -33,7 +34,9 @@ interface Entry {
 export function CommandPalette() {
   const router = useRouter();
   const utils = trpc.useUtils();
-  const [open, setOpen] = useState(false);
+  const open = useCommandPalette((s) => s.open);
+  const setOpen = useCommandPalette((s) => s.setOpen);
+  const toggle = useCommandPalette((s) => s.toggle);
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -63,12 +66,12 @@ export function CommandPalette() {
     const onKey = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault();
-        setOpen((o) => !o);
+        toggle();
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  }, [toggle]);
 
   const close = () => {
     setOpen(false);

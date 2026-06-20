@@ -7,6 +7,7 @@ import { trpc } from '@/lib/trpc';
 import { cn, formatSpeed } from '@/lib/utils';
 import { CheckCircle2, Download, Loader2, Pause, Play, Trash2, XCircle } from 'lucide-react';
 import Link from 'next/link';
+import { useState } from 'react';
 import { toast } from 'sonner';
 
 const STATUS_ICONS: Record<string, React.ReactNode> = {
@@ -31,6 +32,7 @@ function ProgressBar({ progress }: { progress: number }) {
 
 export function DownloadStatus() {
   const utils = trpc.useUtils();
+  const [open, setOpen] = useState(false);
   const queue = trpc.download.queue.useQuery(undefined, {
     refetchInterval: 1500,
   });
@@ -77,7 +79,7 @@ export function DownloadStatus() {
   const isPaused = pausedQuery.data?.paused ?? false;
 
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
           variant="ghost"
@@ -208,7 +210,9 @@ export function DownloadStatus() {
             </Button>
           </div>
           <Button asChild variant="outline" className="w-full">
-            <Link href="/downloads">Vai alla coda completa</Link>
+            <Link href="/downloads" onClick={() => setOpen(false)}>
+              Vai alla coda completa
+            </Link>
           </Button>
         </div>
       </PopoverContent>

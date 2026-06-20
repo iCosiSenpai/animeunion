@@ -30,3 +30,9 @@ export const configSetInputSchema = z.object({
   value: z.unknown(),
 });
 export type ConfigSetInput = z.infer<typeof configSetInputSchema>;
+
+// Info statiche dell'app (versione). Endpoint leggero, usato dal footer.
+export const appInfoSchema = z.object({
+  version: z.string(),
+});
+export type AppInfo = z.infer<typeof appInfoSchema>;

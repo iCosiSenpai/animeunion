@@ -2,7 +2,7 @@
 
 import { DownloadStatus } from '@/components/downloads/download-status';
 import { NotificationBell } from '@/components/layout/notification-bell';
-import { SearchBar } from '@/components/shared/search-bar';
+import { SearchTrigger } from '@/components/layout/search-trigger';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -106,7 +106,7 @@ export function Navbar() {
 
         <div className="ml-auto flex items-center gap-2">
           <div className="hidden w-48 sm:block lg:w-64">
-            <SearchBar />
+            <SearchTrigger />
           </div>
 
           <DownloadStatus />
@@ -124,7 +124,7 @@ export function Navbar() {
             <SheetContent side="right" className="w-72">
               <SheetTitle>Menu</SheetTitle>
               <div className="mt-4">
-                <SearchBar />
+                <SearchTrigger onOpen={() => setOpen(false)} />
               </div>
               <nav className="mt-4 flex flex-col gap-1">
                 {navLinks.map((link) => (

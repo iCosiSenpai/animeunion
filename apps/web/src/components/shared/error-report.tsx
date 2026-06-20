@@ -1,19 +1,17 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
+import { buildIssueUrl, clientContext } from '@/lib/github';
 import { AlertTriangle, Copy, Github, RefreshCw } from 'lucide-react';
 import { useState } from 'react';
 
-const REPO = 'https://github.com/iCosiSenpai/animeunion';
-
 function buildDetails(error: { message?: string; digest?: string }): string {
-  const path = typeof window !== 'undefined' ? window.location.pathname : '';
-  const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+  const { path, userAgent } = clientContext();
   return [
     `Errore: ${error.message ?? 'sconosciuto'}`,
     `Digest: ${error.digest ?? '-'}`,
     `Pagina: ${path}`,
-    `Browser: ${ua}`,
+    `Browser: ${userAgent}`,
   ].join('\n');
 }
 
@@ -41,11 +39,10 @@ export function ErrorReport({
     }
   };
 
-  const issueUrl = (() => {
-    const title = `Errore UI: ${(error.message ?? '').slice(0, 80)}`;
-    const body = `**Cosa stavi facendo:**\n\n\n---\n\`\`\`\n${details}\n\`\`\``;
-    return `${REPO}/issues/new?title=${encodeURIComponent(title)}&body=${encodeURIComponent(body)}`;
-  })();
+  const issueUrl = buildIssueUrl({
+    title: `Errore UI: ${(error.message ?? '').slice(0, 80)}`,
+    body: `**Cosa stavi facendo:**\n\n\n---\n\`\`\`\n${details}\n\`\`\``,
+  });
 
   return (
     <div className="mx-auto flex max-w-lg flex-col items-center gap-4 py-16 text-center">

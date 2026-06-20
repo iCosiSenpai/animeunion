@@ -1,21 +1,9 @@
-import { readFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { healthStatusSchema } from '@animeunion/shared';
 import { sql } from 'drizzle-orm';
 import { schema } from '../db';
 import { freeDiskBytes } from '../lib/download-fs';
+import { APP_VERSION } from '../lib/version';
 import { publicProcedure, router } from '../trpc';
-
-const VERSION = (() => {
-  try {
-    const pkgPath = resolve(dirname(fileURLToPath(import.meta.url)), '../../package.json');
-    const pkg = JSON.parse(readFileSync(pkgPath, 'utf8')) as { version?: string };
-    return pkg.version ?? 'dev';
-  } catch {
-    return 'dev';
-  }
-})();
 
 export const healthRouter = router({
   status: publicProcedure.output(healthStatusSchema).query(async ({ ctx }) => {
@@ -35,7 +23,7 @@ export const healthRouter = router({
     const totalAnime = ctx.db.select({ n: sql<number>`count(*)` }).from(schema.anime).get()?.n ?? 0;
 
     return {
-      version: VERSION,
+      version: APP_VERSION,
       authenticated: ctx.services.auth.status().authenticated,
       worker: {
         paused: ctx.services.download.isQueuePaused(),

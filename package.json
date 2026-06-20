@@ -1,6 +1,6 @@
 {
   "name": "animeunion-docker",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "description": "AnimeUnion Docker — applicazione ufficiale affiliata ad AnimeUnion per il download self-hosted degli anime.",
   "license": "AGPL-3.0-only",

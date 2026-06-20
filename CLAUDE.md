@@ -89,7 +89,18 @@ Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
   cascata; routing per (tipo×lingua); layout Jellyfin `<Titolo>/Season NN/<Titolo> - SxxExx.mp4`
   (titolo leggibile), film in cartella dedicata, suffisso lingua solo se SUB e DUB condividono la
   root. Compose: media montato su `/media`; `.env` solo segreti. `config.browseDir`/`downloadDirs`.
-- **147 test verdi** (17 file).
+- **Wizard + download a contenitori + stagioni (v0.1.2)**: dopo il deploy v0.1.1 sul NAS sono
+  emersi 3 problemi, risolti insieme. (A) **Rilevamento stagioni/sequel**: l'API spesso non dà
+  `seriesId`/relazioni, quindi `series-resolver` deduce stagione+franchise dallo **slug**
+  (`-2nd-season`/`-season-N`/`-ii`/trailing `-2..9`) con guardia "base esiste a catalogo"; aggiunto
+  **override manuale** (tabella `series_override`, router `series`, pannello "Organizzazione file"
+  nel dettaglio). (B) **Wizard di primo setup**: `seriesPathSub` default ora `''` (vuoto = non
+  configurato) → l'`AuthGate` mostra `SetupWizard` finché non scegli le cartelle; download
+  **bloccati** con messaggio chiaro se non configurato (niente più file in `/data/anime`).
+  (C) **Pagina Download stile qBittorrent**: una card per anime con avanzamento/velocità/ETA, righe
+  per-episodio espandibili, clic → scheda anime, filtro stati; nuove colonne
+  `bytes_downloaded`/`total_bytes`/`speed_bps` su `download_queue`. Migrazione `0004` auto all'avvio.
+- **156 test verdi** (17 file).
 
 **Endpoint v1.0.3/1.1.0/1.1.1 verificati live (12/13, base path
 `https://api.animeunion.tv/api/v1/integration`):**

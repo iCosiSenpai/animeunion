@@ -11,6 +11,29 @@ e il progetto aderisce al [Semantic Versioning](https://semver.org/lang/it/).
 - Test E2E (Playwright).
 - PWA (manifest + service worker) e notifiche Web Push.
 
+## [0.1.2] - 2026-06-20
+
+### Added
+- **Wizard di primo setup**: al primo accesso, finché non imposti almeno la cartella
+  *Serie · SUB ITA*, l'app guida nella scelta delle cartelle di download (con browser) e avvia la
+  prima sincronizzazione. Niente più download salvati in silenzio in `/data/anime`.
+- **Pagina Download stile qBittorrent**: un riquadro per anime con avanzamento generale, numero di
+  episodi, **velocità ed ETA**, righe per-episodio espandibili e filtro
+  Tutti/In corso/Completati/Errori. Cliccando un titolo o un episodio si va alla scheda dell'anime.
+- **Correzione manuale di stagione/serie** nel dettaglio anime ("Organizzazione file"), utile quando
+  l'API non collega un sequel alla serie madre.
+
+### Changed
+- **Rilevamento stagioni/sequel** più robusto: quando l'API non fornisce `seriesId`/relazioni, la
+  stagione e la serie madre vengono dedotte dallo slug (`-2nd-season`, `-season-N`, `-ii`,
+  `-2`…) con una guardia anti-falsi-positivi. I sequel finiscono nella cartella della serie madre,
+  `Season NN` corretta.
+- I download vengono **bloccati con un messaggio chiaro** se le cartelle non sono ancora configurate.
+
+### Migrazione da 0.1.1
+- Nuove colonne/tabelle applicate **in automatico** all'avvio (nessuna azione manuale).
+- Se la `config` è vuota, all'avvio comparirà il **wizard**: imposta le cartelle (es. `/media/Anime`).
+
 ## [0.1.1] - 2026-06-19
 
 ### Changed

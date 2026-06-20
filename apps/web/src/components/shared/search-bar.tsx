@@ -2,22 +2,34 @@
 
 import { Input } from '@/components/ui/input';
 import { trpc } from '@/lib/trpc';
-import { Search } from 'lucide-react';
+import type { AnimeType } from '@animeunion/shared';
+import { Film, Loader2, Search, Star } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { type KeyboardEvent, useEffect, useRef, useState } from 'react';
+
+const TYPE_LABELS: Record<AnimeType, string> = {
+  TV: 'Serie TV',
+  TV_SHORT: 'Serie TV',
+  MOVIE: 'Film',
+  OVA: 'OVA',
+  ONA: 'ONA',
+  SPECIAL: 'Special',
+  MUSIC: 'Music',
+};
 
 export function SearchBar() {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
+  const [active, setActive] = useState(0);
 
   const enabled = query.trim().length >= 2;
   const search = trpc.catalog.search.useQuery({ query, page: 1 }, { enabled });
-  const results = search.data?.data ?? [];
+  const results = (search.data?.data ?? []).slice(0, 8);
 
   useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
+    const onKey = (event: globalThis.KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key === 'k') {
         event.preventDefault();
         inputRef.current?.focus();
@@ -27,15 +39,45 @@ export function SearchBar() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  // Riparti dal primo risultato a ogni nuova ricerca.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reset voluto sul cambio query
+  useEffect(() => {
+    setActive(0);
+  }, [query]);
+
   function goTo(slug: string) {
     router.push(`/catalog/${slug}`);
     setQuery('');
     setOpen(false);
   }
 
+  function onKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === 'Escape') {
+      setOpen(false);
+      inputRef.current?.blur();
+      return;
+    }
+    if (!open || results.length === 0) {
+      return;
+    }
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setActive((i) => (i + 1) % results.length);
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setActive((i) => (i - 1 + results.length) % results.length);
+    } else if (event.key === 'Enter') {
+      const target = results[active];
+      if (target) {
+        event.preventDefault();
+        goTo(target.slug);
+      }
+    }
+  }
+
   return (
     <div className="relative w-full">
-      <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
       <Input
         ref={inputRef}
         value={query}
@@ -45,23 +87,79 @@ export function SearchBar() {
         }}
         onFocus={() => setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
-        placeholder="Cerca... (Ctrl+K)"
-        className="pl-8"
+        onKeyDown={onKeyDown}
+        placeholder="Cerca anime… (Ctrl K)"
+        className="h-10 rounded-lg pl-9"
       />
-      {open && enabled && results.length > 0 && (
-        <div className="absolute z-50 mt-1 max-h-80 w-full overflow-auto rounded-md border bg-popover shadow-md">
-          {results.slice(0, 8).map((anime) => (
-            <button
-              key={anime.id}
-              type="button"
-              onMouseDown={() => goTo(anime.slug)}
-              className="block w-full truncate px-3 py-2 text-left text-sm hover:bg-accent"
-            >
-              {anime.title}
-            </button>
-          ))}
+
+      {open && enabled ? (
+        <div className="absolute right-0 z-50 mt-2 w-[min(26rem,calc(100vw-1.5rem))] overflow-hidden rounded-xl border bg-popover/95 shadow-xl backdrop-blur">
+          {search.isFetching && results.length === 0 ? (
+            <div className="flex items-center gap-2 px-4 py-6 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Cerco…
+            </div>
+          ) : results.length === 0 ? (
+            <div className="px-4 py-6 text-center text-sm text-muted-foreground">
+              Nessun risultato per “{query.trim()}”.
+            </div>
+          ) : (
+            <ul className="max-h-[26rem] overflow-auto p-1.5">
+              {results.map((anime, idx) => {
+                const title = anime.titleIta ?? anime.title;
+                const hasOriginal = anime.titleIta && anime.titleIta !== anime.title;
+                const meta = [TYPE_LABELS[anime.type], anime.seasonYear]
+                  .filter(Boolean)
+                  .join(' · ');
+                return (
+                  <li key={anime.id}>
+                    <button
+                      type="button"
+                      onMouseDown={() => goTo(anime.slug)}
+                      onMouseEnter={() => setActive(idx)}
+                      className={`flex w-full items-center gap-3 rounded-lg p-2 text-left transition-colors ${
+                        idx === active ? 'bg-accent' : 'hover:bg-accent/60'
+                      }`}
+                    >
+                      <span className="relative aspect-[2/3] h-14 shrink-0 overflow-hidden rounded-md bg-muted">
+                        {anime.coverImage ? (
+                          <img
+                            src={anime.coverImage}
+                            alt=""
+                            loading="lazy"
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <span className="flex h-full w-full items-center justify-center">
+                            <Film className="h-5 w-5 text-muted-foreground" />
+                          </span>
+                        )}
+                      </span>
+                      <span className="flex min-w-0 flex-1 flex-col">
+                        <span className="line-clamp-1 text-sm font-medium">{title}</span>
+                        {hasOriginal ? (
+                          <span className="line-clamp-1 text-xs text-muted-foreground">
+                            {anime.title}
+                          </span>
+                        ) : null}
+                        {meta ? (
+                          <span className="mt-0.5 text-xs text-muted-foreground">{meta}</span>
+                        ) : null}
+                      </span>
+                      {anime.score != null ? (
+                        <span className="flex shrink-0 items-center gap-0.5 text-xs text-muted-foreground">
+                          <Star className="h-3 w-3" />
+                          {(anime.score / 10).toFixed(1)}
+                        </span>
+                      ) : null}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

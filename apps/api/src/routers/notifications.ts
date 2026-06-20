@@ -12,6 +12,10 @@ export const notificationsRouter = router({
     count: ctx.services.notifications.unreadCount(),
   })),
 
+  markRead: publicProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(({ ctx, input }) => ({ marked: ctx.services.notifications.markRead(input.id) })),
+
   markAllRead: publicProcedure.mutation(({ ctx }) => ({
     marked: ctx.services.notifications.markAllRead(),
   })),

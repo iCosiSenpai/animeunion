@@ -222,6 +222,26 @@ describe('CatalogService', () => {
     expect(calls()).toBe(before);
   });
 
+  it('onSyncComplete viene chiamato col conteggio dopo syncCatalog', async () => {
+    const db = createTestDb();
+    const config = createConfigService({ db });
+    const { source } = countingSource();
+    let calledWith: number | null = null;
+    const service = createCatalogService({
+      db,
+      source,
+      config,
+      logger: testLogger,
+      onSyncComplete: (n) => {
+        calledWith = n;
+      },
+    });
+
+    const res = await service.syncCatalog();
+    expect(res.synced).toBeGreaterThan(0);
+    expect(calledWith).toBe(res.synced);
+  });
+
   it('search con cache scaduta torna a chiamare il source', async () => {
     let currentNow = new Date('2026-06-10T12:00:00.000Z');
     const { service, calls } = makeService({ now: () => currentNow });

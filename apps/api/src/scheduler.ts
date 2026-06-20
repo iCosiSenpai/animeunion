@@ -1,3 +1,4 @@
+import { freeDiskBytes } from './lib/download-fs';
 import type { Context } from './trpc';
 
 export interface Scheduler {
@@ -7,6 +8,9 @@ export interface Scheduler {
 
 const DOWNLOAD_AUTODOWNLOAD_MINUTES = 30;
 const QUEUE_PURGE_HOURS = 6;
+const DISK_CHECK_HOURS = 6;
+// Soglia di avviso (1 GiB): più alta del hard-stop del worker (500 MiB) per avvisare prima.
+const DISK_LOW_BYTES = 1024 * 1024 * 1024;
 
 /**
  * Scheduler di polling dei preferiti del sito (v1.0.3) + auto-download per i follow
@@ -70,6 +74,37 @@ export function createScheduler(ctx: Context): Scheduler {
       const purgeTimer = setInterval(purge, QUEUE_PURGE_HOURS * 60 * 60 * 1000);
       purgeTimer.unref?.();
       timers.push(purgeTimer);
+
+      // Avviso spazio disco basso: debounced (notifica solo alla transizione ok->low per cartella).
+      const lowRoots = new Set<string>();
+      const checkDisk = async () => {
+        try {
+          for (const root of services.config.distinctDownloadRoots()) {
+            const free = await freeDiskBytes(root);
+            if (free == null) {
+              continue;
+            }
+            if (free < DISK_LOW_BYTES) {
+              if (!lowRoots.has(root)) {
+                lowRoots.add(root);
+                services.notifications.create({
+                  type: 'disk_low',
+                  title: 'Spazio su disco in esaurimento',
+                  body: `Cartella ${root}: ${Math.round(free / 1024 / 1024)} MiB liberi`,
+                });
+              }
+            } else {
+              lowRoots.delete(root); // tornata sopra soglia: riarma l'avviso
+            }
+          }
+        } catch (error) {
+          logger.debug({ err: error }, 'Tick check disco fallito');
+        }
+      };
+      void checkDisk();
+      const diskTimer = setInterval(() => void checkDisk(), DISK_CHECK_HOURS * 60 * 60 * 1000);
+      diskTimer.unref?.();
+      timers.push(diskTimer);
 
       logger.info(
         {

@@ -42,15 +42,6 @@ export function createAppContext(options: { env?: Env; databasePath?: string } =
     onAuthError: () => auth.invalidateAndRelogin(),
   });
   const config = createConfigService({ db });
-  const catalog = createCatalogService({ db, source, config, logger });
-  const follow = createFollowService({ db, source, logger });
-  const favorites = createFavoritesService({ db, source, catalog, config, logger });
-  const profile = createProfileService({ source, logger });
-  const home = createHomeService({ source, logger });
-  const resolver = createSeriesResolver({ db });
-  const renamer = createRenamerService({ db, config, seriesResolver: resolver });
-  const library = createLibraryService({ db, config, renamer, resolver, logger });
-  const series = createSeriesService({ db, resolver });
   const telegram = createTelegramNotifier({
     // Config-DB (Impostazioni) ha precedenza; env resta fallback per i deploy esistenti.
     getCredentials: () => ({
@@ -60,6 +51,27 @@ export function createAppContext(options: { env?: Env; databasePath?: string } =
     logger,
   });
   const notifications = createNotificationService({ db, config, telegram, logger });
+  const catalog = createCatalogService({
+    db,
+    source,
+    config,
+    logger,
+    onSyncComplete: (synced) => {
+      notifications.create({
+        type: 'sync_complete',
+        title: 'Catalogo aggiornato',
+        body: `${synced} titol${synced === 1 ? 'o' : 'i'} sincronizzati`,
+      });
+    },
+  });
+  const follow = createFollowService({ db, source, logger });
+  const favorites = createFavoritesService({ db, source, catalog, config, logger });
+  const profile = createProfileService({ source, logger });
+  const home = createHomeService({ source, logger });
+  const resolver = createSeriesResolver({ db });
+  const renamer = createRenamerService({ db, config, seriesResolver: resolver });
+  const library = createLibraryService({ db, config, renamer, resolver, logger });
+  const series = createSeriesService({ db, resolver });
 
   function animeTitleOf(animeId: string): string {
     const row = db

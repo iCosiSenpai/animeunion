@@ -37,6 +37,8 @@ export interface CatalogServiceOptions {
   config: ConfigService;
   logger: Logger;
   now?: () => Date;
+  /** Callback al termine di una sincronizzazione del catalogo (per le notifiche). */
+  onSyncComplete?: (synced: number) => void;
 }
 
 export interface SyncStatus {
@@ -670,6 +672,7 @@ export function createCatalogService(options: CatalogServiceOptions): CatalogSer
         }
         setLastSyncedAt(now().toISOString());
         logger.info({ synced }, 'Sync catalogo completato');
+        options.onSyncComplete?.(synced);
         return { synced };
       } finally {
         syncRunning = false;

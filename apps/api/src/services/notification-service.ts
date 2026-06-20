@@ -17,6 +17,7 @@ export interface NotificationService {
   create(input: CreateNotificationInput): Notification;
   list(limit?: number): Notification[];
   unreadCount(): number;
+  markRead(id: string): number;
   markAllRead(): number;
   clear(): number;
   /** Invio di prova su Telegram (per il bottone "Invia test" nelle Impostazioni). */
@@ -33,13 +34,14 @@ export interface NotificationServiceDeps {
 
 type Row = typeof schema.notification.$inferSelect;
 
-function toNotification(row: Row): Notification {
+function toNotification(row: Row, animeSlug: string | null = null): Notification {
   return {
     id: row.id,
     type: row.type as NotificationType,
     title: row.title,
     body: row.body,
     animeId: row.animeId,
+    animeSlug,
     read: row.read === 1,
     createdAt: row.createdAt,
   };
@@ -73,13 +75,24 @@ export function createNotificationService(deps: NotificationServiceDeps): Notifi
     },
 
     list(limit = 50) {
+      // Join al volo con anime per ricavare lo slug (link "vai alla scheda").
       return db
-        .select()
+        .select({
+          id: schema.notification.id,
+          type: schema.notification.type,
+          title: schema.notification.title,
+          body: schema.notification.body,
+          animeId: schema.notification.animeId,
+          read: schema.notification.read,
+          createdAt: schema.notification.createdAt,
+          animeSlug: schema.anime.slug,
+        })
         .from(schema.notification)
+        .leftJoin(schema.anime, eq(schema.anime.id, schema.notification.animeId))
         .orderBy(desc(schema.notification.createdAt))
         .limit(limit)
         .all()
-        .map(toNotification);
+        .map((row) => toNotification(row as Row, row.animeSlug ?? null));
     },
 
     unreadCount() {
@@ -88,6 +101,15 @@ export function createNotificationService(deps: NotificationServiceDeps): Notifi
         .from(schema.notification)
         .where(eq(schema.notification.read, 0))
         .all().length;
+    },
+
+    markRead(id) {
+      const result = db
+        .update(schema.notification)
+        .set({ read: 1 })
+        .where(eq(schema.notification.id, id))
+        .run();
+      return result.changes;
     },
 
     markAllRead() {

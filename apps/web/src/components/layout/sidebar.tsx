@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { navLinks } from '@/lib/nav';
 import { cn } from '@/lib/utils';
 import {
+  BarChart3,
   Calendar,
   ChevronLeft,
   ChevronRight,
@@ -25,6 +26,7 @@ const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   '/library': Library,
   '/calendar': Calendar,
   '/settings': Settings,
+  '/statistiche': BarChart3,
   '/about': Info,
 };
 

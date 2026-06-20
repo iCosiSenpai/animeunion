@@ -36,6 +36,13 @@ export type AppConfig = z.infer<typeof appConfigSchema>;
 export const configKeySchema = appConfigSchema.keyof();
 export type ConfigKey = z.infer<typeof configKeySchema>;
 
+// Placeholder per i valori segreti (es. token Telegram) inviati al frontend: il valore
+// reale non lascia mai il server. Se il client lo rimanda invariato = "non modificare".
+export const SECRET_MASK = '••••••••';
+
+// Chiavi di config che NON devono mai essere inviate in chiaro al frontend.
+export const SECRET_CONFIG_KEYS: ConfigKey[] = ['telegramBotToken'];
+
 export const configSetInputSchema = z.object({
   key: configKeySchema,
   value: z.unknown(),

@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { trpc } from '@/lib/trpc';
-import type { AppConfig } from '@animeunion/shared';
+import { type AppConfig, SECRET_MASK } from '@animeunion/shared';
 import { ExternalLink, Send } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useRouter } from 'next/navigation';
@@ -98,6 +98,9 @@ export function SettingsView() {
   const [saving, setSaving] = useState(false);
   const [showLeaveDialog, setShowLeaveDialog] = useState(false);
   const [pendingHref, setPendingHref] = useState<string | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importText, setImportText] = useState('');
+  const [importing, setImporting] = useState(false);
 
   // Inizializza il form quando arriva la config dal backend.
   useEffect(() => {
@@ -138,7 +141,9 @@ export function SettingsView() {
         !href ||
         href.startsWith('http') ||
         href.startsWith('mailto:') ||
-        href.startsWith('tel:')
+        href.startsWith('tel:') ||
+        href.startsWith('blob:') ||
+        anchor.hasAttribute('download')
       ) {
         return;
       }
@@ -239,10 +244,55 @@ export function SettingsView() {
     }
   };
 
+  const onExport = () => {
+    if (!original) return;
+    // original arriva già con i segreti mascherati: il token non finisce nel file.
+    const blob = new Blob([JSON.stringify(original, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'animeunion-config.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const onImport = async () => {
+    if (!original) return;
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = JSON.parse(importText) as Record<string, unknown>;
+    } catch {
+      toast.error('JSON non valido.');
+      return;
+    }
+    setImporting(true);
+    try {
+      let applied = 0;
+      for (const key of Object.keys(original) as (keyof AppConfig)[]) {
+        if (!(key in parsed)) continue;
+        const value = parsed[key];
+        // Non reimportare i segreti mascherati (manterrebbero il placeholder).
+        if (value === SECRET_MASK) continue;
+        await setMutation.mutateAsync({ key, value });
+        applied += 1;
+      }
+      const fresh = await utils.config.getAll.fetch();
+      setDraft(fresh);
+      toast.success(`Configurazione importata (${applied} campi).`);
+      setImportOpen(false);
+      setImportText('');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Import non riuscito.');
+    } finally {
+      setImporting(false);
+    }
+  };
+
   const onTestTelegram = async () => {
     try {
       const res = await testTelegramMutation.mutateAsync({
-        botToken: draft.telegramBotToken,
+        // Mascherato e non modificato ⇒ undefined: il server usa il token salvato.
+        botToken: draft.telegramBotToken === SECRET_MASK ? undefined : draft.telegramBotToken,
         chatId: draft.telegramChatId,
       });
       if (res.ok) {
@@ -437,13 +487,34 @@ export function SettingsView() {
           </Select>
         </Field>
         <Field label="Bot Token" hint="Token del bot ottenuto da @BotFather.">
-          <Input
-            type="password"
-            autoComplete="off"
-            placeholder="123456:ABC-DEF…"
-            value={draft.telegramBotToken}
-            onChange={(e) => update('telegramBotToken', e.target.value)}
-          />
+          <div className="space-y-1.5">
+            <Input
+              type="password"
+              autoComplete="off"
+              placeholder={
+                original?.telegramBotToken === SECRET_MASK
+                  ? 'Configurato — digita per sostituirlo'
+                  : '123456:ABC-DEF…'
+              }
+              value={draft.telegramBotToken === SECRET_MASK ? '' : draft.telegramBotToken}
+              onChange={(e) => update('telegramBotToken', e.target.value)}
+            />
+            {original?.telegramBotToken === SECRET_MASK &&
+            draft.telegramBotToken === SECRET_MASK ? (
+              <p className="text-xs text-muted-foreground">
+                Token configurato (mascherato). Lascia vuoto per mantenerlo, digita per sostituirlo
+                o{' '}
+                <button
+                  type="button"
+                  className="text-primary underline-offset-4 hover:underline"
+                  onClick={() => update('telegramBotToken', '')}
+                >
+                  rimuovilo
+                </button>
+                .
+              </p>
+            ) : null}
+          </div>
         </Field>
         <Field
           label="Chat ID"
@@ -551,6 +622,22 @@ export function SettingsView() {
         </Field>
       </Section>
 
+      <Section title="Backup configurazione">
+        <Field
+          label="Esporta"
+          hint="Scarica un file JSON con le tue impostazioni (i token non sono inclusi)."
+        >
+          <Button variant="outline" onClick={onExport}>
+            Esporta configurazione
+          </Button>
+        </Field>
+        <Field label="Importa" hint="Ripristina le impostazioni da un file esportato.">
+          <Button variant="outline" onClick={() => setImportOpen(true)}>
+            Importa configurazione
+          </Button>
+        </Field>
+      </Section>
+
       <div className="fixed inset-x-0 bottom-0 border-t bg-background/95 p-4 backdrop-blur">
         <div className="mx-auto flex max-w-3xl justify-end gap-2">
           {isDirty ? (
@@ -581,6 +668,29 @@ export function SettingsView() {
             </Button>
             <Button onClick={onSaveAndContinue} disabled={saving}>
               {saving ? 'Salvataggio…' : 'Salva e continua'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={importOpen} onOpenChange={setImportOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Importa configurazione</DialogTitle>
+            <DialogDescription>Incolla il contenuto del file JSON esportato.</DialogDescription>
+          </DialogHeader>
+          <textarea
+            value={importText}
+            onChange={(e) => setImportText(e.target.value)}
+            placeholder='{ "themeAccent": "blue", "maxConcurrent": 2 }'
+            className="h-40 w-full resize-none rounded-md border bg-muted/40 p-2 font-mono text-xs"
+          />
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setImportOpen(false)} disabled={importing}>
+              Annulla
+            </Button>
+            <Button onClick={onImport} disabled={importing || !importText.trim()}>
+              {importing ? 'Importo…' : 'Importa'}
             </Button>
           </DialogFooter>
         </DialogContent>

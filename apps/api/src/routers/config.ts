@@ -1,17 +1,40 @@
-import { appInfoSchema, configKeySchema, configSetInputSchema } from '@animeunion/shared';
+import {
+  type AppConfig,
+  SECRET_CONFIG_KEYS,
+  SECRET_MASK,
+  appInfoSchema,
+  configKeySchema,
+  configSetInputSchema,
+} from '@animeunion/shared';
 import { z } from 'zod';
 import { APP_VERSION } from '../lib/version';
 import { publicProcedure, router } from '../trpc';
 
+// Non inviare mai i segreti in chiaro al FE: token impostato → SECRET_MASK, vuoto → ''.
+// Il config-service resta veritiero lato server (il notifier legge il valore reale).
+function redactSecrets(config: AppConfig): AppConfig {
+  const out = { ...config };
+  for (const key of SECRET_CONFIG_KEYS) {
+    const value = out[key];
+    if (typeof value === 'string') {
+      (out[key] as string) = value ? SECRET_MASK : '';
+    }
+  }
+  return out;
+}
+
 export const configRouter = router({
   appInfo: publicProcedure.output(appInfoSchema).query(() => ({ version: APP_VERSION })),
 
-  getAll: publicProcedure.query(({ ctx }) => ctx.services.config.getAll()),
+  getAll: publicProcedure.query(({ ctx }) => redactSecrets(ctx.services.config.getAll())),
 
-  get: publicProcedure.input(z.object({ key: configKeySchema })).query(({ ctx, input }) => ({
-    key: input.key,
-    value: ctx.services.config.get(input.key),
-  })),
+  get: publicProcedure.input(z.object({ key: configKeySchema })).query(({ ctx, input }) => {
+    const value = ctx.services.config.get(input.key);
+    if (SECRET_CONFIG_KEYS.includes(input.key) && typeof value === 'string') {
+      return { key: input.key, value: value ? SECRET_MASK : '' };
+    }
+    return { key: input.key, value };
+  }),
 
   set: publicProcedure.input(configSetInputSchema).mutation(({ ctx, input }) => ({
     key: input.key,

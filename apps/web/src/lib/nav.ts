@@ -10,5 +10,6 @@ export const navLinks: NavLink[] = [
   { href: '/library', label: 'Libreria' },
   { href: '/calendar', label: 'Calendario' },
   { href: '/settings', label: 'Impostazioni' },
+  { href: '/statistiche', label: 'Statistiche' },
   { href: '/about', label: 'About' },
 ];

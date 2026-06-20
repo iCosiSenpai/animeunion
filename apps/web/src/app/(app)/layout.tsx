@@ -1,6 +1,7 @@
 import { AuthGate } from '@/components/auth/auth-gate';
 import { CommandPalette } from '@/components/layout/command-palette';
 import { Footer } from '@/components/layout/footer';
+import { KeyboardShortcuts } from '@/components/layout/keyboard-shortcuts';
 import { Navbar } from '@/components/layout/navbar';
 import { PageTransition } from '@/components/layout/page-transition';
 import { SetupBanner } from '@/components/layout/setup-banner';
@@ -22,6 +23,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         </div>
       </div>
       <CommandPalette />
+      <KeyboardShortcuts />
     </AuthGate>
   );
 }

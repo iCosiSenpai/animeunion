@@ -1,5 +1,6 @@
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { SECRET_MASK } from '@animeunion/shared';
 import { TRPCError } from '@trpc/server';
 import { describe, expect, it, vi } from 'vitest';
 import { createAuthService } from '../services/auth-service';
@@ -77,6 +78,18 @@ describe('appRouter (integrazione)', () => {
     const result = await caller.catalog.search({ query: '' });
     expect(result.data).toHaveLength(24);
     expect(result.meta.total).toBe(50);
+  });
+
+  it('config.getAll/get mascherano il token Telegram (segreto mai in chiaro al FE)', async () => {
+    const { caller, ctx } = makeCaller();
+    expect((await caller.config.getAll()).telegramBotToken).toBe('');
+
+    ctx.services.config.set('telegramBotToken', '123:ABC');
+
+    expect((await caller.config.getAll()).telegramBotToken).toBe(SECRET_MASK);
+    expect((await caller.config.get({ key: 'telegramBotToken' })).value).toBe(SECRET_MASK);
+    // Il service interno resta veritiero (lo usa il notifier).
+    expect(ctx.services.config.get('telegramBotToken')).toBe('123:ABC');
   });
 
   it('catalog.bySlug ritorna il dettaglio validato dal contratto', async () => {

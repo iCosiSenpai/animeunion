@@ -3,6 +3,7 @@
 import { useCommandPalette } from '@/lib/command-palette-store';
 import { trpc } from '@/lib/trpc';
 import {
+  BarChart3,
   Calendar,
   Compass,
   Download,
@@ -122,6 +123,12 @@ export function CommandPalette() {
       label: 'Impostazioni',
       icon: <Settings className="h-4 w-4" />,
       onSelect: () => go('/settings'),
+    },
+    {
+      id: 'stats',
+      label: 'Statistiche',
+      icon: <BarChart3 className="h-4 w-4" />,
+      onSelect: () => go('/statistiche'),
     },
     {
       id: 'diagnostics',

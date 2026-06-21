@@ -1,6 +1,6 @@
 {
   "name": "animeunion-docker",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "private": true,
   "description": "AnimeUnion Docker — applicazione ufficiale affiliata ad AnimeUnion per il download self-hosted degli anime.",
   "license": "AGPL-3.0-only",
@@ -13,10 +13,7 @@
   "engines": {
     "node": ">=20"
   },
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
+  "workspaces": ["apps/*", "packages/*"],
   "scripts": {
     "dev": "concurrently -k -n api,web -c blue,green \"npm:dev:api\" \"npm:dev:web\"",
     "dev:clean": "node scripts/free-ports.mjs && npm run dev",

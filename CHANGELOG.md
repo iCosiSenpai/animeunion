@@ -11,7 +11,7 @@ e il progetto aderisce al [Semantic Versioning](https://semver.org/lang/it/).
 - Test E2E (Playwright).
 - Setup wizard migliorato (Step F, rimandato).
 
-## [0.3.1] - 2026-06-21
+## [0.3.2] - 2026-06-21
 
 ### Fixed
 - **Miglioramenti Accessibilità & UI**: convertito `aria-pressed` in `role="radiogroup"` per i componenti personalizzati (classificazione serie e selettore accento) risolvendo problemi di a11y e warning IDE.

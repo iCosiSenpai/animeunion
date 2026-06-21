@@ -9,7 +9,38 @@ e il progetto aderisce al [Semantic Versioning](https://semver.org/lang/it/).
 
 ### Da fare
 - Test E2E (Playwright).
-- PWA (manifest + service worker) e notifiche Web Push.
+- Setup wizard migliorato (Step F, rimandato).
+
+## [0.3.0] - 2026-06-21
+
+### Added
+- **Footer completo**: logo, social (Telegram/Instagram/TikTok), versione app, link Diagnostica,
+  segnalazione bug; affordance dei link più chiara.
+- **Telegram configurabile dall'app** (Impostazioni → Notifiche): bot token e chat id con
+  **"Invia test"**, niente più `.env` obbligatorio (resta come fallback).
+- **Centro notifiche potenziato**: notifiche cliccabili (→ scheda/coda), filtri, raggruppamento per
+  giorno, lettura singola; nuovi tipi **sync completata** e **disco in esaurimento**.
+- **Scoperta saga multi-stagione**: dal download "Trova tutte le stagioni e i correlati" esplora
+  l'intero franchise (anche stagioni transitive S3/S4…), come opzione attivabile.
+- **Temi anime**: colore accent (palette) + **sfondo wallpaper** (via wallhaven, SFW), in
+  Impostazioni e nel wizard.
+- **Animazioni & micro-interazioni** (con interruttore "No animazioni" + rispetto reduced-motion).
+- **Pagina Statistiche** (catalogo, scaricati, spazio, coda) e **scorciatoie da tastiera** (g+tasto,
+  `/`, `?`).
+- **Notifica nuova stagione** per le serie seguite (`season_available`).
+- **Blocco web UI con passcode** opzionale (Impostazioni → Sicurezza), imposto lato API.
+- **PWA installabile** + **notifiche push del browser** (richiedono HTTPS).
+
+### Changed / Hardening
+- **Backup/restore** della configurazione (export/import JSON) in Impostazioni.
+- **Token Telegram mascherato** verso il frontend (`config.getAll` non lo invia in chiaro).
+- **Header di sicurezza** sul web (X-Frame-Options, nosniff, Referrer-Policy, Permissions-Policy).
+
+### Migrazione da 0.2.x
+- Nuove colonne/tabelle (`follow.known_relation_ids`, `push_subscription`) applicate **in automatico**
+  all'avvio (migrazioni `0007`/`0008`). Nessuna azione manuale.
+- **PWA/Push** funzionano solo via **HTTPS** (Tailscale / Cloudflare Tunnel / reverse proxy): vedi
+  README. Il blocco web UI si recupera con `WEB_LOCK_DISABLED=true`.
 
 ## [0.2.0] - 2026-06-20
 

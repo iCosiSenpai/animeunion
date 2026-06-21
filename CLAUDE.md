@@ -21,7 +21,19 @@ Shared: `packages/shared` (zod + interfaccia `AnimeSource`). Video: ffmpeg-stati
 Scheduler: setInterval (node-cron non usato). Lint: Biome. Test: Vitest (+ Playwright in futuro).
 Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
 
-## Stato attuale (2026-06-18)
+## Stato attuale (2026-06-21)
+
+**Batch rifiniture v0.3.0 (branch `feat/rifiniture-post-v0.2.0` → `main`):** footer completo +
+affordance link + fix UX (ricerca→⌘K, popup coda); **Telegram dall'app** (token in config, invia
+test); **centro notifiche potenziato** (click→destinazione, filtri, raggruppo giorno, tipi
+sync/disco); **scoperta saga multi-stagione** (`series.franchise` BFS fetch-and-cache, opzione "Trova
+tutte le stagioni"); **temi anime** (accent palette + sfondo wallpaper via wallhaven); **animazioni**
+(framer-motion, interruttore); **pagina Statistiche** + **scorciatoie tastiera**; **hardening** (token
+Telegram mascherato in `config.getAll`, header sicurezza web, backup/restore config); **notifica nuova
+stagione** (`season_available`, `season-watcher`); **blocco web UI con passcode** (scrypt + token
+HMAC, guard tRPC, `WEB_LOCK_DISABLED`); **PWA + Web Push** (manifest+SW, VAPID, richiede HTTPS).
+Migrazioni `0007` (`follow.known_relation_ids`) e `0008` (`push_subscription`). **197 test verdi.**
+Step F (wizard migliorato) rimandato.
 
 **Fatto:**
 - Monorepo, CI (lint+typecheck+test), DB SQLite (10 tabelle), MockSource/ApiSource, rate-limiter.

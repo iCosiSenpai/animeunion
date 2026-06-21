@@ -21,6 +21,7 @@
     "dev:web": "npm run dev -w @animeunion/web",
     "lint": "biome check .",
     "format": "biome format --write .",
+    "version": "npm run format && git add .",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "vitest run --passWithNoTests",
     "seed": "npm run seed -w @animeunion/api",

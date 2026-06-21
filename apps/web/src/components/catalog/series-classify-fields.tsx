@@ -65,6 +65,7 @@ export function ClassifyFields({
               <button
                 key={opt.kind}
                 type="button"
+                // biome-ignore lint/a11y/useSemanticElements: custom styled radio button
                 role="radio"
                 onClick={() => onChange({ ...value, kind: opt.kind })}
                 aria-checked={isOn}

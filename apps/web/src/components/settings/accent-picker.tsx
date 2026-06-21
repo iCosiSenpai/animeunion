@@ -21,6 +21,7 @@ export function AccentPicker({
           <button
             key={key}
             type="button"
+            // biome-ignore lint/a11y/useSemanticElements: custom styled radio button
             role="radio"
             onClick={() => onChange(key)}
             title={theme.label}

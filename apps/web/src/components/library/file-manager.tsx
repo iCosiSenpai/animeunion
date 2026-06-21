@@ -10,6 +10,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { trpc } from '@/lib/trpc';
@@ -18,14 +24,21 @@ import type { FileEntry } from '@animeunion/shared';
 import {
   AlertTriangle,
   ChevronLeft,
+  ExternalLink,
   FileVideo,
   Folder,
   FolderPlus,
+  FolderX,
+  Globe,
   Link2,
   Loader2,
   Pencil,
+  RefreshCw,
   Trash2,
+  Wand2,
+  Wrench,
 } from 'lucide-react';
+import Link from 'next/link';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
@@ -155,6 +168,153 @@ function RelinkDialog({
   );
 }
 
+/**
+ * Azioni su una cartella (es. una Season scaricata esternamente): la collega a un anime di
+ * AnimeUnion, poi permette di aprirne la scheda o di ri-scaricarla (elimina la cartella e
+ * rimette in coda gli episodi).
+ */
+function FolderActionsDialog({
+  folder,
+  onClose,
+  onChanged,
+}: {
+  folder: FileEntry;
+  onClose: () => void;
+  onChanged: () => void;
+}) {
+  const [search, setSearch] = useState('');
+  const [picked, setPicked] = useState<{ slug: string; title: string } | null>(null);
+  const [confirmRedownload, setConfirmRedownload] = useState(false);
+  const searchQ = trpc.catalog.search.useQuery(
+    { query: search },
+    { enabled: !picked && search.trim().length >= 2 },
+  );
+  const addAll = trpc.download.addAllBySlug.useMutation();
+  const remove = trpc.files.remove.useMutation();
+  const busy = remove.isPending || addAll.isPending;
+
+  function onRedownload() {
+    if (!picked) {
+      return;
+    }
+    remove.mutate(
+      { path: folder.path },
+      {
+        onSuccess: () => {
+          addAll.mutate(
+            { slug: picked.slug },
+            {
+              onSuccess: (r) => {
+                toast.success(`Cartella eliminata. ${r.enqueued} episodi rimessi in coda.`);
+                onChanged();
+              },
+              onError: (e) => toast.error(e.message || 'Accodamento non riuscito'),
+            },
+          );
+        },
+        onError: (e) => toast.error(e.message || 'Eliminazione non riuscita'),
+      },
+    );
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => (o ? null : onClose())}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle className="truncate">Collega “{folder.name}” a AnimeUnion</DialogTitle>
+          <DialogDescription>
+            Trova l’anime a cui appartiene questa cartella: potrai aprirne la scheda o ri-scaricarlo
+            (elimina la cartella e rimette in coda gli episodi).
+          </DialogDescription>
+        </DialogHeader>
+
+        {!picked ? (
+          <div className="space-y-2">
+            <Input
+              placeholder="Cerca la serie (min. 2 caratteri)…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+            {searchQ.isFetching ? (
+              <div className="flex items-center gap-2 p-2 text-xs text-muted-foreground">
+                <Loader2 className="h-3 w-3 animate-spin" /> Cerco…
+              </div>
+            ) : null}
+            {search.trim().length >= 2 && searchQ.data ? (
+              <ul className="max-h-56 divide-y overflow-y-auto rounded-md border text-sm">
+                {searchQ.data.data.slice(0, 10).map((a) => (
+                  <li key={a.id}>
+                    <button
+                      type="button"
+                      className="w-full p-2 text-left hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
+                      onClick={() => setPicked({ slug: a.slug, title: a.titleIta ?? a.title })}
+                    >
+                      {a.titleIta ?? a.title}
+                    </button>
+                  </li>
+                ))}
+                {searchQ.data.data.length === 0 ? (
+                  <li className="p-2 text-xs text-muted-foreground">Nessun risultato.</li>
+                ) : null}
+              </ul>
+            ) : null}
+          </div>
+        ) : confirmRedownload ? (
+          <div className="space-y-3">
+            <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <span>
+                La cartella <strong>{folder.name}</strong> verrà eliminata e gli episodi di{' '}
+                <strong>{picked.title}</strong> rimessi in coda di download. Operazione non
+                annullabile.
+              </span>
+            </div>
+            <DialogFooter>
+              <Button variant="ghost" onClick={() => setConfirmRedownload(false)} disabled={busy}>
+                Annulla
+              </Button>
+              <Button variant="destructive" onClick={onRedownload} disabled={busy}>
+                {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Elimina e riscarica
+              </Button>
+            </DialogFooter>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="rounded-md border p-3 text-sm">
+              <p className="font-medium">{picked.title}</p>
+              <p className="break-all text-xs text-muted-foreground">{folder.path}</p>
+            </div>
+            <div className="flex flex-col gap-2">
+              <Button asChild variant="outline">
+                <Link href={`/catalog/${picked.slug}`} onClick={onClose}>
+                  <ExternalLink className="mr-2 h-4 w-4" />
+                  Apri la scheda dell’anime
+                </Link>
+              </Button>
+              <Button variant="destructive" onClick={() => setConfirmRedownload(true)}>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Ri-scarica (elimina e riscarica)
+              </Button>
+            </div>
+            <Button variant="ghost" size="sm" className="gap-1" onClick={() => setPicked(null)}>
+              <ChevronLeft className="h-4 w-4" /> Cambia anime
+            </Button>
+          </div>
+        )}
+
+        {!confirmRedownload ? (
+          <DialogFooter>
+            <Button variant="ghost" onClick={onClose} disabled={busy}>
+              Chiudi
+            </Button>
+          </DialogFooter>
+        ) : null}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function FileManager() {
   const utils = trpc.useUtils();
   const [path, setPath] = useState('');
@@ -169,6 +329,8 @@ export function FileManager() {
   const [mkdirOpen, setMkdirOpen] = useState(false);
   const [mkdirName, setMkdirName] = useState('');
   const [relinkTarget, setRelinkTarget] = useState<FileEntry | null>(null);
+  const [folderTarget, setFolderTarget] = useState<FileEntry | null>(null);
+  const [toolsAction, setToolsAction] = useState<'rename-scheme' | 'prune' | null>(null);
 
   const refresh = () => {
     void utils.files.list.invalidate();
@@ -206,6 +368,24 @@ export function FileManager() {
     },
     onError: (e) => toast.error(e.message || 'Creazione non riuscita'),
   });
+  const renameSchemeMut = trpc.files.renameToScheme.useMutation({
+    onSuccess: (r) => {
+      toast.success(
+        r.count ? `${r.count} file rinominati secondo lo schema.` : 'Nomi già a posto.',
+      );
+      setToolsAction(null);
+      refresh();
+    },
+    onError: (e) => toast.error(e.message || 'Operazione non riuscita'),
+  });
+  const pruneMut = trpc.files.pruneEmpty.useMutation({
+    onSuccess: (r) => {
+      toast.success(r.count ? `${r.count} cartelle vuote eliminate.` : 'Nessuna cartella vuota.');
+      setToolsAction(null);
+      refresh();
+    },
+    onError: (e) => toast.error(e.message || 'Operazione non riuscita'),
+  });
 
   const data = list.data;
   const atRootsLevel = !data || data.path === '';
@@ -229,6 +409,19 @@ export function FileManager() {
         </span>
       </div>
 
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
+        <span className="flex items-center gap-1.5">
+          <Badge variant="outline" className="border-amber-500/50 text-amber-300">
+            non collegato
+          </Badge>
+          file non associato a un episodio del catalogo
+        </span>
+        <span className="flex items-center gap-1.5">
+          <Badge variant="secondary">Extra</Badge>
+          sigle, OP/ED, special e contenuti speciali
+        </span>
+      </div>
+
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
           {data && data.parent !== null ? (
@@ -246,14 +439,33 @@ export function FileManager() {
           </p>
         </div>
         {!atRootsLevel ? (
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1.5"
-            onClick={() => setMkdirOpen(true)}
-          >
-            <FolderPlus className="h-4 w-4" /> Nuova cartella
-          </Button>
+          <div className="flex shrink-0 items-center gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-1.5">
+                  <Wrench className="h-4 w-4" /> Strumenti
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-64">
+                <DropdownMenuItem onClick={() => setToolsAction('rename-scheme')}>
+                  <Wand2 className="mr-2 h-4 w-4" />
+                  Rinomina file secondo lo schema
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setToolsAction('prune')}>
+                  <FolderX className="mr-2 h-4 w-4" />
+                  Elimina cartelle vuote
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              onClick={() => setMkdirOpen(true)}
+            >
+              <FolderPlus className="h-4 w-4" /> Nuova cartella
+            </Button>
+          </div>
         ) : null}
       </div>
 
@@ -277,7 +489,7 @@ export function FileManager() {
         <ul className="divide-y rounded-lg border">
           {data.entries.map((entry) => {
             const isDir = entry.type === 'dir';
-            const orphan = entry.type === 'file' && !entry.episodeFileId;
+            const orphan = entry.type === 'file' && !entry.episodeFileId && !entry.extra;
             return (
               <li
                 key={entry.path}
@@ -328,6 +540,10 @@ export function FileManager() {
                       >
                         non collegato
                       </Badge>
+                    ) : entry.extra ? (
+                      <Badge variant="secondary" className="shrink-0">
+                        Extra
+                      </Badge>
                     ) : null}
                     {entry.size != null ? (
                       <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
@@ -339,6 +555,18 @@ export function FileManager() {
 
                 {!atRootsLevel ? (
                   <div className="flex shrink-0 items-center gap-1">
+                    {isDir ? (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-primary"
+                        title="Collega a AnimeUnion / Ri-scarica"
+                        aria-label={`Collega ${entry.name} a AnimeUnion o ri-scarica`}
+                        onClick={() => setFolderTarget(entry)}
+                      >
+                        <Globe className="h-4 w-4" />
+                      </Button>
+                    ) : null}
                     {orphan ? (
                       <Button
                         variant="ghost"
@@ -475,12 +703,68 @@ export function FileManager() {
         </DialogContent>
       </Dialog>
 
+      {/* Strumenti cartella: conferma */}
+      <Dialog open={!!toolsAction} onOpenChange={(o) => (o ? null : setToolsAction(null))}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {toolsAction === 'rename-scheme'
+                ? 'Rinomina file secondo lo schema'
+                : 'Elimina cartelle vuote'}
+            </DialogTitle>
+            <DialogDescription>
+              {toolsAction === 'rename-scheme'
+                ? 'Sposta e rinomina i file collegati al catalogo dentro questa cartella secondo lo schema corrente (tipo, stagione, parte). I file non collegati o gli extra non vengono toccati.'
+                : 'Rimuove ricorsivamente tutte le sottocartelle vuote sotto la cartella corrente. I file non vengono toccati.'}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => setToolsAction(null)}
+              disabled={renameSchemeMut.isPending || pruneMut.isPending}
+            >
+              Annulla
+            </Button>
+            <Button
+              onClick={() => {
+                if (!data) {
+                  return;
+                }
+                if (toolsAction === 'rename-scheme') {
+                  renameSchemeMut.mutate({ path: data.path });
+                } else {
+                  pruneMut.mutate({ path: data.path });
+                }
+              }}
+              disabled={renameSchemeMut.isPending || pruneMut.isPending}
+            >
+              {renameSchemeMut.isPending || pruneMut.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : null}
+              Conferma
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {relinkTarget ? (
         <RelinkDialog
           file={relinkTarget}
           onClose={() => setRelinkTarget(null)}
           onDone={() => {
             setRelinkTarget(null);
+            refresh();
+          }}
+        />
+      ) : null}
+
+      {folderTarget ? (
+        <FolderActionsDialog
+          folder={folderTarget}
+          onClose={() => setFolderTarget(null)}
+          onChanged={() => {
+            setFolderTarget(null);
             refresh();
           }}
         />

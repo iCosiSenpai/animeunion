@@ -1,6 +1,6 @@
 import { mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { schema } from '../db';
@@ -129,5 +129,51 @@ describe('FileManagerService', () => {
     const row = db.select().from(schema.episodeFile).where(eq(schema.episodeFile.id, 'ef-1')).get();
     expect(row?.downloadStatus).toBe('downloaded');
     expect(row?.localPath).toBe(res.path);
+  });
+
+  it('non segnala come orfani i file nelle cartelle extra (Specials/backdrops)', async () => {
+    await mkdir(join(root, 'Show', 'Specials'), { recursive: true });
+    await mkdir(join(root, 'Show', 'backdrops'), { recursive: true });
+    await mkdir(join(root, 'Show', 'Season 01'), { recursive: true });
+    await writeFile(join(root, 'Show', 'Specials', 'OVA.mp4'), 'x');
+    await writeFile(join(root, 'Show', 'backdrops', 'opening.mp4'), 'x');
+    await writeFile(join(root, 'Show', 'Season 01', 'Show - S01E01.mp4'), 'x');
+
+    const specials = await service.list(join(root, 'Show', 'Specials'));
+    const ova = specials.entries.find((e) => e.name === 'OVA.mp4');
+    expect(ova?.extra).toBe(true);
+    expect(ova?.episodeFileId).toBeNull();
+
+    const backdrops = await service.list(join(root, 'Show', 'backdrops'));
+    expect(backdrops.entries.find((e) => e.name === 'opening.mp4')?.extra).toBe(true);
+
+    // Una cartella di stagione normale non e' extra.
+    const s1 = await service.list(join(root, 'Show', 'Season 01'));
+    expect(s1.entries.find((e) => e.name === 'Show - S01E01.mp4')?.extra).toBe(false);
+  });
+
+  it('renameToScheme sposta i file tracciati nel percorso atteso dal renamer', async () => {
+    const wrong = join(root, 'random', 'whatever.mp4');
+    await mkdir(dirname(wrong), { recursive: true });
+    await writeFile(wrong, 'x');
+    seedEpisode(db, { localPath: wrong, status: 'downloaded' });
+
+    const res = await service.renameToScheme(root);
+    expect(res.count).toBe(1);
+    const expected = resolve(join(root, 'Show', 'Season 01', 'Show - S01E01 - SUB ITA.mp4'));
+    expect((await stat(expected)).isFile()).toBe(true);
+    const row = db.select().from(schema.episodeFile).where(eq(schema.episodeFile.id, 'ef-1')).get();
+    expect(row?.localPath).toBe(expected);
+  });
+
+  it('pruneEmpty rimuove le sottocartelle vuote ma non quelle con file', async () => {
+    await mkdir(join(root, 'Empty', 'Nested'), { recursive: true });
+    await mkdir(join(root, 'WithFile'), { recursive: true });
+    await writeFile(join(root, 'WithFile', 'keep.mp4'), 'x');
+
+    const res = await service.pruneEmpty(root);
+    expect(res.count).toBe(2); // Empty/Nested + Empty
+    await expect(stat(join(root, 'Empty'))).rejects.toBeTruthy();
+    expect((await stat(join(root, 'WithFile'))).isDirectory()).toBe(true);
   });
 });

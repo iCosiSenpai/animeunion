@@ -5,8 +5,10 @@ import {
   fileMkdirInputSchema,
   fileMoveInputSchema,
   fileOpResultSchema,
+  filePruneEmptyInputSchema,
   fileRelinkInputSchema,
   fileRenameInputSchema,
+  fileRenameToSchemeInputSchema,
 } from '@animeunion/shared';
 import { publicProcedure, router } from '../trpc';
 
@@ -41,4 +43,14 @@ export const filesRouter = router({
     .input(fileRelinkInputSchema)
     .output(fileOpResultSchema)
     .mutation(({ ctx, input }) => ctx.services.files.relink(input.path, input.episodeFileId)),
+
+  renameToScheme: publicProcedure
+    .input(fileRenameToSchemeInputSchema)
+    .output(fileOpResultSchema)
+    .mutation(({ ctx, input }) => ctx.services.files.renameToScheme(input.path)),
+
+  pruneEmpty: publicProcedure
+    .input(filePruneEmptyInputSchema)
+    .output(fileOpResultSchema)
+    .mutation(({ ctx, input }) => ctx.services.files.pruneEmpty(input.path)),
 });

@@ -1,4 +1,4 @@
-import { readdir, rm, stat } from 'node:fs/promises';
+import { readdir, rm, rmdir, stat } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import type { FileEntry, FileList, FileOpResult } from '@animeunion/shared';
 import { eq } from 'drizzle-orm';
@@ -17,6 +17,30 @@ function isVideo(name: string): boolean {
   return dot >= 0 && VIDEO_EXTENSIONS.has(name.slice(dot).toLowerCase());
 }
 
+// Cartelle "extra" alla Jellyfin: i video al loro interno sono sigle/OP/ED/trailer/special,
+// non episodi da collegare. Vanno mostrati ma non segnalati come orfani.
+const EXTRA_DIR_NAMES = new Set([
+  'specials',
+  'season 00',
+  'extras',
+  'backdrops',
+  'theme-music',
+  'theme music',
+  'trailers',
+  'featurettes',
+  'behind the scenes',
+  'deleted scenes',
+  'interviews',
+  'scenes',
+  'shorts',
+  'other',
+]);
+
+/** Vero se uno dei segmenti del percorso è una cartella extra (case-insensitive). */
+function isExtraPath(fullPath: string): boolean {
+  return fullPath.split(/[/\\]+/).some((segment) => EXTRA_DIR_NAMES.has(segment.toLowerCase()));
+}
+
 // Nomi file/cartella sicuri: niente separatori di percorso né caratteri illegali su NTFS.
 const ILLEGAL_NAME = /[/\\:*?"<>|]/;
 
@@ -27,6 +51,10 @@ export interface FileManagerService {
   remove(path: string): Promise<FileOpResult>;
   mkdir(parent: string, name: string): Promise<FileOpResult>;
   relink(path: string, episodeFileId: string): Promise<FileOpResult>;
+  /** Rinomina/sposta i file tracciati sotto `path` secondo lo schema del renamer. */
+  renameToScheme(path: string): Promise<FileOpResult>;
+  /** Rimuove ricorsivamente le cartelle vuote sotto `path`. */
+  pruneEmpty(path: string): Promise<FileOpResult>;
 }
 
 export interface FileManagerDeps {
@@ -132,7 +160,14 @@ export function createFileManagerService(deps: FileManagerDeps): FileManagerServ
         exists = false;
       }
       if (exists) {
-        entries.push({ name: root, path: root, type: 'dir', size: null, episodeFileId: null });
+        entries.push({
+          name: root,
+          path: root,
+          type: 'dir',
+          size: null,
+          episodeFileId: null,
+          extra: false,
+        });
       }
     }
     return { path: '', parent: null, atRoot: false, entries };
@@ -164,7 +199,14 @@ export function createFileManagerService(deps: FileManagerDeps): FileManagerServ
         }
         const full = join(target, d.name);
         if (d.isDirectory()) {
-          entries.push({ name: d.name, path: full, type: 'dir', size: null, episodeFileId: null });
+          entries.push({
+            name: d.name,
+            path: full,
+            type: 'dir',
+            size: null,
+            episodeFileId: null,
+            extra: isExtraPath(full),
+          });
         } else if (d.isFile() && isVideo(d.name)) {
           let size: number | null = null;
           try {
@@ -178,6 +220,7 @@ export function createFileManagerService(deps: FileManagerDeps): FileManagerServ
             type: 'file',
             size,
             episodeFileId: tracked.get(resolve(full)) ?? null,
+            extra: isExtraPath(full),
           });
         }
       }
@@ -307,6 +350,90 @@ export function createFileManagerService(deps: FileManagerDeps): FileManagerServ
         .where(eq(schema.episodeFile.id, episodeFileId))
         .run();
       return { ok: true, path: dest };
+    },
+
+    async renameToScheme(path) {
+      const target = assertInside(path);
+      const prefix = target + sep;
+      const rows = db
+        .select({
+          fileId: schema.episodeFile.id,
+          language: schema.episodeFile.language,
+          localPath: schema.episodeFile.localPath,
+          number: schema.episode.number,
+          animeId: schema.episode.animeId,
+        })
+        .from(schema.episodeFile)
+        .innerJoin(schema.episode, eq(schema.episode.id, schema.episodeFile.episodeId))
+        .where(eq(schema.episodeFile.downloadStatus, 'downloaded'))
+        .all();
+      const ts = new Date().toISOString();
+      let moved = 0;
+      for (const row of rows) {
+        if (!row.localPath) {
+          continue;
+        }
+        const local = resolve(row.localPath);
+        // Solo i file tracciati che si trovano dentro la cartella richiesta.
+        if (local !== target && !local.startsWith(prefix)) {
+          continue;
+        }
+        const dest = assertInside(
+          renamer.computeEpisodePath({
+            animeId: row.animeId,
+            episodeNumber: row.number,
+            language: row.language as 'SUB_ITA' | 'DUB_ITA',
+          }),
+        );
+        if (dest === local) {
+          continue;
+        }
+        // Non sovrascrivere un file gia' presente alla destinazione.
+        let destExists = false;
+        try {
+          destExists = (await stat(dest)).isFile();
+        } catch {
+          destExists = false;
+        }
+        if (destExists) {
+          logger.warn({ local, dest }, 'Rinomina schema: destinazione gia presente, salto');
+          continue;
+        }
+        await atomicMove(local, dest, logger);
+        db.update(schema.episodeFile)
+          .set({ localPath: dest, updatedAt: ts })
+          .where(eq(schema.episodeFile.id, row.fileId))
+          .run();
+        moved += 1;
+      }
+      return { ok: true, count: moved };
+    },
+
+    async pruneEmpty(path) {
+      const target = assertInside(path);
+      let removed = 0;
+      async function walk(dir: string): Promise<boolean> {
+        const dirents = await readdir(dir, { withFileTypes: true }).catch(() => []);
+        for (const d of dirents) {
+          if (!d.isDirectory()) {
+            continue;
+          }
+          const full = join(dir, d.name);
+          const emptied = await walk(full);
+          if (emptied) {
+            try {
+              await rmdir(full);
+              removed += 1;
+            } catch {
+              // ENOTEMPTY/permessi: lascia stare e prosegui.
+            }
+          }
+        }
+        const after = await readdir(dir).catch(() => []);
+        return after.length === 0;
+      }
+      await walk(target);
+      return { ok: true, count: removed };
     },
   };
 }

@@ -190,6 +190,8 @@ export const seriesOverride = sqliteTable('series_override', {
     .references(() => anime.id, { onDelete: 'cascade' }),
   seriesAnimeId: text('series_anime_id').references(() => anime.id, { onDelete: 'set null' }),
   seasonNumber: integer('season_number'),
+  // Override del tipo: 'auto' (euristica) | 'tv' | 'movie' | 'special'.
+  kind: text('kind').notNull().default('auto'),
   updatedAt: text('updated_at').notNull(),
 });
 

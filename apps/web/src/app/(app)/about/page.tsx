@@ -12,8 +12,8 @@ export default function AboutPage() {
         <h1 className="text-3xl font-bold tracking-tight">AnimeUnion Docker</h1>
         <p className="text-muted-foreground">
           Applicazione ufficiale affiliata ad AnimeUnion per il download self-hosted degli anime. La
-          tua libreria anime, sempre aggiornata: segui una serie e ogni nuovo episodio viene scaricato
-          e organizzato automaticamente per Plex/Jellyfin.
+          tua libreria anime, sempre aggiornata: segui una serie e ogni nuovo episodio viene
+          scaricato e organizzato automaticamente per Plex/Jellyfin.
         </p>
       </div>
 

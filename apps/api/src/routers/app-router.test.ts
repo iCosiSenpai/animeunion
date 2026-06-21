@@ -39,7 +39,7 @@ function makeCaller() {
   const resolver = createSeriesResolver({ db });
   const renamer = createRenamerService({ db, config, seriesResolver: resolver });
   const library = createLibraryService({ db, config, renamer, resolver, logger: testLogger });
-  const series = createSeriesService({ db, resolver, catalog });
+  const series = createSeriesService({ db, resolver, catalog, renamer, config });
   const notifications = createNotificationService({ db, config });
   const lock = createLockService({ db, env: { WEB_LOCK_DISABLED: undefined } });
   const push = createPushService({ db, logger: testLogger });

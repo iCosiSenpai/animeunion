@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { schema } from '../db';
 import { createTestDb } from '../test/helpers';
 import type { CatalogService } from './catalog-service';
+import { createConfigService } from './config-service';
+import { createRenamerService } from './renamer-service';
 import { createSeriesResolver } from './series-resolver';
 import { createSeriesService } from './series-service';
 
@@ -13,7 +15,10 @@ const stubCatalog = {
 } as unknown as CatalogService;
 
 function makeService(db: ReturnType<typeof createTestDb>, catalog: CatalogService = stubCatalog) {
-  return createSeriesService({ db, resolver: createSeriesResolver({ db }), catalog });
+  const resolver = createSeriesResolver({ db });
+  const config = createConfigService({ db });
+  const renamer = createRenamerService({ db, config, seriesResolver: resolver });
+  return createSeriesService({ db, resolver, catalog, renamer, config });
 }
 
 function rel(id: string, relationType: string): RelatedAnime {
@@ -104,6 +109,21 @@ describe('SeriesService.confirmed', () => {
     expect(res.seasonNumber).toBe(0);
     expect(res.confirmed).toBe(true);
     expect(service.getResolved('a-1').confirmed).toBe(true);
+  });
+
+  it('previewPath ritorna il percorso e il kind effettivo (override movie)', () => {
+    insertAnime(db, 'mov', 'mov');
+    const resolver = createSeriesResolver({ db });
+    const config = createConfigService({ db });
+    config.set('seriesPathSub', '/data/anime');
+    config.set('moviePathSub', '/data/movies');
+    config.set('moviePathDub', '/data/movies-dub');
+    const renamer = createRenamerService({ db, config, seriesResolver: resolver });
+    const service = createSeriesService({ db, resolver, catalog: stubCatalog, renamer, config });
+
+    const res = service.previewPath({ animeId: 'mov', kind: 'movie' });
+    expect(res.kind).toBe('movie');
+    expect(res.path).toContain('movies');
   });
 
   it('confirmed=true se un episodio risulta gia scaricato', () => {

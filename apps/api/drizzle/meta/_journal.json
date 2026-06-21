@@ -64,6 +64,13 @@
       "when": 1782007867151,
       "tag": "0008_skinny_sebastian_shaw",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1782042207025,
+      "tag": "0009_series_override_kind",
+      "breakpoints": true
     }
   ]
 }

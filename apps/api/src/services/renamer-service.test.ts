@@ -123,6 +123,79 @@ describe('RenamerService', () => {
     ).toBe(join('/data/anime', 'My Show', 'Specials', 'My Show - S00E02.mp4'));
   });
 
+  it('previewPath con override kind=movie: forza il percorso film anche se type=TV', () => {
+    insertAnime(db, {
+      id: 'ord',
+      slug: 'sao-ordinal-scale',
+      title: 'SAO Ordinal Scale',
+      type: 'TV',
+    });
+    const renamer = makeRenamer(db, {
+      seriesPathSub: '/data/anime',
+      moviePathSub: '/data/movies',
+      moviePathDub: '/data/movies-dub',
+    });
+
+    expect(
+      renamer.previewPath({
+        animeId: 'ord',
+        episodeNumber: 1,
+        language: 'SUB_ITA',
+        override: { kind: 'movie' },
+      }),
+    ).toBe(join('/data/movies', 'SAO Ordinal Scale', 'SAO Ordinal Scale.mp4'));
+  });
+
+  it('previewPath con override kind=special: cartella Specials, nome S00EXX', () => {
+    insertAnime(db, { id: 'ova', slug: 'my-ova', title: 'My OVA' });
+    const renamer = makeRenamer(db, {
+      seriesPathSub: '/data/anime',
+      seriesPathDub: '/data/anime-dub',
+    });
+
+    expect(
+      renamer.previewPath({
+        animeId: 'ova',
+        episodeNumber: 2,
+        language: 'SUB_ITA',
+        override: { kind: 'special' },
+      }),
+    ).toBe(join('/data/anime', 'My OVA', 'Specials', 'My OVA - S00E02.mp4'));
+  });
+
+  it('previewPath: una stagione di sequel finisce nella cartella della serie madre (caso SAO)', () => {
+    insertAnime(db, {
+      id: 'sao',
+      slug: 'sword-art-online',
+      title: 'Sword Art Online',
+      episodeCount: 25,
+    });
+    insertAnime(db, {
+      id: 'sao-ali',
+      slug: 'sword-art-online-alicization',
+      title: 'Sword Art Online: Alicization',
+      episodeCount: 24,
+    });
+    const renamer = makeRenamer(db, { seriesPathSub: '/data/anime' });
+
+    // Con serie madre = SAO base + stagione 3 → cartella "Sword Art Online", non "…: Alicization".
+    expect(
+      renamer.previewPath({
+        animeId: 'sao-ali',
+        episodeNumber: 1,
+        language: 'SUB_ITA',
+        override: { seriesAnimeId: 'sao', seasonNumber: 3 },
+      }),
+    ).toBe(
+      join(
+        '/data/anime',
+        'Sword Art Online',
+        'Season 03',
+        'Sword Art Online - S03E01 - SUB ITA.mp4',
+      ),
+    );
+  });
+
   it('sequel via euristica slug: usa titolo e cartella della serie madre, Season 02', () => {
     // L'API non fornisce seriesId/relazioni: solo lo slug "-2nd-season".
     insertAnime(db, {

@@ -1,0 +1,1 @@
+ALTER TABLE `series_override` ADD `kind` text DEFAULT 'auto' NOT NULL;

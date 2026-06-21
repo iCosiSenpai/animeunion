@@ -2,10 +2,27 @@ import { and, count, eq, inArray } from 'drizzle-orm';
 import type { Db } from '../db';
 import { schema } from '../db';
 
-export interface SeriesInfo {
+/** Classificazione effettiva di un'entry ai fini del percorso su disco. */
+export type SeriesKind = 'tv' | 'movie' | 'special';
+
+/** Valore dell'override del tipo salvato: 'auto' = lascia decidere all'euristica. */
+export type OverrideKind = 'auto' | SeriesKind;
+
+interface BaseInfo {
   seriesId: string;
   seasonNumber: number;
   seriesSlug: string;
+}
+
+export interface SeriesInfo extends BaseInfo {
+  kind: SeriesKind;
+}
+
+/** Parametri di override (manuali o ipotetici per l'anteprima). */
+export interface OverrideParams {
+  kind?: OverrideKind | null;
+  seasonNumber?: number | null;
+  seriesAnimeId?: string | null;
 }
 
 export interface SeriesResolverDeps {
@@ -48,40 +65,22 @@ export function parseSeasonFromSlug(slug: string): { base: string; season: numbe
 }
 
 export interface SeriesResolver {
+  /** Stagione/serie/tipo correnti (legge l'override salvato). */
   resolve(animeId: string): SeriesInfo;
+  /** Come resolve ma usa l'override passato (per l'anteprima di scelte non ancora salvate). */
+  resolveWith(animeId: string, override: OverrideParams): SeriesInfo;
 }
+
+type AnimeRow = typeof schema.anime.$inferSelect;
 
 export function createSeriesResolver(deps: SeriesResolverDeps): SeriesResolver {
   const { db } = deps;
 
-  function fallback(anime: typeof schema.anime.$inferSelect): SeriesInfo {
+  function fallback(anime: AnimeRow): BaseInfo {
     return { seriesId: anime.id, seasonNumber: 1, seriesSlug: anime.slug };
   }
 
-  function fromOverride(anime: typeof schema.anime.$inferSelect): SeriesInfo | null {
-    const row = db
-      .select()
-      .from(schema.seriesOverride)
-      .where(eq(schema.seriesOverride.animeId, anime.id))
-      .get();
-    if (!row || (row.seriesAnimeId == null && row.seasonNumber == null)) {
-      return null;
-    }
-    const root = row.seriesAnimeId
-      ? db
-          .select({ id: schema.anime.id, slug: schema.anime.slug })
-          .from(schema.anime)
-          .where(eq(schema.anime.id, row.seriesAnimeId))
-          .get()
-      : null;
-    return {
-      seriesId: root?.id ?? anime.id,
-      seasonNumber: row.seasonNumber ?? 1,
-      seriesSlug: root?.slug ?? anime.slug,
-    };
-  }
-
-  function fromSlugHeuristic(anime: typeof schema.anime.$inferSelect): SeriesInfo | null {
+  function fromSlugHeuristic(anime: AnimeRow): BaseInfo | null {
     const parsed = parseSeasonFromSlug(anime.slug);
     if (!parsed) {
       return null;
@@ -101,7 +100,7 @@ export function createSeriesResolver(deps: SeriesResolverDeps): SeriesResolver {
     return null;
   }
 
-  function fromApiData(anime: typeof schema.anime.$inferSelect): SeriesInfo | null {
+  function fromApiData(anime: AnimeRow): BaseInfo | null {
     if (!anime.seriesId || anime.seasonNumber == null) {
       return null;
     }
@@ -217,7 +216,7 @@ export function createSeriesResolver(deps: SeriesResolverDeps): SeriesResolver {
     return distances;
   }
 
-  function fromRelations(anime: typeof schema.anime.$inferSelect): SeriesInfo | null {
+  function fromRelations(anime: AnimeRow): BaseInfo | null {
     const nodes = discoverChain(anime.id);
     // Nessuna relazione reale: l'anime è isolato. Lascia decidere euristica/fallback
     // (altrimenti verrebbe sempre trattato come root di una serie a sé, Season 01).
@@ -241,19 +240,91 @@ export function createSeriesResolver(deps: SeriesResolverDeps): SeriesResolver {
     };
   }
 
+  /** Rilevamento automatico (senza override): API → relazioni → slug → fallback. */
+  function autoInfo(anime: AnimeRow): BaseInfo {
+    return (
+      fromApiData(anime) ?? fromRelations(anime) ?? fromSlugHeuristic(anime) ?? fallback(anime)
+    );
+  }
+
+  /** Applica l'override (serie madre, stagione, tipo) sopra il rilevamento automatico. */
+  function applyOverride(anime: AnimeRow, auto: BaseInfo, override: OverrideParams): SeriesInfo {
+    let seriesId = auto.seriesId;
+    let seriesSlug = auto.seriesSlug;
+    if (override.seriesAnimeId) {
+      const root = db
+        .select({ id: schema.anime.id, slug: schema.anime.slug })
+        .from(schema.anime)
+        .where(eq(schema.anime.id, override.seriesAnimeId))
+        .get();
+      if (root) {
+        seriesId = root.id;
+        seriesSlug = root.slug;
+      }
+    }
+    let seasonNumber = override.seasonNumber ?? auto.seasonNumber;
+
+    const ok: OverrideKind = override.kind ?? 'auto';
+    let kind: SeriesKind;
+    if (ok === 'movie' || ok === 'tv') {
+      kind = ok;
+    } else if (ok === 'special') {
+      kind = 'special';
+    } else {
+      // auto: deriva dal tipo dell'API e dalla stagione.
+      if (anime.type === 'MOVIE') {
+        kind = 'movie';
+      } else if (seasonNumber === 0) {
+        kind = 'special';
+      } else {
+        kind = 'tv';
+      }
+    }
+    if (kind === 'special') {
+      seasonNumber = 0;
+    }
+    return { seriesId, seasonNumber, seriesSlug, kind };
+  }
+
+  function getAnime(animeId: string): AnimeRow | undefined {
+    return db.select().from(schema.anime).where(eq(schema.anime.id, animeId)).get();
+  }
+
+  function savedOverride(animeId: string): OverrideParams {
+    const row = db
+      .select()
+      .from(schema.seriesOverride)
+      .where(eq(schema.seriesOverride.animeId, animeId))
+      .get();
+    if (!row) {
+      return {};
+    }
+    return {
+      kind: (row.kind as OverrideKind | null) ?? 'auto',
+      seasonNumber: row.seasonNumber,
+      seriesAnimeId: row.seriesAnimeId,
+    };
+  }
+
+  function missing(animeId: string): SeriesInfo {
+    return { seriesId: animeId, seasonNumber: 1, seriesSlug: animeId, kind: 'tv' };
+  }
+
   return {
     resolve(animeId) {
-      const anime = db.select().from(schema.anime).where(eq(schema.anime.id, animeId)).get();
+      const anime = getAnime(animeId);
       if (!anime) {
-        return { seriesId: animeId, seasonNumber: 1, seriesSlug: animeId };
+        return missing(animeId);
       }
-      return (
-        fromOverride(anime) ??
-        fromApiData(anime) ??
-        fromRelations(anime) ??
-        fromSlugHeuristic(anime) ??
-        fallback(anime)
-      );
+      return applyOverride(anime, autoInfo(anime), savedOverride(animeId));
+    },
+
+    resolveWith(animeId, override) {
+      const anime = getAnime(animeId);
+      if (!anime) {
+        return missing(animeId);
+      }
+      return applyOverride(anime, autoInfo(anime), override);
     },
   };
 }

@@ -1,4 +1,6 @@
 import {
+  pathPreviewInputSchema,
+  pathPreviewSchema,
   relatedAnimeSchema,
   seriesOverrideInputSchema,
   seriesResolvedSchema,
@@ -28,4 +30,10 @@ export const seriesRouter = router({
     .input(z.object({ animeId: z.string() }))
     .output(seriesResolvedSchema)
     .mutation(({ ctx, input }) => ctx.services.series.clearOverride(input.animeId)),
+
+  // Anteprima del percorso su disco con parametri ipotetici (per il dialog "Classifica e scarica").
+  previewPath: publicProcedure
+    .input(pathPreviewInputSchema)
+    .output(pathPreviewSchema)
+    .query(({ ctx, input }) => ctx.services.series.previewPath(input)),
 });

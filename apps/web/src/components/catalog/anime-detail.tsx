@@ -22,7 +22,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { trpc } from '@/lib/trpc';
@@ -41,6 +40,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { RelationsDownloadDialog } from './relations-download-dialog';
 import { useSeasonGate } from './season-gate';
+import { ClassifyFields, type ClassifyValue } from './series-classify-fields';
 
 const STATUS_LABELS: Record<string, string> = {
   ONGOING: 'In corso',
@@ -422,19 +422,22 @@ function EpisodeList({ anime }: { anime: AnimeDetailType }) {
   );
 }
 
+function organizationLabel(data: { kind: string; seasonNumber: number }): string {
+  if (data.kind === 'movie') return 'Film';
+  if (data.kind === 'special') return 'Special';
+  return `Stagione ${data.seasonNumber}`;
+}
+
 function SeriesOrganizationPanel({ animeId }: { animeId: string }) {
   const utils = trpc.useUtils();
   const resolved = trpc.series.getResolved.useQuery({ animeId });
   const [open, setOpen] = useState(false);
-  const [season, setSeason] = useState('');
-  const [parentId, setParentId] = useState<string | null>(null);
-  const [parentTitle, setParentTitle] = useState('');
-  const [search, setSearch] = useState('');
-
-  const searchQuery = trpc.catalog.search.useQuery(
-    { query: search },
-    { enabled: open && search.trim().length >= 2 },
-  );
+  const [value, setValue] = useState<ClassifyValue>({
+    kind: 'tv',
+    season: '1',
+    parentId: null,
+    parentTitle: '',
+  });
 
   const refresh = () => {
     void utils.series.getResolved.invalidate({ animeId });
@@ -460,20 +463,24 @@ function SeriesOrganizationPanel({ animeId }: { animeId: string }) {
 
   function onOpenChange(next: boolean) {
     if (next && data) {
-      setSeason(String(data.seasonNumber));
-      setParentId(data.seriesAnimeId === animeId ? null : data.seriesAnimeId);
-      setParentTitle(data.seriesAnimeId === animeId ? '' : data.seriesTitle);
-      setSearch('');
+      const hasParent = Boolean(data.seriesAnimeId && data.seriesAnimeId !== animeId);
+      setValue({
+        kind: data.kind,
+        season: data.seasonNumber > 0 ? String(data.seasonNumber) : '1',
+        parentId: hasParent ? data.seriesAnimeId : null,
+        parentTitle: hasParent ? data.seriesTitle : '',
+      });
     }
     setOpen(next);
   }
 
   function onSave() {
-    const n = Number(season);
+    const n = Number(value.season);
     setOverride.mutate({
       animeId,
-      seasonNumber: Number.isFinite(n) && n >= 1 ? n : null,
-      seriesAnimeId: parentId,
+      kind: value.kind,
+      seasonNumber: value.kind === 'tv' ? (Number.isFinite(n) && n >= 1 ? n : 1) : null,
+      seriesAnimeId: value.kind === 'tv' ? value.parentId : null,
     });
   }
 
@@ -488,7 +495,7 @@ function SeriesOrganizationPanel({ animeId }: { animeId: string }) {
       <DialogTrigger asChild>
         <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground">
           <FolderTree className="h-4 w-4" />
-          Stagione {data.seasonNumber}
+          {organizationLabel(data)}
           {data.hasOverride ? (
             <Badge variant="outline" className="ml-1">
               manuale
@@ -500,80 +507,13 @@ function SeriesOrganizationPanel({ animeId }: { animeId: string }) {
         <DialogHeader>
           <DialogTitle>Organizzazione file</DialogTitle>
           <DialogDescription>
-            Come questo titolo viene salvato: numero di stagione e serie a cui appartiene. Correggi
-            qui se il rilevamento automatico sbaglia (l'API a volte non collega i sequel).
+            Come questo titolo viene salvato: tipo, stagione e serie a cui appartiene. Correggi qui
+            se il rilevamento automatico sbaglia (l'API a volte non collega i sequel o scambia un
+            film per una stagione).
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
-          <div className="space-y-1.5">
-            <p className="text-sm font-medium">Numero di stagione</p>
-            <Input
-              type="number"
-              min={1}
-              max={99}
-              className="w-28"
-              value={season}
-              onChange={(e) => setSeason(e.target.value)}
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <p className="text-sm font-medium">Serie madre (cartella)</p>
-            {parentId ? (
-              <div className="flex items-center justify-between rounded-md border px-3 py-2 text-sm">
-                <span className="truncate">{parentTitle}</span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setParentId(null);
-                    setParentTitle('');
-                  }}
-                >
-                  Rimuovi
-                </Button>
-              </div>
-            ) : (
-              <>
-                <Input
-                  placeholder="Cerca la serie principale (min. 2 caratteri)…"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
-                {searchQuery.isFetching ? (
-                  <div className="flex items-center gap-2 p-2 text-xs text-muted-foreground">
-                    <Loader2 className="h-3 w-3 animate-spin" /> Cerco…
-                  </div>
-                ) : null}
-                {search.trim().length >= 2 && searchQuery.data ? (
-                  <ul className="max-h-44 divide-y overflow-y-auto rounded-md border text-sm">
-                    {searchQuery.data.data.slice(0, 8).map((a) => (
-                      <li key={a.id}>
-                        <button
-                          type="button"
-                          className="flex w-full items-center gap-2 p-2 text-left hover:bg-muted"
-                          onClick={() => {
-                            setParentId(a.id);
-                            setParentTitle(a.titleIta ?? a.title);
-                          }}
-                        >
-                          {a.titleIta ?? a.title}
-                        </button>
-                      </li>
-                    ))}
-                    {searchQuery.data.data.length === 0 ? (
-                      <li className="p-2 text-xs text-muted-foreground">Nessun risultato.</li>
-                    ) : null}
-                  </ul>
-                ) : null}
-                <p className="text-xs text-muted-foreground">
-                  Lascia vuoto per tenere questo titolo come cartella a sé.
-                </p>
-              </>
-            )}
-          </div>
-        </div>
+        <ClassifyFields animeId={animeId} value={value} onChange={setValue} />
 
         <DialogFooter className="gap-2 sm:justify-between">
           {data.hasOverride ? (

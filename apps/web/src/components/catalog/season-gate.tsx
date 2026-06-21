@@ -9,21 +9,32 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
 import { trpc } from '@/lib/trpc';
 import type { SeriesResolved } from '@animeunion/shared';
-import { ArrowUpRight, Loader2 } from 'lucide-react';
+import { ArrowUpRight, Info, Loader2 } from 'lucide-react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { type ReactNode, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { ClassifyFields, type ClassifyValue } from './series-classify-fields';
+
+function initValue(data: SeriesResolved): ClassifyValue {
+  const hasParent = Boolean(data.seriesAnimeId && data.seriesAnimeId !== data.animeId);
+  return {
+    kind: data.kind,
+    season: data.seasonNumber > 0 ? String(data.seasonNumber) : '1',
+    parentId: hasParent ? data.seriesAnimeId : null,
+    parentTitle: hasParent ? data.seriesTitle : '',
+  };
+}
 
 /**
- * Conferma obbligatoria della stagione prima del primo download di una serie.
- * `ensureConfirmed(action)` esegue subito `action` se la stagione è già confermata
- * (override impostato o serie già scaricata/accodata); altrimenti apre il dialog e
- * lancia `action` solo dopo che l'utente conferma (salvando l'override).
- * La risoluzione è lazy (fetch on-demand): nessuna query al mount, così le griglie
- * di card non scatenano N richieste.
+ * Conferma obbligatoria (tipo + stagione + destinazione) prima del primo download di una serie.
+ * `ensureConfirmed(action)` esegue subito `action` se è già confermato (override impostato o serie
+ * già scaricata/accodata); altrimenti apre il dialog "Classifica e scarica" e lancia `action` solo
+ * dopo che l'utente conferma (salvando l'override con tipo/stagione/serie madre).
+ * La risoluzione è lazy (fetch on-demand): nessuna query al mount, così le griglie di card non
+ * scatenano N richieste.
  */
 export function useSeasonGate(animeId: string): {
   ensureConfirmed: (action: () => void) => void;
@@ -34,8 +45,12 @@ export function useSeasonGate(animeId: string): {
   const setOverride = trpc.series.setOverride.useMutation();
   const [open, setOpen] = useState(false);
   const [info, setInfo] = useState<SeriesResolved | null>(null);
-  const [season, setSeason] = useState('1');
-  const [isSpecial, setIsSpecial] = useState(false);
+  const [value, setValue] = useState<ClassifyValue>({
+    kind: 'tv',
+    season: '1',
+    parentId: null,
+    parentTitle: '',
+  });
   const pending = useRef<(() => void) | null>(null);
 
   const ensureConfirmed = (action: () => void) => {
@@ -54,8 +69,7 @@ export function useSeasonGate(animeId: string): {
       }
       pending.current = action;
       setInfo(data);
-      setIsSpecial(data.seasonNumber === 0);
-      setSeason(data.seasonNumber > 0 ? String(data.seasonNumber) : '1');
+      setValue(initValue(data));
       setOpen(true);
     })();
   };
@@ -74,11 +88,16 @@ export function useSeasonGate(animeId: string): {
   };
 
   const onConfirm = () => {
-    const parsed = isSpecial ? 0 : Number(season);
+    const n = Number(value.season);
     const seasonNumber =
-      Number.isFinite(parsed) && parsed >= 0 ? Math.min(99, Math.floor(parsed)) : 1;
+      value.kind === 'tv' ? (Number.isFinite(n) && n >= 1 ? Math.min(99, Math.floor(n)) : 1) : null;
     setOverride.mutate(
-      { animeId, seasonNumber },
+      {
+        animeId,
+        kind: value.kind,
+        seasonNumber,
+        seriesAnimeId: value.kind === 'tv' ? value.parentId : null,
+      },
       {
         onSuccess: () => {
           void utils.series.getResolved.invalidate({ animeId });
@@ -90,7 +109,7 @@ export function useSeasonGate(animeId: string): {
           pending.current = null;
           act?.();
         },
-        onError: (e) => toast.error(e.message || 'Impossibile salvare la stagione'),
+        onError: (e) => toast.error(e.message || 'Impossibile salvare la classificazione'),
       },
     );
   };
@@ -99,43 +118,28 @@ export function useSeasonGate(animeId: string): {
     <Dialog open={open} onOpenChange={(o) => (o ? setOpen(true) : close())}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>
-            {isSpecial
-              ? 'Confermi che è uno Special?'
-              : `Confermi che è la Stagione ${season || '?'}?`}
-          </DialogTitle>
+          <DialogTitle>Classifica e scarica</DialogTitle>
           <DialogDescription>
             {info ? (
               <>
-                Stai per scaricare da <strong>{info.seriesTitle}</strong>. Te lo chiediamo solo la
-                prima volta per questa serie.
+                Controlla come e dove verrà salvato <strong>{info.seriesTitle}</strong>. Te lo
+                chiediamo solo la prima volta per questo titolo.
               </>
             ) : null}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-3">
-          <div className="flex items-center gap-3">
-            <span className="text-sm font-medium">Stagione</span>
-            <Input
-              type="number"
-              min={1}
-              max={99}
-              className="w-24"
-              value={season}
-              disabled={isSpecial}
-              onChange={(e) => setSeason(e.target.value)}
-            />
-          </div>
-          <label className="flex items-center gap-2 text-sm text-muted-foreground">
-            <input
-              type="checkbox"
-              className="h-4 w-4 accent-primary"
-              checked={isSpecial}
-              onChange={(e) => setIsSpecial(e.target.checked)}
-            />
-            È uno special (OAV / extra) → cartella "Specials"
-          </label>
+        <ClassifyFields animeId={animeId} value={value} onChange={setValue} />
+
+        <div className="flex items-start gap-2 rounded-md border border-dashed bg-muted/30 p-2.5 text-xs text-muted-foreground">
+          <Info className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+          <span>
+            Controlla bene la destinazione qui sopra. Potrai sempre spostare o rinominare i file dal{' '}
+            <Link href="/library" className="text-primary underline-offset-4 hover:underline">
+              gestore file
+            </Link>
+            .
+          </span>
         </div>
 
         <DialogFooter className="gap-2 sm:justify-between">

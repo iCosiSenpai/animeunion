@@ -9,12 +9,14 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from '@/components/ui/dialog';
 import { trpc } from '@/lib/trpc';
 import type { Language, RelatedAnime } from '@animeunion/shared';
-import { Film, Layers, Loader2 } from 'lucide-react';
+import { Film, Layers, Loader2, SlidersHorizontal } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { ClassifyFields, type ClassifyValue } from './series-classify-fields';
 
 const RELATION_LABELS: Record<string, string> = {
   SEQUEL: 'Sequel',
@@ -30,6 +32,86 @@ const RELATION_LABELS: Record<string, string> = {
 
 function isTv(type: string): boolean {
   return type === 'TV' || type === 'TV_SHORT';
+}
+
+/** Pulsante per classificare un singolo correlato (tipo/stagione/destinazione) prima di scaricarlo. */
+function RelationClassifyButton({ animeId, title }: { animeId: string; title: string }) {
+  const utils = trpc.useUtils();
+  const [open, setOpen] = useState(false);
+  const [value, setValue] = useState<ClassifyValue>({
+    kind: 'tv',
+    season: '1',
+    parentId: null,
+    parentTitle: '',
+  });
+  const setOverride = trpc.series.setOverride.useMutation({
+    onSuccess: () => {
+      toast.success('Classificazione salvata');
+      setOpen(false);
+    },
+    onError: (e) => toast.error(e.message || 'Salvataggio non riuscito'),
+  });
+
+  async function onOpenChange(next: boolean) {
+    if (next) {
+      try {
+        const data = await utils.series.getResolved.fetch({ animeId });
+        const hasParent = Boolean(data.seriesAnimeId && data.seriesAnimeId !== animeId);
+        setValue({
+          kind: data.kind,
+          season: data.seasonNumber > 0 ? String(data.seasonNumber) : '1',
+          parentId: hasParent ? data.seriesAnimeId : null,
+          parentTitle: hasParent ? data.seriesTitle : '',
+        });
+      } catch {
+        // se non risolve, parte dai default
+      }
+    }
+    setOpen(next);
+  }
+
+  function onSave() {
+    const n = Number(value.season);
+    setOverride.mutate({
+      animeId,
+      kind: value.kind,
+      seasonNumber: value.kind === 'tv' ? (Number.isFinite(n) && n >= 1 ? n : 1) : null,
+      seriesAnimeId: value.kind === 'tv' ? value.parentId : null,
+    });
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-9 w-9 shrink-0 self-center text-muted-foreground"
+          title="Classifica e scegli destinazione"
+        >
+          <SlidersHorizontal className="h-4 w-4" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle className="truncate">Classifica: {title}</DialogTitle>
+          <DialogDescription>
+            Scegli tipo, stagione e destinazione prima di scaricare questo correlato.
+          </DialogDescription>
+        </DialogHeader>
+        <ClassifyFields animeId={animeId} value={value} onChange={setValue} />
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => setOpen(false)} disabled={setOverride.isPending}>
+            Annulla
+          </Button>
+          <Button onClick={onSave} disabled={setOverride.isPending}>
+            {setOverride.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            Salva
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 export function RelationsDownloadDialog({
@@ -112,7 +194,9 @@ export function RelationsDownloadDialog({
           <DialogTitle>Scaricare anche le serie correlate?</DialogTitle>
           <DialogDescription>
             Questa serie ha contenuti correlati. Seleziona quelli che vuoi scaricare (episodi
-            mancanti){language ? ` in ${language === 'DUB_ITA' ? 'DUB ITA' : 'SUB ITA'}` : ''}.
+            mancanti){language ? ` in ${language === 'DUB_ITA' ? 'DUB ITA' : 'SUB ITA'}` : ''}. Usa
+            l'icona accanto a ogni titolo per scegliere se è una stagione, uno special o un film e
+            dove salvarlo.
           </DialogDescription>
         </DialogHeader>
 
@@ -139,9 +223,9 @@ export function RelationsDownloadDialog({
             const checked = selected.has(r.slug);
             const seasonBadge = isTv(r.type) && (r.seasonNumber ?? 0) > 1;
             return (
-              <li key={`${r.id}_${r.relationType}`}>
+              <li key={`${r.id}_${r.relationType}`} className="flex items-stretch gap-2">
                 <label
-                  className={`flex cursor-pointer items-center gap-3 rounded-md border p-2 transition-colors ${
+                  className={`flex flex-1 cursor-pointer items-center gap-3 rounded-md border p-2 transition-colors ${
                     checked ? 'border-primary bg-primary/5' : 'hover:bg-accent/50'
                   }`}
                 >
@@ -179,6 +263,7 @@ export function RelationsDownloadDialog({
                     </span>
                   </span>
                 </label>
+                <RelationClassifyButton animeId={r.id} title={title} />
               </li>
             );
           })}

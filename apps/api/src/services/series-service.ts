@@ -1,5 +1,7 @@
 import type {
   AnimeDetail,
+  PathPreview,
+  PathPreviewInput,
   RelatedAnime,
   SeriesOverrideInput,
   SeriesResolved,
@@ -9,7 +11,9 @@ import type { Db } from '../db';
 import { schema } from '../db';
 import { NotFoundError } from '../lib/errors';
 import type { CatalogService } from './catalog-service';
-import type { SeriesResolver } from './series-resolver';
+import type { ConfigService } from './config-service';
+import type { RenamerService } from './renamer-service';
+import type { OverrideParams, SeriesResolver } from './series-resolver';
 
 // Relazioni che fanno parte della "stessa saga" (espanse dalla BFS franchise). NON
 // ALTERNATIVE/CHARACTER/SUMMARY/OTHER, che porterebbero a opere diverse.
@@ -22,12 +26,14 @@ const FRANCHISE_RELATIONS = new Set([
 ]);
 
 export interface SeriesService {
-  /** Stagione/serie correnti per un anime (dopo override/euristica). */
+  /** Stagione/serie/tipo correnti per un anime (dopo override/euristica). */
   getResolved(animeId: string): SeriesResolved;
   /** Imposta o aggiorna l'override manuale. Campi a null azzerano quel campo. */
   setOverride(input: SeriesOverrideInput): SeriesResolved;
   /** Rimuove l'override: si torna a euristica/API. */
   clearOverride(animeId: string): SeriesResolved;
+  /** Anteprima del percorso su disco (con parametri ipotetici non ancora salvati). */
+  previewPath(input: PathPreviewInput): PathPreview;
   /**
    * Scopre l'intero franchise partendo da uno slug: BFS che segue le relazioni di "stessa saga"
    * e fa fetch+cache di ogni nodo (cosi' emergono anche le stagioni transitive S3/S4...).
@@ -40,11 +46,13 @@ export interface SeriesServiceDeps {
   db: Db;
   resolver: SeriesResolver;
   catalog: CatalogService;
+  renamer: RenamerService;
+  config: ConfigService;
   now?: () => Date;
 }
 
 export function createSeriesService(deps: SeriesServiceDeps): SeriesService {
-  const { db, resolver, catalog } = deps;
+  const { db, resolver, catalog, renamer, config } = deps;
   const now = deps.now ?? (() => new Date());
 
   // L'utente ha gia' scaricato/accodato da questa serie? Allora la stagione e' di
@@ -81,6 +89,11 @@ export function createSeriesService(deps: SeriesServiceDeps): SeriesService {
       .from(schema.anime)
       .where(eq(schema.anime.id, info.seriesId))
       .get();
+    const self = db
+      .select({ type: schema.anime.type })
+      .from(schema.anime)
+      .where(eq(schema.anime.id, animeId))
+      .get();
     const override = db
       .select({ animeId: schema.seriesOverride.animeId })
       .from(schema.seriesOverride)
@@ -93,6 +106,8 @@ export function createSeriesService(deps: SeriesServiceDeps): SeriesService {
       seriesAnimeId: info.seriesId,
       seriesSlug: info.seriesSlug,
       seriesTitle: root?.titleIta ?? root?.title ?? info.seriesSlug,
+      kind: info.kind,
+      type: (self?.type ?? 'TV') as SeriesResolved['type'],
       hasOverride,
       confirmed: hasOverride || hasExistingDownload(animeId),
     };
@@ -111,7 +126,7 @@ export function createSeriesService(deps: SeriesServiceDeps): SeriesService {
       return resolved(animeId);
     },
 
-    setOverride({ animeId, seasonNumber, seriesAnimeId }) {
+    setOverride({ animeId, seasonNumber, seriesAnimeId, kind }) {
       const exists = db
         .select({ id: schema.anime.id })
         .from(schema.anime)
@@ -130,8 +145,9 @@ export function createSeriesService(deps: SeriesServiceDeps): SeriesService {
           throw new NotFoundError(`Serie madre non trovata: ${seriesAnimeId}`);
         }
       }
+      const effectiveKind = kind ?? 'auto';
       // Override vuoto = nessun vincolo: equivale a rimuoverlo.
-      if (seasonNumber == null && seriesAnimeId == null) {
+      if (seasonNumber == null && seriesAnimeId == null && effectiveKind === 'auto') {
         return this.clearOverride(animeId);
       }
       const timestamp = now().toISOString();
@@ -140,6 +156,7 @@ export function createSeriesService(deps: SeriesServiceDeps): SeriesService {
           animeId,
           seriesAnimeId: seriesAnimeId ?? null,
           seasonNumber: seasonNumber ?? null,
+          kind: effectiveKind,
           updatedAt: timestamp,
         })
         .onConflictDoUpdate({
@@ -147,6 +164,7 @@ export function createSeriesService(deps: SeriesServiceDeps): SeriesService {
           set: {
             seriesAnimeId: seriesAnimeId ?? null,
             seasonNumber: seasonNumber ?? null,
+            kind: effectiveKind,
             updatedAt: timestamp,
           },
         })
@@ -157,6 +175,38 @@ export function createSeriesService(deps: SeriesServiceDeps): SeriesService {
     clearOverride(animeId) {
       db.delete(schema.seriesOverride).where(eq(schema.seriesOverride.animeId, animeId)).run();
       return resolved(animeId);
+    },
+
+    previewPath(input) {
+      const exists = db
+        .select({ id: schema.anime.id })
+        .from(schema.anime)
+        .where(eq(schema.anime.id, input.animeId))
+        .get();
+      if (!exists) {
+        throw new NotFoundError(`Anime non trovato: ${input.animeId}`);
+      }
+      const language = input.language ?? config.get('language');
+      const episodeNumber = input.episodeNumber ?? 1;
+      const hasHypothesis =
+        input.kind != null || input.seasonNumber != null || input.seriesAnimeId != null;
+      const override: OverrideParams | undefined = hasHypothesis
+        ? {
+            kind: input.kind ?? undefined,
+            seasonNumber: input.seasonNumber ?? undefined,
+            seriesAnimeId: input.seriesAnimeId ?? undefined,
+          }
+        : undefined;
+      const path = renamer.previewPath({
+        animeId: input.animeId,
+        episodeNumber,
+        language,
+        override,
+      });
+      const series = override
+        ? resolver.resolveWith(input.animeId, override)
+        : resolver.resolve(input.animeId);
+      return { path, kind: series.kind };
     },
 
     async franchise(startSlug, maxNodes = 30) {

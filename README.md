@@ -5,7 +5,7 @@
 <h1 align="center">AnimeUnion Docker</h1>
 
 <p align="center">
-  <b>"Radarr/Sonarr italiano per anime."</b><br/>
+  <b>La tua libreria anime, sempre aggiornata.</b><br/>
   Segui un anime e ogni nuovo episodio viene scaricato, rinominato e organizzato da solo — pronto per Jellyfin/Plex.
 </p>
 
@@ -38,9 +38,8 @@ libreria, già pronto da guardare. Tutto da un'interfaccia web, senza aprire il 
 | 📁 **Libreria organizzata** | Naming Jellyfin/Plex, **gestione file** (elimina episodio/stagione/serie dall'app) |
 | 🔔 **Notifiche** | Centro notifiche in-app (completati/falliti/nuovi episodi) + inoltro **Telegram** opzionale |
 | 🩺 **Diagnostica** | Stato worker, spazio disco per cartella, ultima sync, connessione |
+| 📲 **App installabile + push** | Installa AnimeUnion come app (PWA) e ricevi notifiche del browser anche ad app chiusa (richiede HTTPS — [guida](#https-app-installabile-pwa-e-notifiche-push)) |
 | 🐳 **Docker multi-arch** | Synology, QNAP, Ubuntu, Raspberry Pi, Windows, macOS (amd64 + arm64) |
-
-> 🛣️ **In arrivo**: PWA installabile e notifiche Web Push.
 
 ---
 

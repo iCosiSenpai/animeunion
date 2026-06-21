@@ -20,4 +20,4 @@ Eventuali soluzioni o funzionalità alternative che hai valutato.
 
 ## Note aggiuntive
 
-Mockup, riferimenti, esempi da altre app (es. Radarr/Sonarr), o altro contesto.
+Mockup, riferimenti, esempi da altre app, o altro contesto.

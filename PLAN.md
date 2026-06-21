@@ -29,7 +29,7 @@ Decisioni prese dopo le prime domande di design. Prevalgono sul testo originale 
 
 ## 1. Visione
 
-Creare un **"Radarr/Sonarr italiano per gli anime"**: un'applicazione Docker self-hosted che, integrata ufficialmente con [AnimeUnion](https://animeunion.tv), permetta a chiunque di automatizzare il download degli anime dal catalogo AnimeUnion — con file rinominati e organizzati per Jellyfin e Plex.
+Un'applicazione Docker self-hosted che, integrata ufficialmente con [AnimeUnion](https://animeunion.tv), permetta a chiunque di automatizzare il download degli anime dal catalogo AnimeUnion — con file rinominati e organizzati per Jellyfin e Plex. In breve: **la tua libreria anime, sempre aggiornata**.
 
 **Il container serve principalmente ad automatizzare il download**: l'utente cerca un anime, clicca "Segui", e da quel momento ogni nuovo episodio viene scaricato automaticamente. Niente interazione manuale, niente browser aperto sul sito per scaricare. Tutto in casa, tutto automatico.
 

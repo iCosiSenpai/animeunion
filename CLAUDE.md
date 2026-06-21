@@ -9,8 +9,8 @@
 
 ## Visione
 
-"Radarr/Sonarr italiano per anime": l'utente segue un anime e ogni nuovo episodio viene scaricato
-automaticamente (un episodio alla volta), rinominato e organizzato per Jellyfin. Integrazione
+"La tua libreria anime, sempre aggiornata": l'utente segue un anime e ogni nuovo episodio viene
+scaricato automaticamente (un episodio alla volta), rinominato e organizzato per Jellyfin. Integrazione
 **ufficiale** con AnimeUnion via API (no scraping). App self-hosted in Docker, mono-utente.
 
 ## Stack (non negoziabile)

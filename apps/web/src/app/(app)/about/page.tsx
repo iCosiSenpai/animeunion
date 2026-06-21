@@ -11,9 +11,9 @@ export default function AboutPage() {
       <div className="space-y-2">
         <h1 className="text-3xl font-bold tracking-tight">AnimeUnion Docker</h1>
         <p className="text-muted-foreground">
-          Applicazione ufficiale affiliata ad AnimeUnion per il download self-hosted degli anime. Un
-          &quot;Radarr/Sonarr italiano per gli anime&quot;: segui una serie e ogni nuovo episodio
-          viene scaricato e organizzato automaticamente per Plex/Jellyfin.
+          Applicazione ufficiale affiliata ad AnimeUnion per il download self-hosted degli anime. La
+          tua libreria anime, sempre aggiornata: segui una serie e ogni nuovo episodio viene scaricato
+          e organizzato automaticamente per Plex/Jellyfin.
         </p>
       </div>
 

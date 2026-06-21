@@ -11,6 +11,7 @@ import { createCatalogService } from './services/catalog-service';
 import { createConfigService } from './services/config-service';
 import { createDownloadService } from './services/download-service';
 import { createFavoritesService } from './services/favorites-service';
+import { createFileManagerService } from './services/file-manager-service';
 import { createFollowService } from './services/follow-service';
 import { createHomeService } from './services/home-service';
 import { createLibraryService } from './services/library-service';
@@ -74,6 +75,7 @@ export function createAppContext(options: { env?: Env; databasePath?: string } =
   const resolver = createSeriesResolver({ db });
   const renamer = createRenamerService({ db, config, seriesResolver: resolver });
   const library = createLibraryService({ db, config, renamer, resolver, logger });
+  const files = createFileManagerService({ db, config, renamer, logger });
   const series = createSeriesService({ db, resolver, catalog, renamer, config });
 
   function animeTitleOf(animeId: string): string {
@@ -167,6 +169,7 @@ export function createAppContext(options: { env?: Env; databasePath?: string } =
       auth,
       download,
       library,
+      files,
       series,
       notifications,
       lock,

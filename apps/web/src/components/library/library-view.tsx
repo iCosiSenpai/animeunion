@@ -15,7 +15,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { trpc } from '@/lib/trpc';
 import { formatBytes } from '@/lib/utils';
 import type { LibraryScanResult } from '@animeunion/shared';
-import { FolderOpen, HardDrive, Play, RefreshCw, Trash2, Tv } from 'lucide-react';
+import { FolderOpen, FolderTree, HardDrive, Play, RefreshCw, Trash2, Tv } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -140,10 +140,18 @@ export function LibraryView() {
             {statsQuery.data?.totalSizeBytes ? formatBytes(statsQuery.data.totalSizeBytes) : '—'}.
           </p>
         </div>
-        <Button onClick={onScan} disabled={scanMutation.isPending} className="gap-2">
-          <RefreshCw className={`h-4 w-4 ${scanMutation.isPending ? 'animate-spin' : ''}`} />
-          {scanMutation.isPending ? 'Scansione...' : 'Scansiona libreria'}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button asChild variant="outline" className="gap-2">
+            <Link href="/library/files">
+              <FolderTree className="h-4 w-4" />
+              Gestore file
+            </Link>
+          </Button>
+          <Button onClick={onScan} disabled={scanMutation.isPending} className="gap-2">
+            <RefreshCw className={`h-4 w-4 ${scanMutation.isPending ? 'animate-spin' : ''}`} />
+            {scanMutation.isPending ? 'Scansione...' : 'Scansiona libreria'}
+          </Button>
+        </div>
       </div>
 
       <StatsCards stats={statsQuery.data} isLoading={statsQuery.isLoading} />

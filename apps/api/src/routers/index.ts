@@ -5,6 +5,7 @@ import { catalogRouter } from './catalog';
 import { configRouter } from './config';
 import { downloadRouter } from './download';
 import { episodeRouter } from './episode';
+import { filesRouter } from './files';
 import { followRouter } from './follow';
 import { healthRouter } from './health';
 import { homeRouter } from './home';
@@ -30,6 +31,7 @@ export const appRouter = router({
   profile: profileRouter,
   config: configRouter,
   download: downloadRouter,
+  files: filesRouter,
   series: seriesRouter,
   notifications: notificationsRouter,
   health: healthRouter,

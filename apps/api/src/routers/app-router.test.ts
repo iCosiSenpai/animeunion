@@ -9,6 +9,7 @@ import { createCatalogService } from '../services/catalog-service';
 import { createConfigService } from '../services/config-service';
 import { createDownloadService } from '../services/download-service';
 import { createFavoritesService } from '../services/favorites-service';
+import { createFileManagerService } from '../services/file-manager-service';
 import { createFollowService } from '../services/follow-service';
 import { createHomeService } from '../services/home-service';
 import { createLibraryService } from '../services/library-service';
@@ -39,6 +40,7 @@ function makeCaller() {
   const resolver = createSeriesResolver({ db });
   const renamer = createRenamerService({ db, config, seriesResolver: resolver });
   const library = createLibraryService({ db, config, renamer, resolver, logger: testLogger });
+  const files = createFileManagerService({ db, config, renamer, logger: testLogger });
   const series = createSeriesService({ db, resolver, catalog, renamer, config });
   const notifications = createNotificationService({ db, config });
   const lock = createLockService({ db, env: { WEB_LOCK_DISABLED: undefined } });
@@ -69,6 +71,7 @@ function makeCaller() {
       auth,
       download,
       library,
+      files,
       series,
       notifications,
       lock,

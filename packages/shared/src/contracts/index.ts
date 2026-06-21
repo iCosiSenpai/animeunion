@@ -7,6 +7,7 @@ export * from './follow';
 export * from './me';
 export * from './download';
 export * from './library';
+export * from './files';
 export * from './calendar';
 export * from './config';
 export * from './series';

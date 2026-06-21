@@ -135,7 +135,7 @@ export function useSeasonGate(animeId: string): {
           <Info className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
           <span>
             Controlla bene la destinazione qui sopra. Potrai sempre spostare o rinominare i file dal{' '}
-            <Link href="/library" className="text-primary underline-offset-4 hover:underline">
+            <Link href="/library/files" className="text-primary underline-offset-4 hover:underline">
               gestore file
             </Link>
             .

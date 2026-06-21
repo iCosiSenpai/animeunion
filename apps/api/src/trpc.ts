@@ -10,6 +10,7 @@ import type { CatalogService } from './services/catalog-service';
 import type { ConfigService } from './services/config-service';
 import type { DownloadService } from './services/download-service';
 import type { FavoritesService } from './services/favorites-service';
+import type { FileManagerService } from './services/file-manager-service';
 import type { FollowService } from './services/follow-service';
 import type { HomeService } from './services/home-service';
 import type { LibraryService } from './services/library-service';
@@ -32,6 +33,7 @@ export interface Context {
     auth: AuthService;
     download: DownloadService;
     library: LibraryService;
+    files: FileManagerService;
     series: SeriesService;
     notifications: NotificationService;
     lock: LockService;

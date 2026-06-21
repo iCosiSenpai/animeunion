@@ -1,0 +1,487 @@
+'use client';
+
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Input } from '@/components/ui/input';
+import { trpc } from '@/lib/trpc';
+import { cn } from '@/lib/utils';
+import type { FileEntry } from '@animeunion/shared';
+import {
+  AlertTriangle,
+  ChevronLeft,
+  FileVideo,
+  Folder,
+  FolderPlus,
+  Link2,
+  Loader2,
+  Pencil,
+  Trash2,
+} from 'lucide-react';
+import { useState } from 'react';
+import { toast } from 'sonner';
+
+function formatSize(bytes: number | null): string {
+  if (bytes == null) return '';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let n = bytes;
+  let i = 0;
+  while (n >= 1024 && i < units.length - 1) {
+    n /= 1024;
+    i += 1;
+  }
+  return `${n.toFixed(n >= 10 || i === 0 ? 0 : 1)} ${units[i]}`;
+}
+
+/** Collega un file orfano a un episodio: cerca la serie, scegli l'episodio, sposta+marca. */
+function RelinkDialog({
+  file,
+  onClose,
+  onDone,
+}: {
+  file: FileEntry;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [search, setSearch] = useState('');
+  const [slug, setSlug] = useState<string | null>(null);
+  const searchQ = trpc.catalog.search.useQuery(
+    { query: search },
+    { enabled: !slug && search.trim().length >= 2 },
+  );
+  const episodesQ = trpc.episode.byAnime.useQuery({ animeSlug: slug ?? '' }, { enabled: !!slug });
+  const relink = trpc.files.relink.useMutation({
+    onSuccess: () => {
+      toast.success('File collegato all’episodio.');
+      onDone();
+    },
+    onError: (e) => toast.error(e.message || 'Collegamento non riuscito'),
+  });
+
+  return (
+    <Dialog open onOpenChange={(o) => (o ? null : onClose())}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Collega a un episodio</DialogTitle>
+          <DialogDescription>
+            Scegli a quale episodio appartiene <strong>{file.name}</strong>. Il file verrà spostato
+            nella posizione corretta e segnato come scaricato.
+          </DialogDescription>
+        </DialogHeader>
+
+        {!slug ? (
+          <div className="space-y-2">
+            <Input
+              placeholder="Cerca la serie (min. 2 caratteri)…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+            {searchQ.isFetching ? (
+              <div className="flex items-center gap-2 p-2 text-xs text-muted-foreground">
+                <Loader2 className="h-3 w-3 animate-spin" /> Cerco…
+              </div>
+            ) : null}
+            {search.trim().length >= 2 && searchQ.data ? (
+              <ul className="max-h-56 divide-y overflow-y-auto rounded-md border text-sm">
+                {searchQ.data.data.slice(0, 10).map((a) => (
+                  <li key={a.id}>
+                    <button
+                      type="button"
+                      className="w-full p-2 text-left hover:bg-muted"
+                      onClick={() => setSlug(a.slug)}
+                    >
+                      {a.titleIta ?? a.title}
+                    </button>
+                  </li>
+                ))}
+                {searchQ.data.data.length === 0 ? (
+                  <li className="p-2 text-xs text-muted-foreground">Nessun risultato.</li>
+                ) : null}
+              </ul>
+            ) : null}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <Button variant="ghost" size="sm" className="gap-1" onClick={() => setSlug(null)}>
+              <ChevronLeft className="h-4 w-4" /> Cambia serie
+            </Button>
+            {episodesQ.isFetching ? (
+              <div className="flex items-center gap-2 p-2 text-xs text-muted-foreground">
+                <Loader2 className="h-3 w-3 animate-spin" /> Carico gli episodi…
+              </div>
+            ) : (
+              <ul className="max-h-56 divide-y overflow-y-auto rounded-md border text-sm">
+                {(episodesQ.data ?? []).map((ep) => (
+                  <li key={ep.id}>
+                    <button
+                      type="button"
+                      className="flex w-full items-center justify-between p-2 text-left hover:bg-muted disabled:opacity-50"
+                      disabled={relink.isPending}
+                      onClick={() => relink.mutate({ path: file.path, episodeFileId: ep.id })}
+                    >
+                      <span>
+                        Episodio {ep.number}
+                        {(ep.titleIta ?? ep.title) ? ` — ${ep.titleIta ?? ep.title}` : ''}
+                      </span>
+                      <Badge variant="secondary">{ep.language === 'DUB_ITA' ? 'DUB' : 'SUB'}</Badge>
+                    </button>
+                  </li>
+                ))}
+                {(episodesQ.data ?? []).length === 0 && !episodesQ.isFetching ? (
+                  <li className="p-2 text-xs text-muted-foreground">
+                    Nessun episodio per questa serie.
+                  </li>
+                ) : null}
+              </ul>
+            )}
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose} disabled={relink.isPending}>
+            Annulla
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function FileManager() {
+  const utils = trpc.useUtils();
+  const [path, setPath] = useState('');
+  const list = trpc.files.list.useQuery({ path: path || undefined });
+
+  const [draggedPath, setDraggedPath] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState<string | null>(null);
+
+  const [renameTarget, setRenameTarget] = useState<FileEntry | null>(null);
+  const [renameName, setRenameName] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState<FileEntry | null>(null);
+  const [mkdirOpen, setMkdirOpen] = useState(false);
+  const [mkdirName, setMkdirName] = useState('');
+  const [relinkTarget, setRelinkTarget] = useState<FileEntry | null>(null);
+
+  const refresh = () => {
+    void utils.files.list.invalidate();
+  };
+
+  const renameMut = trpc.files.rename.useMutation({
+    onSuccess: () => {
+      toast.success('Rinominato.');
+      setRenameTarget(null);
+      refresh();
+    },
+    onError: (e) => toast.error(e.message || 'Operazione non riuscita'),
+  });
+  const moveMut = trpc.files.move.useMutation({
+    onSuccess: () => {
+      toast.success('Spostato.');
+      refresh();
+    },
+    onError: (e) => toast.error(e.message || 'Spostamento non riuscito'),
+  });
+  const removeMut = trpc.files.remove.useMutation({
+    onSuccess: () => {
+      toast.success('Eliminato.');
+      setDeleteTarget(null);
+      refresh();
+    },
+    onError: (e) => toast.error(e.message || 'Eliminazione non riuscita'),
+  });
+  const mkdirMut = trpc.files.mkdir.useMutation({
+    onSuccess: () => {
+      toast.success('Cartella creata.');
+      setMkdirOpen(false);
+      setMkdirName('');
+      refresh();
+    },
+    onError: (e) => toast.error(e.message || 'Creazione non riuscita'),
+  });
+
+  const data = list.data;
+  const atRootsLevel = !data || data.path === '';
+
+  function onDropToDir(dirPath: string) {
+    setDragOver(null);
+    if (draggedPath && draggedPath !== dirPath) {
+      moveMut.mutate({ path: draggedPath, destDir: dirPath });
+    }
+    setDraggedPath(null);
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-200">
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+        <span>
+          Gestisci i file <strong>solo da qui</strong>. Se sposti o rinomini i file direttamente sul
+          NAS (fuori dall'app), l'app può perdere il collegamento e segnalarli come mancanti o
+          ri-scaricarli.
+        </span>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          {data && data.parent !== null ? (
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1"
+              onClick={() => setPath(data.parent ?? '')}
+            >
+              <ChevronLeft className="h-4 w-4" /> Su
+            </Button>
+          ) : null}
+          <p className="truncate font-mono text-xs text-muted-foreground">
+            {atRootsLevel ? 'Le tue cartelle' : data?.path}
+          </p>
+        </div>
+        {!atRootsLevel ? (
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            onClick={() => setMkdirOpen(true)}
+          >
+            <FolderPlus className="h-4 w-4" /> Nuova cartella
+          </Button>
+        ) : null}
+      </div>
+
+      {list.isLoading ? (
+        <div className="space-y-2">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="h-12 animate-pulse rounded-md bg-muted" />
+          ))}
+        </div>
+      ) : !data || data.entries.length === 0 ? (
+        <EmptyState
+          icon={Folder}
+          title="Cartella vuota"
+          description={
+            atRootsLevel
+              ? 'Configura le cartelle di download nelle Impostazioni per vederle qui.'
+              : 'Non ci sono sottocartelle o file video qui.'
+          }
+        />
+      ) : (
+        <ul className="divide-y rounded-lg border">
+          {data.entries.map((entry) => {
+            const isDir = entry.type === 'dir';
+            const orphan = entry.type === 'file' && !entry.episodeFileId;
+            return (
+              <li
+                key={entry.path}
+                draggable={entry.type === 'file'}
+                onDragStart={() => setDraggedPath(entry.path)}
+                onDragEnd={() => {
+                  setDraggedPath(null);
+                  setDragOver(null);
+                }}
+                onDragOver={(e) => {
+                  if (isDir && draggedPath) {
+                    e.preventDefault();
+                    setDragOver(entry.path);
+                  }
+                }}
+                onDragLeave={() => isDir && setDragOver(null)}
+                onDrop={() => isDir && onDropToDir(entry.path)}
+                className={cn(
+                  'flex items-center gap-3 px-3 py-2.5 text-sm transition-colors',
+                  isDir &&
+                    dragOver === entry.path &&
+                    'bg-primary/10 ring-1 ring-inset ring-primary',
+                  entry.type === 'file' && 'cursor-grab',
+                )}
+              >
+                {isDir ? (
+                  <button
+                    type="button"
+                    className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                    onClick={() => setPath(entry.path)}
+                  >
+                    <Folder className="h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
+                    <span className="truncate font-medium">
+                      {atRootsLevel ? entry.path : entry.name}
+                    </span>
+                  </button>
+                ) : (
+                  <div className="flex min-w-0 flex-1 items-center gap-2">
+                    <FileVideo
+                      className="h-5 w-5 shrink-0 text-muted-foreground"
+                      aria-hidden="true"
+                    />
+                    <span className="truncate">{entry.name}</span>
+                    {orphan ? (
+                      <Badge
+                        variant="outline"
+                        className="shrink-0 border-amber-500/50 text-amber-300"
+                      >
+                        non collegato
+                      </Badge>
+                    ) : null}
+                    {entry.size != null ? (
+                      <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                        {formatSize(entry.size)}
+                      </span>
+                    ) : null}
+                  </div>
+                )}
+
+                {!atRootsLevel ? (
+                  <div className="flex shrink-0 items-center gap-1">
+                    {orphan ? (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-primary"
+                        title="Collega a un episodio"
+                        onClick={() => setRelinkTarget(entry)}
+                      >
+                        <Link2 className="h-4 w-4" />
+                      </Button>
+                    ) : null}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      title="Rinomina"
+                      onClick={() => {
+                        setRenameTarget(entry);
+                        setRenameName(entry.name);
+                      }}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-destructive"
+                      title="Elimina"
+                      onClick={() => setDeleteTarget(entry)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      {/* Rinomina */}
+      <Dialog open={!!renameTarget} onOpenChange={(o) => (o ? null : setRenameTarget(null))}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Rinomina</DialogTitle>
+            <DialogDescription>Nuovo nome per “{renameTarget?.name}”.</DialogDescription>
+          </DialogHeader>
+          <Input value={renameName} onChange={(e) => setRenameName(e.target.value)} />
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => setRenameTarget(null)}
+              disabled={renameMut.isPending}
+            >
+              Annulla
+            </Button>
+            <Button
+              onClick={() =>
+                renameTarget && renameMut.mutate({ path: renameTarget.path, newName: renameName })
+              }
+              disabled={
+                renameMut.isPending || !renameName.trim() || renameName === renameTarget?.name
+              }
+            >
+              {renameMut.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Rinomina
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Nuova cartella */}
+      <Dialog open={mkdirOpen} onOpenChange={setMkdirOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Nuova cartella</DialogTitle>
+            <DialogDescription>Creala dentro la cartella corrente.</DialogDescription>
+          </DialogHeader>
+          <Input
+            placeholder="Nome cartella"
+            value={mkdirName}
+            onChange={(e) => setMkdirName(e.target.value)}
+          />
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => setMkdirOpen(false)}
+              disabled={mkdirMut.isPending}
+            >
+              Annulla
+            </Button>
+            <Button
+              onClick={() => data && mkdirMut.mutate({ parent: data.path, name: mkdirName })}
+              disabled={mkdirMut.isPending || !mkdirName.trim()}
+            >
+              {mkdirMut.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Crea
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Elimina */}
+      <Dialog open={!!deleteTarget} onOpenChange={(o) => (o ? null : setDeleteTarget(null))}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Eliminare “{deleteTarget?.name}”?</DialogTitle>
+            <DialogDescription>
+              {deleteTarget?.type === 'dir'
+                ? 'La cartella e tutto il suo contenuto verranno eliminati. Operazione non annullabile.'
+                : 'Il file verrà eliminato dal disco. Operazione non annullabile.'}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => setDeleteTarget(null)}
+              disabled={removeMut.isPending}
+            >
+              Annulla
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => deleteTarget && removeMut.mutate({ path: deleteTarget.path })}
+              disabled={removeMut.isPending}
+            >
+              {removeMut.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Elimina
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {relinkTarget ? (
+        <RelinkDialog
+          file={relinkTarget}
+          onClose={() => setRelinkTarget(null)}
+          onDone={() => {
+            setRelinkTarget(null);
+            refresh();
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}

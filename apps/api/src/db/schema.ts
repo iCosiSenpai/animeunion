@@ -147,6 +147,8 @@ export const follow = sqliteTable(
     addedAt: text('added_at').notNull(),
     updatedAt: text('updated_at').notNull(),
     lastCheckAt: text('last_check_at'),
+    // JSON degli id delle relazioni già viste (per rilevare nuove stagioni). null = mai scansionato.
+    knownRelationIds: text('known_relation_ids'),
   },
   (table) => [
     index('idx_follow_anime').on(table.animeId),

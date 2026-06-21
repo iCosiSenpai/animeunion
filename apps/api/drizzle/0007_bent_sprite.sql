@@ -1,0 +1,1 @@
+ALTER TABLE `follow` ADD `known_relation_ids` text;

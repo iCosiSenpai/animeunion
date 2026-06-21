@@ -470,6 +470,23 @@ export function SettingsView() {
           </Select>
         </Field>
         <Field
+          label="Nuove stagioni"
+          hint="Avvisa quando una serie che segui ottiene una nuova stagione o contenuto correlato."
+        >
+          <Select
+            value={draft.notifyNewSeasons ? 'on' : 'off'}
+            onValueChange={(v) => update('notifyNewSeasons', v === 'on')}
+          >
+            <SelectTrigger className="w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="on">Attivo</SelectItem>
+              <SelectItem value="off">Disattivo</SelectItem>
+            </SelectContent>
+          </Select>
+        </Field>
+        <Field
           label="Notifiche Telegram"
           hint="Inoltra le notifiche al tuo bot Telegram. Configura token e chat id qui sotto."
         >

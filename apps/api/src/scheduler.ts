@@ -1,4 +1,5 @@
 import { freeDiskBytes } from './lib/download-fs';
+import { createSeasonWatcher } from './services/season-watcher';
 import type { Context } from './trpc';
 
 export interface Scheduler {
@@ -9,6 +10,8 @@ export interface Scheduler {
 const DOWNLOAD_AUTODOWNLOAD_MINUTES = 30;
 const QUEUE_PURGE_HOURS = 6;
 const DISK_CHECK_HOURS = 6;
+const SEASON_CHECK_HOURS = 12;
+const SEASON_CHECK_STARTUP_MS = 2 * 60 * 1000; // prima passata ~2 min dopo l'avvio
 // Soglia di avviso (1 GiB): più alta del hard-stop del worker (500 MiB) per avvisare prima.
 const DISK_LOW_BYTES = 1024 * 1024 * 1024;
 
@@ -105,6 +108,26 @@ export function createScheduler(ctx: Context): Scheduler {
       const diskTimer = setInterval(() => void checkDisk(), DISK_CHECK_HOURS * 60 * 60 * 1000);
       diskTimer.unref?.();
       timers.push(diskTimer);
+
+      // Nuove stagioni delle serie seguite (batch a rotazione, refresh forzato del dettaglio).
+      const seasonWatcher = createSeasonWatcher({
+        db: ctx.db,
+        catalog: services.catalog,
+        notifications: services.notifications,
+        config: services.config,
+        logger,
+      });
+      const seasonCheck = () => {
+        void seasonWatcher.checkNewSeasons().catch((error) => {
+          logger.debug({ err: error }, 'Tick season-watcher fallito');
+        });
+      };
+      const seasonStartup = setTimeout(seasonCheck, SEASON_CHECK_STARTUP_MS);
+      seasonStartup.unref?.();
+      timers.push(seasonStartup);
+      const seasonTimer = setInterval(seasonCheck, SEASON_CHECK_HOURS * 60 * 60 * 1000);
+      seasonTimer.unref?.();
+      timers.push(seasonTimer);
 
       logger.info(
         {

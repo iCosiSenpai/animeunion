@@ -48,7 +48,7 @@ export interface SyncStatus {
 
 export interface CatalogService {
   search(input: { query: string; page: number }): Promise<PaginatedAnime>;
-  getBySlug(slug: string): Promise<AnimeDetail>;
+  getBySlug(slug: string, opts?: { forceRefresh?: boolean }): Promise<AnimeDetail>;
   byGenre(genreSlug: string, page: number): Promise<PaginatedAnime>;
   bySeason(season: Season, year: number, page: number): Promise<PaginatedAnime>;
   byYear(year: number, page: number): Promise<PaginatedAnime>;
@@ -552,9 +552,10 @@ export function createCatalogService(options: CatalogServiceOptions): CatalogSer
       }
     },
 
-    async getBySlug(slug): Promise<AnimeDetail> {
+    async getBySlug(slug, opts): Promise<AnimeDetail> {
       const row = getAnimeRowBySlug(slug);
-      if (row && isRowFresh(row) && hasEpisodes(row.id)) {
+      // forceRefresh: salta la cache e rifà il fetch (per rilevare relazioni nuove).
+      if (!opts?.forceRefresh && row && isRowFresh(row) && hasEpisodes(row.id)) {
         return assembleDetailFromDb(row);
       }
       try {

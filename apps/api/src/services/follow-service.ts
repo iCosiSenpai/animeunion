@@ -121,6 +121,7 @@ export function createFollowService(deps: FollowServiceDeps): FollowService {
         addedAt: timestamp,
         updatedAt: timestamp,
         lastCheckAt: null,
+        knownRelationIds: null,
       };
       db.insert(schema.follow).values(row).run();
       // Preferiti = fonte di verita: propaga al sito (best-effort).

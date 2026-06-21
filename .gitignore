@@ -13,8 +13,15 @@ out/
 
 # Segreti e ambiente — MAI committare
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+credentials*.json
+service-account*.json
+secrets*.json
 
 # Database SQLite (locale, generato a runtime)
 *.db

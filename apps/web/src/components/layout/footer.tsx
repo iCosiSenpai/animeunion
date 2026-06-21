@@ -55,7 +55,7 @@ export function Footer() {
   }, []);
 
   return (
-    <footer className="mt-8 border-t bg-card/30">
+    <footer className="mt-8 border-t bg-card/30 pb-dock-safe md:pb-0">
       <div className="container py-10">
         <div className="flex flex-col items-center gap-8 md:flex-row md:items-start md:justify-between">
           <div className="flex flex-col items-center gap-4 md:items-start">

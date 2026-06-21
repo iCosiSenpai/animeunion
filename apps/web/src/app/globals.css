@@ -68,29 +68,3 @@
     background-color: transparent;
   }
 }
-
-@layer utilities {
-  /* Safe-area (notch / home indicator). Senza queste classi i contenitori fissi
-     finiscono sotto la gesture bar su iOS. */
-  .pt-safe {
-    padding-top: env(safe-area-inset-top);
-  }
-  .pb-safe {
-    padding-bottom: env(safe-area-inset-bottom);
-  }
-  .pl-safe {
-    padding-left: env(safe-area-inset-left);
-  }
-  .pr-safe {
-    padding-right: env(safe-area-inset-right);
-  }
-  /* Clearance per il contenuto che scorre sotto la bottom bar mobile (+ safe area). */
-  .pb-dock {
-    padding-bottom: calc(var(--dock-height) + env(safe-area-inset-bottom));
-  }
-  /* Offset verticale pari all'altezza del dock (+ safe area): per barre contestuali
-     che devono stare SOPRA il dock su mobile invece di sovrapporsi. */
-  .bottom-dock {
-    bottom: calc(var(--dock-height) + env(safe-area-inset-bottom));
-  }
-}

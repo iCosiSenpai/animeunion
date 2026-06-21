@@ -11,6 +11,15 @@ const config: Config = {
       screens: { '2xl': '1400px' },
     },
     extend: {
+      spacing: {
+        // Safe-area (notch / home indicator) e altezza del dock mobile. Disponibili come
+        // token Tailwind (con varianti responsive) per padding e inset: es. pb-safe-b,
+        // pb-dock-safe, bottom-dock-safe + md:bottom-0.
+        'safe-t': 'env(safe-area-inset-top)',
+        'safe-b': 'env(safe-area-inset-bottom)',
+        dock: 'var(--dock-height)',
+        'dock-safe': 'calc(var(--dock-height) + env(safe-area-inset-bottom))',
+      },
       colors: {
         border: 'hsl(var(--border))',
         input: 'hsl(var(--input))',

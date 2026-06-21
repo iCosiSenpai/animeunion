@@ -16,7 +16,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         <div className="flex flex-1 flex-col md:pl-16">
           <Navbar />
           <SetupBanner />
-          <main className="container flex-1 py-6 pb-24 md:pb-6">
+          <main className="container flex-1 py-6 pb-8 md:pb-6">
             <PageTransition>{children}</PageTransition>
           </main>
           <Footer />

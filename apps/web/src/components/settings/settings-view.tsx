@@ -26,6 +26,7 @@ import {
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { trpc } from '@/lib/trpc';
+import { cn } from '@/lib/utils';
 import { type AppConfig, SECRET_MASK } from '@animeunion/shared';
 import { ExternalLink, Lock, Send } from 'lucide-react';
 import { useTheme } from 'next-themes';
@@ -309,7 +310,14 @@ export function SettingsView() {
   };
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 pb-24">
+    <div
+      className={cn(
+        'mx-auto max-w-3xl space-y-6',
+        // Riserva spazio in fondo solo quando la barra di salvataggio è visibile, così su
+        // mobile la barra non copre l'ultima sezione e il footer resta raggiungibile.
+        isDirty ? 'pb-44 md:pb-28' : 'pb-12 md:pb-8',
+      )}
+    >
       <div className="space-y-1">
         <h1 className="text-2xl font-bold tracking-tight">Impostazioni</h1>
         <p className="text-sm text-muted-foreground">
@@ -656,18 +664,21 @@ export function SettingsView() {
 
       <SecuritySection />
 
-      <div className="fixed inset-x-0 bottom-0 border-t bg-background/95 p-4 backdrop-blur">
-        <div className="mx-auto flex max-w-3xl justify-end gap-2">
-          {isDirty ? (
-            <Button variant="ghost" onClick={() => setDraft(original)} disabled={saving}>
-              Annulla modifiche
-            </Button>
-          ) : null}
-          <Button onClick={onSave} disabled={saving || !isDirty}>
-            {saving ? 'Salvataggio…' : 'Salva'}
-          </Button>
+      {isDirty ? (
+        <div className="fixed inset-x-0 bottom-dock-safe z-30 border-t bg-background/95 p-4 backdrop-blur md:bottom-0">
+          <div className="mx-auto flex max-w-3xl items-center justify-between gap-2 md:pl-16">
+            <p className="text-sm text-muted-foreground">Modifiche non salvate</p>
+            <div className="flex gap-2">
+              <Button variant="ghost" onClick={() => setDraft(original)} disabled={saving}>
+                Annulla
+              </Button>
+              <Button onClick={onSave} disabled={saving}>
+                {saving ? 'Salvataggio…' : 'Salva'}
+              </Button>
+            </div>
+          </div>
         </div>
-      </div>
+      ) : null}
 
       <Dialog open={showLeaveDialog} onOpenChange={setShowLeaveDialog}>
         <DialogContent>

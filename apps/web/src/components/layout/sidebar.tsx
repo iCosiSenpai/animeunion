@@ -97,7 +97,7 @@ export function Sidebar() {
       </aside>
 
       {/* Bottom bar mobile */}
-      <nav className="fixed bottom-0 left-0 right-0 z-30 flex items-center justify-around border-t bg-card px-2 pb-safe md:hidden">
+      <nav className="fixed bottom-0 left-0 right-0 z-30 flex items-center justify-around border-t bg-card px-2 pb-safe-b md:hidden">
         {navLinks.slice(0, 6).map((link) => {
           const Icon = ICONS[link.href] ?? Home;
           return (

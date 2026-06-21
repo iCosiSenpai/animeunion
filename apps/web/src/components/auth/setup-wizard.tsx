@@ -131,7 +131,7 @@ export function SetupWizard() {
         <div className="rounded-2xl border border-border/60 bg-card/80 p-8 shadow-2xl backdrop-blur-sm">
           {step === 0 ? (
             <div className="flex flex-col items-center gap-5 text-center">
-              <img src="/logo.png" alt="AnimeUnion" className="h-14 w-auto drop-shadow" />
+              <img src="/logo.png" alt="AnimeUnion" className="h-16 w-auto drop-shadow" />
               <div className="space-y-2">
                 <h1 className="text-2xl font-bold tracking-tight">
                   Benvenuto su AnimeUnion Docker

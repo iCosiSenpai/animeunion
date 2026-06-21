@@ -64,7 +64,7 @@ export function Footer() {
               alt="AnimeUnion"
               width={160}
               height={34}
-              className="h-8 w-auto object-contain"
+              className="h-9 w-auto object-contain"
             />
             <div className="flex items-center gap-5">
               {SOCIALS.map((s) => (

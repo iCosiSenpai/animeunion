@@ -17,6 +17,9 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: '#242424',
+  // Necessario su iOS: senza viewport-fit=cover env(safe-area-inset-*) resta 0 e il
+  // dock mobile (pb-safe-b) finirebbe sotto l'home indicator.
+  viewportFit: 'cover',
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

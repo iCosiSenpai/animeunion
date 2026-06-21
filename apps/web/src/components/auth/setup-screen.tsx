@@ -48,7 +48,7 @@ export function SetupScreen() {
       <div className="w-full max-w-md">
         <div className="rounded-2xl border border-border/60 bg-card/80 p-8 shadow-2xl backdrop-blur-sm">
           <div className="flex flex-col items-center gap-4 text-center">
-            <img src="/logo.png" alt="AnimeUnion" className="h-14 w-auto drop-shadow" />
+            <img src="/logo.png" alt="AnimeUnion" className="h-16 w-auto drop-shadow" />
             <div className="space-y-1.5">
               <h1 className="text-2xl font-bold tracking-tight">AnimeUnion Docker</h1>
               <p className="text-sm text-muted-foreground">

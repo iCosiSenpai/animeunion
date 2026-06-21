@@ -3,7 +3,6 @@
 import { DownloadStatus } from '@/components/downloads/download-status';
 import { NotificationBell } from '@/components/layout/notification-bell';
 import { SearchTrigger } from '@/components/layout/search-trigger';
-import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,16 +11,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
-import { navLinks } from '@/lib/nav';
 import { clearSessionToken } from '@/lib/session';
 import { trpc } from '@/lib/trpc';
-import { cn } from '@/lib/utils';
-import { ExternalLink, Lock, LogOut, Menu } from 'lucide-react';
+import { ExternalLink, Lock, LogOut } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { useState } from 'react';
 import { toast } from 'sonner';
 import { ThemeToggle } from './theme-toggle';
 
@@ -94,14 +88,7 @@ function ProfileBadge() {
   );
 }
 
-function isActive(pathname: string, href: string): boolean {
-  return pathname === href || pathname.startsWith(`${href}/`);
-}
-
 export function Navbar() {
-  const pathname = usePathname();
-  const [open, setOpen] = useState(false);
-
   return (
     <header className="sticky top-0 z-40 border-b bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/60">
       <div className="container flex h-14 items-center gap-4">
@@ -111,50 +98,20 @@ export function Navbar() {
             alt="AnimeUnion"
             width={140}
             height={30}
-            className="h-7 w-auto object-contain"
+            className="h-8 w-auto object-contain"
             priority
           />
         </Link>
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex min-w-0 items-center gap-2">
           <div className="hidden w-48 sm:block lg:w-64">
             <SearchTrigger />
           </div>
 
           <DownloadStatus />
           <NotificationBell />
-
           <ProfileBadge />
           <ThemeToggle />
-
-          <Sheet open={open} onOpenChange={setOpen}>
-            <SheetTrigger asChild className="md:hidden">
-              <Button variant="ghost" size="icon" aria-label="Apri menu">
-                <Menu className="h-5 w-5" />
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="right" className="w-72">
-              <SheetTitle>Menu</SheetTitle>
-              <div className="mt-4">
-                <SearchTrigger onOpen={() => setOpen(false)} />
-              </div>
-              <nav className="mt-4 flex flex-col gap-1">
-                {navLinks.map((link) => (
-                  <Link
-                    key={link.href}
-                    href={link.href}
-                    onClick={() => setOpen(false)}
-                    className={cn(
-                      'rounded-md px-3 py-2 text-sm hover:bg-accent',
-                      isActive(pathname, link.href) && 'bg-accent',
-                    )}
-                  >
-                    {link.label}
-                  </Link>
-                ))}
-              </nav>
-            </SheetContent>
-          </Sheet>
         </div>
       </div>
     </header>

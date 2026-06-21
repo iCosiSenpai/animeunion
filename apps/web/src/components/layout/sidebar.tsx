@@ -1,7 +1,10 @@
 'use client';
 
+import { SearchTrigger } from '@/components/layout/search-trigger';
 import { Button } from '@/components/ui/button';
-import { navLinks } from '@/lib/nav';
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { navLinks, primaryNavLinks, secondaryNavLinks } from '@/lib/nav';
+import { useSidebar } from '@/lib/sidebar-store';
 import { cn } from '@/lib/utils';
 import {
   BarChart3,
@@ -13,6 +16,7 @@ import {
   Home,
   Info,
   Library,
+  MoreHorizontal,
   Settings,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -36,7 +40,10 @@ function isActive(pathname: string, href: string): boolean {
 
 export function Sidebar() {
   const pathname = usePathname();
-  const [expanded, setExpanded] = useState(false);
+  const expanded = useSidebar((s) => s.expanded);
+  const toggle = useSidebar((s) => s.toggle);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreActive = secondaryNavLinks.some((link) => isActive(pathname, link.href));
 
   return (
     <>
@@ -47,20 +54,20 @@ export function Sidebar() {
           expanded ? 'w-56' : 'w-16',
         )}
       >
-        <div className="flex h-14 items-center justify-center border-b px-2">
+        <div className="flex h-14 items-center gap-2 border-b px-2">
           <Button
             variant="ghost"
             size="icon"
             aria-label={expanded ? 'Comprimi menu' : 'Espandi menu'}
             title={expanded ? 'Comprimi menu' : 'Espandi menu'}
-            onClick={() => setExpanded((v) => !v)}
+            onClick={toggle}
             className="shrink-0"
           >
             {expanded ? <ChevronLeft className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
           </Button>
           <span
             className={cn(
-              'ml-2 overflow-hidden whitespace-nowrap text-sm font-semibold transition-all duration-200',
+              'overflow-hidden whitespace-nowrap text-sm font-semibold transition-all duration-200',
               expanded ? 'w-auto opacity-100' : 'w-0 opacity-0',
             )}
           >
@@ -96,16 +103,16 @@ export function Sidebar() {
         </nav>
       </aside>
 
-      {/* Bottom bar mobile */}
-      <nav className="fixed bottom-0 left-0 right-0 z-30 flex items-center justify-around border-t bg-card px-2 pb-safe-b md:hidden">
-        {navLinks.slice(0, 6).map((link) => {
+      {/* Dock mobile: voci principali + "Altro" (drawer) */}
+      <nav className="fixed inset-x-0 bottom-0 z-30 flex items-center justify-around border-t bg-card px-2 pb-safe-b md:hidden">
+        {primaryNavLinks.map((link) => {
           const Icon = ICONS[link.href] ?? Home;
           return (
             <Link
               key={link.href}
               href={link.href}
               className={cn(
-                'flex flex-col items-center gap-0.5 rounded-md px-3 py-2 text-xs text-muted-foreground transition-colors hover:text-foreground',
+                'flex min-h-[3rem] flex-col items-center justify-center gap-0.5 rounded-md px-3 py-2 text-xs text-muted-foreground transition-colors hover:text-foreground',
                 isActive(pathname, link.href) && 'text-foreground',
               )}
             >
@@ -114,6 +121,47 @@ export function Sidebar() {
             </Link>
           );
         })}
+
+        <Sheet open={moreOpen} onOpenChange={setMoreOpen}>
+          <SheetTrigger asChild>
+            <button
+              type="button"
+              aria-label="Altro"
+              className={cn(
+                'flex min-h-[3rem] flex-col items-center justify-center gap-0.5 rounded-md px-3 py-2 text-xs text-muted-foreground transition-colors hover:text-foreground',
+                moreActive && 'text-foreground',
+              )}
+            >
+              <MoreHorizontal className="h-5 w-5" />
+              <span className="text-[10px]">Altro</span>
+            </button>
+          </SheetTrigger>
+          <SheetContent side="bottom" className="rounded-t-2xl pb-safe-b">
+            <SheetTitle>Altro</SheetTitle>
+            <div className="mt-4">
+              <SearchTrigger onOpen={() => setMoreOpen(false)} />
+            </div>
+            <nav className="mt-4 grid grid-cols-2 gap-2">
+              {secondaryNavLinks.map((link) => {
+                const Icon = ICONS[link.href] ?? Home;
+                return (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    onClick={() => setMoreOpen(false)}
+                    className={cn(
+                      'flex items-center gap-3 rounded-md px-3 py-3 text-sm hover:bg-accent',
+                      isActive(pathname, link.href) && 'bg-accent',
+                    )}
+                  >
+                    <Icon className="h-5 w-5 shrink-0 text-muted-foreground" />
+                    <span className="truncate">{link.label}</span>
+                  </Link>
+                );
+              })}
+            </nav>
+          </SheetContent>
+        </Sheet>
       </nav>
     </>
   );

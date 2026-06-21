@@ -13,6 +13,7 @@ import type { FavoritesService } from './services/favorites-service';
 import type { FollowService } from './services/follow-service';
 import type { HomeService } from './services/home-service';
 import type { LibraryService } from './services/library-service';
+import type { LockService } from './services/lock-service';
 import type { NotificationService } from './services/notification-service';
 import type { ProfileService } from './services/profile-service';
 import type { SeriesService } from './services/series-service';
@@ -32,7 +33,10 @@ export interface Context {
     library: LibraryService;
     series: SeriesService;
     notifications: NotificationService;
+    lock: LockService;
   };
+  /** Token di sessione del blocco web UI, dall'header x-app-session (per richiesta). */
+  sessionToken?: string;
   logger: Logger;
 }
 
@@ -98,7 +102,20 @@ const errorMapper = t.middleware(async ({ ctx, next }) => {
   throw mapped;
 });
 
+// Blocco web UI: se un passcode è impostato e non arriva un token di sessione valido,
+// rifiuta. Le procedure di lock (status/unlock) usano openProcedure e restano accessibili.
+const lockGuard = t.middleware(async ({ ctx, next }) => {
+  if (ctx.services.lock.isEnabled() && !ctx.services.lock.verifyToken(ctx.sessionToken)) {
+    throw new TRPCError({ code: 'UNAUTHORIZED', message: 'App bloccata: inserisci il passcode' });
+  }
+  return next();
+});
+
 export const router = t.router;
 export const createCallerFactory = t.createCallerFactory;
-export const publicProcedure = t.procedure.use(errorMapper);
+const baseProcedure = t.procedure.use(errorMapper);
+/** Senza blocco: solo per lock.status / lock.unlock. */
+export const openProcedure = baseProcedure;
+/** Tutte le altre procedure: protette dal blocco web UI quando attivo. */
+export const publicProcedure = baseProcedure.use(lockGuard);
 export const protectedProcedure = publicProcedure;

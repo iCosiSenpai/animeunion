@@ -11,6 +11,7 @@ import { createFavoritesService } from '../services/favorites-service';
 import { createFollowService } from '../services/follow-service';
 import { createHomeService } from '../services/home-service';
 import { createLibraryService } from '../services/library-service';
+import { createLockService } from '../services/lock-service';
 import { createNotificationService } from '../services/notification-service';
 import { createProfileService } from '../services/profile-service';
 import { createRenamerService } from '../services/renamer-service';
@@ -38,6 +39,7 @@ function makeCaller() {
   const library = createLibraryService({ db, config, renamer, resolver, logger: testLogger });
   const series = createSeriesService({ db, resolver, catalog });
   const notifications = createNotificationService({ db, config });
+  const lock = createLockService({ db, env: { WEB_LOCK_DISABLED: undefined } });
   const download = createDownloadService({
     db,
     worker: {
@@ -66,6 +68,7 @@ function makeCaller() {
       library,
       series,
       notifications,
+      lock,
     },
     logger: testLogger,
   };
@@ -90,6 +93,24 @@ describe('appRouter (integrazione)', () => {
     expect((await caller.config.get({ key: 'telegramBotToken' })).value).toBe(SECRET_MASK);
     // Il service interno resta veritiero (lo usa il notifier).
     expect(ctx.services.config.get('telegramBotToken')).toBe('123:ABC');
+  });
+
+  it('lock: passcode attivo blocca le procedure senza token e le sblocca col token', async () => {
+    const { ctx } = makeCaller();
+    ctx.services.lock.setPasscode('1234');
+
+    const locked = createCallerFactory(appRouter)(ctx); // ctx.sessionToken undefined
+    await expect(locked.catalog.search({ query: '' })).rejects.toMatchObject({
+      code: 'UNAUTHORIZED',
+    });
+    // status/unlock restano accessibili da bloccato
+    expect((await locked.lock.status()).enabled).toBe(true);
+    const res = await locked.lock.unlock({ passcode: '1234' });
+    expect(res.ok).toBe(true);
+
+    const unlocked = createCallerFactory(appRouter)({ ...ctx, sessionToken: res.token ?? '' });
+    const search = await unlocked.catalog.search({ query: '' });
+    expect(search.data.length).toBeGreaterThan(0);
   });
 
   it('catalog.bySlug ritorna il dettaglio validato dal contratto', async () => {

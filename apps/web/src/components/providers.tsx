@@ -3,6 +3,7 @@
 import { AnimationProvider } from '@/components/layout/animation-provider';
 import { AppTheme } from '@/components/layout/app-theme';
 import { Toaster } from '@/components/ui/sonner';
+import { getSessionToken } from '@/lib/session';
 import { trpc } from '@/lib/trpc';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { httpLink } from '@trpc/client';
@@ -28,6 +29,10 @@ export function Providers({ children }: { children: ReactNode }) {
       links: [
         httpLink({
           url: '/trpc',
+          headers() {
+            const token = getSessionToken();
+            return token ? { 'x-app-session': token } : {};
+          },
         }),
       ],
     }),

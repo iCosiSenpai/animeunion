@@ -31,7 +31,11 @@ async function main(): Promise<void> {
     prefix: '/trpc',
     trpcOptions: {
       router: appRouter,
-      createContext: () => ctx,
+      createContext: ({ req }) => {
+        const header = req.headers['x-app-session'];
+        const sessionToken = Array.isArray(header) ? header[0] : header;
+        return { ...ctx, sessionToken };
+      },
     } satisfies FastifyTRPCPluginOptions<AppRouter>['trpcOptions'],
   });
   app.get('/health', async () => ({ status: 'ok' }));

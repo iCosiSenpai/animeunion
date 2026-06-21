@@ -14,9 +14,10 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { navLinks } from '@/lib/nav';
+import { clearSessionToken } from '@/lib/session';
 import { trpc } from '@/lib/trpc';
 import { cn } from '@/lib/utils';
-import { ExternalLink, LogOut, Menu } from 'lucide-react';
+import { ExternalLink, Lock, LogOut, Menu } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -27,12 +28,17 @@ import { ThemeToggle } from './theme-toggle';
 function ProfileBadge() {
   const utils = trpc.useUtils();
   const profile = trpc.profile.me.useQuery(undefined, { retry: false });
+  const lockStatus = trpc.lock.status.useQuery(undefined, { retry: false });
   const logout = trpc.auth.logout.useMutation({
     onSuccess: () => {
       toast.success('Disconnesso');
       void utils.auth.status.invalidate();
     },
   });
+  const onLock = () => {
+    clearSessionToken();
+    void utils.lock.status.invalidate();
+  };
   const user = profile.data;
   if (!user) {
     return null;
@@ -68,6 +74,12 @@ function ProfileBadge() {
             Modifica profilo
           </a>
         </DropdownMenuItem>
+        {lockStatus.data?.enabled ? (
+          <DropdownMenuItem onClick={onLock}>
+            <Lock className="mr-2 h-4 w-4" />
+            Blocca app
+          </DropdownMenuItem>
+        ) : null}
         <DropdownMenuSeparator />
         <DropdownMenuItem
           className="text-destructive focus:text-destructive"

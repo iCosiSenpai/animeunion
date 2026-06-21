@@ -14,6 +14,7 @@ import { createFavoritesService } from './services/favorites-service';
 import { createFollowService } from './services/follow-service';
 import { createHomeService } from './services/home-service';
 import { createLibraryService } from './services/library-service';
+import { createLockService } from './services/lock-service';
 import { createNotificationService } from './services/notification-service';
 import { createProfileService } from './services/profile-service';
 import { createRenamerService } from './services/renamer-service';
@@ -149,6 +150,8 @@ export function createAppContext(options: { env?: Env; databasePath?: string } =
     });
   });
 
+  const lock = createLockService({ db, env: resolvedEnv });
+
   return {
     db,
     source,
@@ -164,6 +167,7 @@ export function createAppContext(options: { env?: Env; databasePath?: string } =
       library,
       series,
       notifications,
+      lock,
     },
     logger,
   };

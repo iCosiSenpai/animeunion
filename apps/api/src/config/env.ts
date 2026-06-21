@@ -14,6 +14,8 @@ const envSchema = z.object({
   // Notifiche Telegram (opzionali): bot token + chat id. Segreti → solo env/.env.
   TELEGRAM_BOT_TOKEN: z.string().optional(),
   TELEGRAM_CHAT_ID: z.string().optional(),
+  // Escape hatch: 'true' disabilita il blocco passcode della web UI (recupero).
+  WEB_LOCK_DISABLED: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

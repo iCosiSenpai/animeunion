@@ -2,6 +2,7 @@
 
 import { AccentPicker } from '@/components/settings/accent-picker';
 import { FolderInput } from '@/components/settings/folder-picker';
+import { SecuritySection } from '@/components/settings/security-section';
 import { WallpaperPicker } from '@/components/settings/wallpaper-picker';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -654,6 +655,8 @@ export function SettingsView() {
           </Button>
         </Field>
       </Section>
+
+      <SecuritySection />
 
       <div className="fixed inset-x-0 bottom-0 border-t bg-background/95 p-4 backdrop-blur">
         <div className="mx-auto flex max-w-3xl justify-end gap-2">

@@ -9,6 +9,7 @@ import { followRouter } from './follow';
 import { healthRouter } from './health';
 import { homeRouter } from './home';
 import { libraryRouter } from './library';
+import { lockRouter } from './lock';
 import { meRouter } from './me';
 import { notificationsRouter } from './notifications';
 import { profileRouter } from './profile';
@@ -32,6 +33,7 @@ export const appRouter = router({
   notifications: notificationsRouter,
   health: healthRouter,
   theme: themeRouter,
+  lock: lockRouter,
   stats: statsRouter,
 });
 

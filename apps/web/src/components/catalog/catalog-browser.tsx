@@ -4,6 +4,7 @@ import { AnimeGrid, AnimeGridSkeleton } from '@/components/anime/anime-grid';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PageHeader } from '@/components/ui/page-header';
 import {
   Select,
   SelectContent,
@@ -328,10 +329,11 @@ export function CatalogBrowser() {
 
   return (
     <div className="space-y-6">
-      <div className="space-y-1">
-        <h1 className="text-2xl font-bold tracking-tight">Catalogo</h1>
-        <p className="text-sm text-muted-foreground">Esplora e filtra gli anime di AnimeUnion.</p>
-      </div>
+      <PageHeader
+        eyebrow="Esplora"
+        title="Catalogo"
+        description="Esplora e filtra gli anime di AnimeUnion."
+      />
 
       <div className="flex flex-col gap-3 rounded-lg border bg-card p-4 shadow-sm">
         <form onSubmit={onSearchSubmit} className="flex gap-2">

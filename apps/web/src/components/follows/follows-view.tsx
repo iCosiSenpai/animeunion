@@ -1,6 +1,7 @@
 'use client';
 
 import { AnimeGridSkeleton } from '@/components/anime/anime-grid';
+import { PageHeader } from '@/components/ui/page-header';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FOLLOW_STATUSES } from '@/lib/follow';
 import { trpc } from '@/lib/trpc';
@@ -14,13 +15,11 @@ export function FollowsView() {
 
   return (
     <div className="space-y-6">
-      <div className="space-y-1">
-        <h1 className="text-2xl font-bold tracking-tight">Seguiti</h1>
-        <p className="text-sm text-muted-foreground">
-          Gli anime che segui sono sincronizzati con i Preferiti del sito. Lo stato (in corso,
-          completato, ecc.) è locale e decide chi viene scaricato automaticamente.
-        </p>
-      </div>
+      <PageHeader
+        eyebrow="La tua lista"
+        title="Seguiti"
+        description="Gli anime che segui sono sincronizzati con i Preferiti del sito. Lo stato (in corso, completato, ecc.) è locale e decide chi viene scaricato automaticamente."
+      />
 
       {isLoading ? (
         <AnimeGridSkeleton />

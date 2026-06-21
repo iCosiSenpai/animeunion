@@ -11,6 +11,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { EmptyState } from '@/components/ui/empty-state';
+import { PageHeader } from '@/components/ui/page-header';
 import { Skeleton } from '@/components/ui/skeleton';
 import { trpc } from '@/lib/trpc';
 import { formatBytes } from '@/lib/utils';
@@ -132,27 +134,30 @@ export function LibraryView() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-bold tracking-tight">Libreria</h1>
-          <p className="text-sm text-muted-foreground">
+      <PageHeader
+        eyebrow="La tua collezione"
+        title="Libreria"
+        description={
+          <>
             Esplora e sincronizza gli episodi scaricati in{' '}
             {statsQuery.data?.totalSizeBytes ? formatBytes(statsQuery.data.totalSizeBytes) : '—'}.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button asChild variant="outline" className="gap-2">
-            <Link href="/library/files">
-              <FolderTree className="h-4 w-4" />
-              Gestore file
-            </Link>
-          </Button>
-          <Button onClick={onScan} disabled={scanMutation.isPending} className="gap-2">
-            <RefreshCw className={`h-4 w-4 ${scanMutation.isPending ? 'animate-spin' : ''}`} />
-            {scanMutation.isPending ? 'Scansione...' : 'Scansiona libreria'}
-          </Button>
-        </div>
-      </div>
+          </>
+        }
+        actions={
+          <>
+            <Button asChild variant="outline" className="gap-2">
+              <Link href="/library/files">
+                <FolderTree className="h-4 w-4" />
+                Gestore file
+              </Link>
+            </Button>
+            <Button onClick={onScan} disabled={scanMutation.isPending} className="gap-2">
+              <RefreshCw className={`h-4 w-4 ${scanMutation.isPending ? 'animate-spin' : ''}`} />
+              {scanMutation.isPending ? 'Scansione...' : 'Scansiona libreria'}
+            </Button>
+          </>
+        }
+      />
 
       <StatsCards stats={statsQuery.data} isLoading={statsQuery.isLoading} />
 
@@ -220,16 +225,16 @@ export function LibraryView() {
       {listQuery.isLoading ? (
         <LibrarySkeleton />
       ) : items.length === 0 ? (
-        <div className="py-16 text-center">
-          <FolderOpen className="mx-auto h-12 w-12 text-muted-foreground" />
-          <h3 className="mt-4 text-lg font-semibold">Libreria vuota</h3>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Nessun episodio scaricato. Vai al catalogo e segui un anime per iniziare.
-          </p>
-          <Button asChild className="mt-6">
-            <Link href="/catalog">Esplora il catalogo</Link>
-          </Button>
-        </div>
+        <EmptyState
+          icon={FolderOpen}
+          title="Libreria vuota"
+          description="Nessun episodio scaricato. Vai al catalogo e segui un anime per iniziare."
+          action={
+            <Button asChild>
+              <Link href="/catalog">Esplora il catalogo</Link>
+            </Button>
+          }
+        />
       ) : (
         <div className="grid gap-4">
           {items.map((item) => (

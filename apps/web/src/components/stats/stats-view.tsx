@@ -1,6 +1,7 @@
 'use client';
 
 import { Card } from '@/components/ui/card';
+import { PageHeader } from '@/components/ui/page-header';
 import { trpc } from '@/lib/trpc';
 import { formatBytes } from '@/lib/utils';
 import type { DashboardStats } from '@animeunion/shared';
@@ -109,12 +110,11 @@ export function StatsView() {
 
   return (
     <div className="space-y-6">
-      <div className="space-y-1">
-        <h1 className="text-2xl font-bold tracking-tight">Statistiche</h1>
-        <p className="text-sm text-muted-foreground">
-          Una panoramica di catalogo, download e spazio occupato.
-        </p>
-      </div>
+      <PageHeader
+        eyebrow="Panoramica"
+        title="Statistiche"
+        description="Una panoramica di catalogo, download e spazio occupato."
+      />
 
       {stats.isLoading || !stats.data ? (
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">

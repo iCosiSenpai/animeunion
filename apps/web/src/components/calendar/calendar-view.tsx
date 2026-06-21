@@ -1,6 +1,7 @@
 'use client';
 
 import { AnimeGrid, AnimeGridSkeleton } from '@/components/anime/anime-grid';
+import { PageHeader } from '@/components/ui/page-header';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { trpc } from '@/lib/trpc';
 import type { WeekDay } from '@animeunion/shared';
@@ -32,7 +33,11 @@ export function CalendarView() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold tracking-tight">Calendario</h1>
+      <PageHeader
+        eyebrow="Programmazione"
+        title="Calendario"
+        description="Quando escono i nuovi episodi degli anime in corso, giorno per giorno."
+      />
 
       {isLoading ? (
         <AnimeGridSkeleton />

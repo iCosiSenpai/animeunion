@@ -57,7 +57,7 @@ export function ClassifyFields({
     <div className="space-y-4">
       <div className="space-y-1.5">
         <p className="text-sm font-medium">Tipo</p>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Tipo">
           {KIND_OPTIONS.map((opt) => {
             const Icon = opt.icon;
             const isOn = value.kind === opt.kind;
@@ -65,8 +65,9 @@ export function ClassifyFields({
               <button
                 key={opt.kind}
                 type="button"
+                role="radio"
                 onClick={() => onChange({ ...value, kind: opt.kind })}
-                aria-pressed={isOn}
+                aria-checked={isOn}
                 className={cn(
                   'flex flex-col items-center gap-1 rounded-md border px-2 py-2.5 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                   isOn

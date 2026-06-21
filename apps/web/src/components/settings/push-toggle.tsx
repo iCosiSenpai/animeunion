@@ -3,6 +3,7 @@
 import { Button } from '@/components/ui/button';
 import { getSubscription, isPushSupported, subscribePush } from '@/lib/push';
 import { trpc } from '@/lib/trpc';
+import { ExternalLink, HelpCircle } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -72,9 +73,30 @@ export function PushToggle() {
   }
   if (!supported) {
     return (
-      <p className="text-xs text-muted-foreground">
-        Richiede HTTPS (contesto sicuro) e un browser compatibile. Vedi la guida nel README.
-      </p>
+      <div className="space-y-2 rounded-md border border-dashed bg-muted/30 p-3 text-xs text-muted-foreground">
+        <p className="flex items-center gap-1.5 font-medium text-foreground">
+          <HelpCircle className="h-4 w-4 text-primary" aria-hidden="true" />
+          Perché le notifiche richiedono HTTPS?
+        </p>
+        <p>
+          Le notifiche del browser (e l'installazione come app) funzionano solo su un indirizzo
+          sicuro <strong>HTTPS</strong>, oppure su <code>localhost</code>. È una regola del browser,
+          non dell'app.
+        </p>
+        <p>
+          La via più semplice è <strong>Tailscale</strong>: ti dà un indirizzo HTTPS valido in
+          automatico, senza certificati da gestire.
+        </p>
+        <a
+          href="https://github.com/iCosiSenpai/animeunion#https-app-installabile-pwa-e-notifiche-push"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 text-primary underline-offset-4 hover:underline"
+        >
+          <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+          Apri la guida
+        </a>
+      </div>
     );
   }
   return subscribed ? (

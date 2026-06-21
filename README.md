@@ -152,11 +152,16 @@ I token sono salvati nel database locale dell'app (`./data`). In alternativa puo
 
 ## HTTPS, app installabile (PWA) e notifiche push
 
+> **In breve:** queste funzioni sono **opzionali**. Se ti bastano le notifiche in-app (la campanella)
+> e Telegram, puoi tranquillamente saltarle. Per averle serve un indirizzo HTTPS: il modo più
+> semplice è **Tailscale** (HTTPS automatico, praticamente una riga — vedi sotto).
+
 L'app è una **PWA installabile** e può inviare **notifiche push del browser** (download
 completati/falliti, nuovi episodi, nuove stagioni) anche ad app chiusa. **Service worker e Push API
-funzionano solo in un contesto sicuro: servono HTTPS** (oppure `localhost`). Su `http://` puro in LAN
-queste funzioni restano disattivate e nelle Impostazioni vedrai "richiede HTTPS" — tutto il resto
-dell'app funziona comunque.
+funzionano solo in un contesto sicuro: servono HTTPS** (oppure `localhost`). Non è una scelta
+dell'app: è una regola di sicurezza dei browser (Chrome/Firefox/Safari), uguale per qualsiasi sito.
+Su `http://` puro in LAN queste funzioni restano disattivate e nelle Impostazioni vedrai una nota che
+spiega come attivarle — tutto il resto dell'app funziona comunque.
 
 ### Esporre l'app in HTTPS (scegli una via)
 

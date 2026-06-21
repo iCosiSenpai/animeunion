@@ -22,8 +22,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { EmptyState } from '@/components/ui/empty-state';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useCommandPalette } from '@/lib/command-palette-store';
 import { trpc } from '@/lib/trpc';
 import { cn } from '@/lib/utils';
 import type {
@@ -34,7 +36,16 @@ import type {
   Language,
   RelatedAnime,
 } from '@animeunion/shared';
-import { ChevronDown, Download, FolderTree, Loader2, Star } from 'lucide-react';
+import {
+  AlertCircle,
+  ChevronDown,
+  Download,
+  ExternalLink,
+  FolderTree,
+  Loader2,
+  Search,
+  Star,
+} from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -147,15 +158,45 @@ function aggregateDlState(states: EpisodeDlState[]): EpisodeDlState {
 export function AnimeDetail({ slug }: { slug: string }) {
   const { data, isLoading, error } = trpc.catalog.bySlug.useQuery({ slug });
   const [expanded, setExpanded] = useState(false);
+  const setSearchOpen = useCommandPalette((s) => s.setOpen);
 
   if (isLoading) {
     return <DetailSkeleton />;
   }
   if (error || !data) {
+    if (error?.data?.code === 'NOT_FOUND') {
+      return (
+        <EmptyState
+          className="my-12"
+          icon={AlertCircle}
+          title="Anime non trovato (404)"
+          description="Questo titolo è uscito nella ricerca ma la sua scheda non esiste (o non è più disponibile) su AnimeUnion: può essere stato rimosso, rinominato, oppure il link non è corretto. Riprova dalla ricerca o torna al catalogo."
+          action={
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <Button asChild>
+                <Link href="/catalog">Torna al catalogo</Link>
+              </Button>
+              <Button variant="outline" onClick={() => setSearchOpen(true)}>
+                <Search className="mr-2 h-4 w-4" />
+                Cerca ancora
+              </Button>
+            </div>
+          }
+        />
+      );
+    }
     return (
-      <div className="py-24 text-center text-muted-foreground">
-        {error?.data?.code === 'NOT_FOUND' ? 'Anime non trovato.' : 'Errore nel caricamento.'}
-      </div>
+      <EmptyState
+        className="my-12"
+        icon={AlertCircle}
+        title="Errore nel caricamento"
+        description="Non è stato possibile caricare questa scheda. Controlla la connessione e riprova."
+        action={
+          <Button variant="outline" onClick={() => window.location.reload()}>
+            Riprova
+          </Button>
+        }
+      />
     );
   }
 
@@ -240,6 +281,33 @@ function Hero({
                 <Badge variant="outline">{genre.name}</Badge>
               </Link>
             ))}
+          </div>
+        ) : null}
+
+        {anime.malId != null || anime.anilistId != null ? (
+          <div className="flex flex-wrap gap-2">
+            {anime.malId != null ? (
+              <a
+                href={`https://myanimelist.net/anime/${anime.malId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              >
+                <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+                MyAnimeList
+              </a>
+            ) : null}
+            {anime.anilistId != null ? (
+              <a
+                href={`https://anilist.co/anime/${anime.anilistId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              >
+                <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+                AniList
+              </a>
+            ) : null}
           </div>
         ) : null}
 
@@ -435,6 +503,7 @@ function SeriesOrganizationPanel({ animeId }: { animeId: string }) {
   const [value, setValue] = useState<ClassifyValue>({
     kind: 'tv',
     season: '1',
+    part: '1',
     parentId: null,
     parentTitle: '',
   });
@@ -467,6 +536,7 @@ function SeriesOrganizationPanel({ animeId }: { animeId: string }) {
       setValue({
         kind: data.kind,
         season: data.seasonNumber > 0 ? String(data.seasonNumber) : '1',
+        part: data.partNumber > 0 ? String(data.partNumber) : '1',
         parentId: hasParent ? data.seriesAnimeId : null,
         parentTitle: hasParent ? data.seriesTitle : '',
       });
@@ -476,10 +546,12 @@ function SeriesOrganizationPanel({ animeId }: { animeId: string }) {
 
   function onSave() {
     const n = Number(value.season);
+    const p = Number(value.part);
     setOverride.mutate({
       animeId,
       kind: value.kind,
       seasonNumber: value.kind === 'tv' ? (Number.isFinite(n) && n >= 1 ? n : 1) : null,
+      partNumber: value.kind === 'tv' && Number.isFinite(p) && p >= 1 ? Math.min(20, p) : null,
       seriesAnimeId: value.kind === 'tv' ? value.parentId : null,
     });
   }

@@ -23,6 +23,7 @@ function initValue(data: SeriesResolved): ClassifyValue {
   return {
     kind: data.kind,
     season: data.seasonNumber > 0 ? String(data.seasonNumber) : '1',
+    part: data.partNumber > 0 ? String(data.partNumber) : '1',
     parentId: hasParent ? data.seriesAnimeId : null,
     parentTitle: hasParent ? data.seriesTitle : '',
   };
@@ -48,6 +49,7 @@ export function useSeasonGate(animeId: string): {
   const [value, setValue] = useState<ClassifyValue>({
     kind: 'tv',
     season: '1',
+    part: '1',
     parentId: null,
     parentTitle: '',
   });
@@ -91,11 +93,15 @@ export function useSeasonGate(animeId: string): {
     const n = Number(value.season);
     const seasonNumber =
       value.kind === 'tv' ? (Number.isFinite(n) && n >= 1 ? Math.min(99, Math.floor(n)) : 1) : null;
+    const p = Number(value.part);
+    const partNumber =
+      value.kind === 'tv' && Number.isFinite(p) && p >= 1 ? Math.min(20, Math.floor(p)) : null;
     setOverride.mutate(
       {
         animeId,
         kind: value.kind,
         seasonNumber,
+        partNumber,
         seriesAnimeId: value.kind === 'tv' ? value.parentId : null,
       },
       {

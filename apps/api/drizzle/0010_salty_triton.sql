@@ -1,0 +1,1 @@
+ALTER TABLE `series_override` ADD `part_number` integer;

@@ -14,6 +14,9 @@ export type OverrideKind = z.infer<typeof overrideKindSchema>;
 export const seriesResolvedSchema = z.object({
   animeId: z.string(),
   seasonNumber: z.number().int(),
+  // Parte della stagione (1 = parte unica). Più parti sulla stessa stagione hanno
+  // numerazione episodi continua (part1 1..N, part2 N+1..).
+  partNumber: z.number().int(),
   seriesAnimeId: z.string(),
   seriesSlug: z.string(),
   seriesTitle: z.string(),
@@ -31,6 +34,8 @@ export const seriesOverrideInputSchema = z.object({
   // 0 = Special (cartella "Specials"); 1..99 = stagione normale.
   seasonNumber: z.number().int().min(0).max(99).nullable().optional(),
   seriesAnimeId: z.string().nullable().optional(),
+  // Parte della stagione (1..20) per le stagioni divise (War of Underworld part 1/2).
+  partNumber: z.number().int().min(1).max(20).nullable().optional(),
   // Tipo forzato dall'utente quando l'auto-rilevamento sbaglia (es. film visto come stagione).
   kind: overrideKindSchema.nullable().optional(),
 });
@@ -45,6 +50,7 @@ export const pathPreviewInputSchema = z.object({
   kind: overrideKindSchema.nullable().optional(),
   seasonNumber: z.number().int().min(0).max(99).nullable().optional(),
   seriesAnimeId: z.string().nullable().optional(),
+  partNumber: z.number().int().min(1).max(20).nullable().optional(),
 });
 export type PathPreviewInput = z.infer<typeof pathPreviewInputSchema>;
 

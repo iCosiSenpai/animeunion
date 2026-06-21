@@ -190,6 +190,10 @@ export const seriesOverride = sqliteTable('series_override', {
     .references(() => anime.id, { onDelete: 'cascade' }),
   seriesAnimeId: text('series_anime_id').references(() => anime.id, { onDelete: 'set null' }),
   seasonNumber: integer('season_number'),
+  // Parte di una stagione divisa (es. "War of Underworld" part 1/2): più entry sulla stessa
+  // (seriesAnimeId, seasonNumber) con part 1,2,... La numerazione episodi è continua tra le
+  // parti (offset = somma episodi delle parti precedenti). null/1 = parte unica.
+  partNumber: integer('part_number'),
   // Override del tipo: 'auto' (euristica) | 'tv' | 'movie' | 'special'.
   kind: text('kind').notNull().default('auto'),
   updatedAt: text('updated_at').notNull(),

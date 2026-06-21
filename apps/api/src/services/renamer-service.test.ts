@@ -229,4 +229,102 @@ describe('RenamerService', () => {
       ),
     );
   });
+
+  it('stagione divisa in part 1/2: numerazione episodi continua (War of Underworld)', () => {
+    insertAnime(db, {
+      id: 'sao',
+      slug: 'sword-art-online',
+      title: 'Sword Art Online',
+      episodeCount: 25,
+    });
+    insertAnime(db, {
+      id: 'wou1',
+      slug: 'sao-alicization-war-of-underworld',
+      title: 'SAO Alicization - War of Underworld',
+      episodeCount: 12,
+    });
+    insertAnime(db, {
+      id: 'wou2',
+      slug: 'sao-alicization-war-of-underworld-2',
+      title: 'SAO Alicization - War of Underworld 2',
+      episodeCount: 11,
+    });
+    const ts = new Date().toISOString();
+    db.insert(schema.seriesOverride)
+      .values([
+        {
+          animeId: 'wou1',
+          seriesAnimeId: 'sao',
+          seasonNumber: 4,
+          partNumber: 1,
+          kind: 'tv',
+          updatedAt: ts,
+        },
+        {
+          animeId: 'wou2',
+          seriesAnimeId: 'sao',
+          seasonNumber: 4,
+          partNumber: 2,
+          kind: 'tv',
+          updatedAt: ts,
+        },
+      ])
+      .run();
+    const renamer = makeRenamer(db, { seriesPathSub: '/data/anime' });
+    const dir = join('/data/anime', 'Sword Art Online', 'Season 04');
+
+    // Part 1: episodi 1..12 invariati.
+    expect(
+      renamer.computeEpisodePath({ animeId: 'wou1', episodeNumber: 1, language: 'SUB_ITA' }),
+    ).toBe(join(dir, 'Sword Art Online - S04E01 - SUB ITA.mp4'));
+    expect(
+      renamer.computeEpisodePath({ animeId: 'wou1', episodeNumber: 12, language: 'SUB_ITA' }),
+    ).toBe(join(dir, 'Sword Art Online - S04E12 - SUB ITA.mp4'));
+
+    // Part 2 riparte da 1 sul sito → numerazione continua a partire da 13.
+    expect(
+      renamer.computeEpisodePath({ animeId: 'wou2', episodeNumber: 1, language: 'SUB_ITA' }),
+    ).toBe(join(dir, 'Sword Art Online - S04E13 - SUB ITA.mp4'));
+    expect(
+      renamer.computeEpisodePath({ animeId: 'wou2', episodeNumber: 11, language: 'SUB_ITA' }),
+    ).toBe(join(dir, 'Sword Art Online - S04E23 - SUB ITA.mp4'));
+
+    // Se l'entry usa gia' numerazione continua (13) non viene sommato l'offset due volte.
+    expect(
+      renamer.computeEpisodePath({ animeId: 'wou2', episodeNumber: 13, language: 'SUB_ITA' }),
+    ).toBe(join(dir, 'Sword Art Online - S04E13 - SUB ITA.mp4'));
+  });
+
+  it('part 2 con conteggio part 1 sconosciuto: nessun offset (fallback)', () => {
+    insertAnime(db, { id: 'root', slug: 'root-show', title: 'Root Show', episodeCount: 12 });
+    insertAnime(db, { id: 'p1', slug: 'root-show-p1', title: 'Root P1', episodeCount: 0 });
+    insertAnime(db, { id: 'p2', slug: 'root-show-p2', title: 'Root P2', episodeCount: 11 });
+    const ts = new Date().toISOString();
+    db.insert(schema.seriesOverride)
+      .values([
+        {
+          animeId: 'p1',
+          seriesAnimeId: 'root',
+          seasonNumber: 2,
+          partNumber: 1,
+          kind: 'tv',
+          updatedAt: ts,
+        },
+        {
+          animeId: 'p2',
+          seriesAnimeId: 'root',
+          seasonNumber: 2,
+          partNumber: 2,
+          kind: 'tv',
+          updatedAt: ts,
+        },
+      ])
+      .run();
+    const renamer = makeRenamer(db, { seriesPathSub: '/data/anime' });
+
+    // episodeCount di part 1 sconosciuto (0) → offset 0 → si tiene il numero d'origine.
+    expect(
+      renamer.computeEpisodePath({ animeId: 'p2', episodeNumber: 1, language: 'SUB_ITA' }),
+    ).toBe(join('/data/anime', 'Root Show', 'Season 02', 'Root Show - S02E01 - SUB ITA.mp4'));
+  });
 });

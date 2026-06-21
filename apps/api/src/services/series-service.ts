@@ -103,6 +103,7 @@ export function createSeriesService(deps: SeriesServiceDeps): SeriesService {
     return {
       animeId,
       seasonNumber: info.seasonNumber,
+      partNumber: info.partNumber,
       seriesAnimeId: info.seriesId,
       seriesSlug: info.seriesSlug,
       seriesTitle: root?.titleIta ?? root?.title ?? info.seriesSlug,
@@ -126,7 +127,7 @@ export function createSeriesService(deps: SeriesServiceDeps): SeriesService {
       return resolved(animeId);
     },
 
-    setOverride({ animeId, seasonNumber, seriesAnimeId, kind }) {
+    setOverride({ animeId, seasonNumber, seriesAnimeId, kind, partNumber }) {
       const exists = db
         .select({ id: schema.anime.id })
         .from(schema.anime)
@@ -146,8 +147,15 @@ export function createSeriesService(deps: SeriesServiceDeps): SeriesService {
         }
       }
       const effectiveKind = kind ?? 'auto';
+      // La parte vale solo per una stagione normale: la normalizzo (1 = nessuna parte).
+      const effectivePart = seasonNumber != null && seasonNumber > 0 ? (partNumber ?? null) : null;
       // Override vuoto = nessun vincolo: equivale a rimuoverlo.
-      if (seasonNumber == null && seriesAnimeId == null && effectiveKind === 'auto') {
+      if (
+        seasonNumber == null &&
+        seriesAnimeId == null &&
+        effectiveKind === 'auto' &&
+        effectivePart == null
+      ) {
         return this.clearOverride(animeId);
       }
       const timestamp = now().toISOString();
@@ -156,6 +164,7 @@ export function createSeriesService(deps: SeriesServiceDeps): SeriesService {
           animeId,
           seriesAnimeId: seriesAnimeId ?? null,
           seasonNumber: seasonNumber ?? null,
+          partNumber: effectivePart,
           kind: effectiveKind,
           updatedAt: timestamp,
         })
@@ -164,6 +173,7 @@ export function createSeriesService(deps: SeriesServiceDeps): SeriesService {
           set: {
             seriesAnimeId: seriesAnimeId ?? null,
             seasonNumber: seasonNumber ?? null,
+            partNumber: effectivePart,
             kind: effectiveKind,
             updatedAt: timestamp,
           },
@@ -189,12 +199,16 @@ export function createSeriesService(deps: SeriesServiceDeps): SeriesService {
       const language = input.language ?? config.get('language');
       const episodeNumber = input.episodeNumber ?? 1;
       const hasHypothesis =
-        input.kind != null || input.seasonNumber != null || input.seriesAnimeId != null;
+        input.kind != null ||
+        input.seasonNumber != null ||
+        input.seriesAnimeId != null ||
+        input.partNumber != null;
       const override: OverrideParams | undefined = hasHypothesis
         ? {
             kind: input.kind ?? undefined,
             seasonNumber: input.seasonNumber ?? undefined,
             seriesAnimeId: input.seriesAnimeId ?? undefined,
+            partNumber: input.partNumber ?? undefined,
           }
         : undefined;
       const path = renamer.previewPath({

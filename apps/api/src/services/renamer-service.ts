@@ -58,16 +58,50 @@ export function createRenamerService(deps: RenamerServiceDeps): RenamerService {
     return row?.total ?? 0;
   }
 
+  /**
+   * Episodi delle PARTI precedenti della stessa stagione (es. War of Underworld part 1)
+   * per dare numerazione continua alla parte corrente. NULL part_number conta come 1.
+   */
+  function previousPartsEpisodeCount(series: SeriesInfo): number {
+    if (series.partNumber <= 1) {
+      return 0;
+    }
+    const row = db
+      .select({ total: sql<number>`COALESCE(SUM(${schema.anime.episodeCount}), 0)` })
+      .from(schema.seriesOverride)
+      .innerJoin(schema.anime, eq(schema.anime.id, schema.seriesOverride.animeId))
+      .where(
+        and(
+          eq(schema.seriesOverride.seriesAnimeId, series.seriesId),
+          eq(schema.seriesOverride.seasonNumber, series.seasonNumber),
+          sql`COALESCE(${schema.seriesOverride.partNumber}, 1) < ${series.partNumber}`,
+          sql<number>`${schema.anime.episodeCount} > 0`,
+        ),
+      )
+      .get();
+    return row?.total ?? 0;
+  }
+
   function relativeEpisodeNumber(series: SeriesInfo, episodeNumber: number): number {
-    if (series.seasonNumber <= 1) {
-      return episodeNumber;
+    // 1) Numerazione assoluta -> relativa di stagione (stagioni precedenti dello stesso franchise).
+    let n = episodeNumber;
+    if (series.seasonNumber > 1) {
+      const previous = previousSeasonsEpisodeCount(series);
+      if (previous > 0) {
+        const relative = episodeNumber - previous;
+        n = relative > 0 ? relative : episodeNumber;
+      }
     }
-    const previous = previousSeasonsEpisodeCount(series);
-    if (previous === 0) {
-      return episodeNumber;
+    // 2) Stagione divisa in parti: offset additivo per numerazione continua. Si applica solo
+    //    se la parte riparte da capo (n <= episodi della/e parte/i precedente/i); se l'entry
+    //    e' gia' continua (n maggiore dell'offset) non si tocca.
+    if (series.partNumber > 1) {
+      const prevParts = previousPartsEpisodeCount(series);
+      if (prevParts > 0 && n <= prevParts) {
+        n += prevParts;
+      }
     }
-    const relative = episodeNumber - previous;
-    return relative > 0 ? relative : episodeNumber;
+    return n;
   }
 
   function titleOf(animeId: string): string {

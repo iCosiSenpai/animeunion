@@ -16,6 +16,8 @@ interface BaseInfo {
 
 export interface SeriesInfo extends BaseInfo {
   kind: SeriesKind;
+  /** Parte della stagione divisa (1 = parte unica). */
+  partNumber: number;
 }
 
 /** Parametri di override (manuali o ipotetici per l'anteprima). */
@@ -23,6 +25,7 @@ export interface OverrideParams {
   kind?: OverrideKind | null;
   seasonNumber?: number | null;
   seriesAnimeId?: string | null;
+  partNumber?: number | null;
 }
 
 export interface SeriesResolverDeps {
@@ -283,7 +286,8 @@ export function createSeriesResolver(deps: SeriesResolverDeps): SeriesResolver {
     if (kind === 'special') {
       seasonNumber = 0;
     }
-    return { seriesId, seasonNumber, seriesSlug, kind };
+    const partNumber = override.partNumber ?? 1;
+    return { seriesId, seasonNumber, seriesSlug, kind, partNumber };
   }
 
   function getAnime(animeId: string): AnimeRow | undefined {
@@ -303,11 +307,12 @@ export function createSeriesResolver(deps: SeriesResolverDeps): SeriesResolver {
       kind: (row.kind as OverrideKind | null) ?? 'auto',
       seasonNumber: row.seasonNumber,
       seriesAnimeId: row.seriesAnimeId,
+      partNumber: row.partNumber,
     };
   }
 
   function missing(animeId: string): SeriesInfo {
-    return { seriesId: animeId, seasonNumber: 1, seriesSlug: animeId, kind: 'tv' };
+    return { seriesId: animeId, seasonNumber: 1, seriesSlug: animeId, kind: 'tv', partNumber: 1 };
   }
 
   return {

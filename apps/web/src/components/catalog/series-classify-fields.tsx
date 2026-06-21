@@ -13,6 +13,8 @@ export interface ClassifyValue {
   kind: ClassifyKind;
   /** Numero di stagione come stringa (solo per kind === 'tv'). */
   season: string;
+  /** Parte della stagione come stringa (1 = parte unica), solo per kind === 'tv'. */
+  part: string;
   /** Serie madre scelta (cartella del franchise), solo per kind === 'tv'. */
   parentId: string | null;
   parentTitle: string;
@@ -45,12 +47,15 @@ export function ClassifyFields({
   );
 
   const seasonNum = Number(value.season);
+  const partNum = Number(value.part);
   const preview = trpc.series.previewPath.useQuery({
     animeId,
     kind: value.kind,
     seasonNumber:
       value.kind === 'tv' && Number.isFinite(seasonNum) && seasonNum >= 1 ? seasonNum : undefined,
     seriesAnimeId: value.kind === 'tv' ? value.parentId : undefined,
+    partNumber:
+      value.kind === 'tv' && Number.isFinite(partNum) && partNum >= 1 ? partNum : undefined,
   });
 
   return (
@@ -87,15 +92,33 @@ export function ClassifyFields({
       {value.kind === 'tv' ? (
         <>
           <div className="space-y-1.5">
-            <p className="text-sm font-medium">Numero di stagione</p>
-            <Input
-              type="number"
-              min={1}
-              max={99}
-              className="w-28"
-              value={value.season}
-              onChange={(e) => onChange({ ...value, season: e.target.value })}
-            />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <p className="text-sm font-medium">Numero di stagione</p>
+                <Input
+                  type="number"
+                  min={1}
+                  max={99}
+                  value={value.season}
+                  onChange={(e) => onChange({ ...value, season: e.target.value })}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <p className="text-sm font-medium">Parte</p>
+                <Input
+                  type="number"
+                  min={1}
+                  max={20}
+                  value={value.part}
+                  onChange={(e) => onChange({ ...value, part: e.target.value })}
+                />
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Stagione divisa in più parti (es. &ldquo;War of Underworld&rdquo; 1 e 2)? Imposta la
+              stessa stagione e cartella madre, poi Parte 1 e Parte 2: la numerazione degli episodi
+              sarà continua.
+            </p>
           </div>
 
           <div className="space-y-1.5">
@@ -159,7 +182,7 @@ export function ClassifyFields({
 
       <div className="space-y-1.5">
         <p className="text-sm font-medium">Verrà salvato in</p>
-        <p className="break-all rounded-md border bg-muted/40 px-3 py-2 font-mono text-xs text-muted-foreground">
+        <p className="max-w-full overflow-x-auto whitespace-pre-wrap break-all rounded-md border bg-muted/40 px-3 py-2 font-mono text-xs text-muted-foreground">
           {preview.isFetching && !preview.data ? 'Calcolo…' : (preview.data?.path ?? '—')}
         </p>
       </div>

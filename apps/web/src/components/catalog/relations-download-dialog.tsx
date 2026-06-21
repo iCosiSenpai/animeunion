@@ -41,6 +41,7 @@ function RelationClassifyButton({ animeId, title }: { animeId: string; title: st
   const [value, setValue] = useState<ClassifyValue>({
     kind: 'tv',
     season: '1',
+    part: '1',
     parentId: null,
     parentTitle: '',
   });
@@ -60,6 +61,7 @@ function RelationClassifyButton({ animeId, title }: { animeId: string; title: st
         setValue({
           kind: data.kind,
           season: data.seasonNumber > 0 ? String(data.seasonNumber) : '1',
+          part: data.partNumber > 0 ? String(data.partNumber) : '1',
           parentId: hasParent ? data.seriesAnimeId : null,
           parentTitle: hasParent ? data.seriesTitle : '',
         });
@@ -72,10 +74,12 @@ function RelationClassifyButton({ animeId, title }: { animeId: string; title: st
 
   function onSave() {
     const n = Number(value.season);
+    const p = Number(value.part);
     setOverride.mutate({
       animeId,
       kind: value.kind,
       seasonNumber: value.kind === 'tv' ? (Number.isFinite(n) && n >= 1 ? n : 1) : null,
+      partNumber: value.kind === 'tv' && Number.isFinite(p) && p >= 1 ? Math.min(20, p) : null,
       seriesAnimeId: value.kind === 'tv' ? value.parentId : null,
     });
   }

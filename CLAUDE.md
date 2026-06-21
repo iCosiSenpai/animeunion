@@ -36,7 +36,7 @@ list/rename/move/delete/mkdir/**relink orfano**, guardie root-confined, sync `ep
 `/library/files` con drag&drop + banner di avviso); **PWA/HTTPS** guida semplificata (Tailscale) +
 card in-app "Perché serve HTTPS"; **header coerenti** (`PageHeader`/`EmptyState`) su pagine
 principali; pass a11y (aria-label icon-only, focus ring). Migrazione `0009` (`series_override.kind`).
-**207 test verdi.** Tutti i comandi lint/typecheck/build verdi.
+**207 test verdi.** Tutti i comandi lint/typecheck/build verdi. Rilasciato come `v0.5.0`.
 
 **Batch rifiniture v0.3.0 (branch `feat/rifiniture-post-v0.2.0` → `main`):** footer completo +
 affordance link + fix UX (ricerca→⌘K, popup coda); **Telegram dall'app** (token in config, invia
@@ -205,8 +205,8 @@ potrebbe bloccare l'accesso, da fare con una scelta UX esplicita.
       `.dockerignore` + credenziali AnimeUnion **opzionali** (login dalla web UI). **Build validata
       sul NAS** (fix: `.dockerignore` escludeva `src/components/anime`; API non pubblicata sull'host).
       **Restano (rinviati)**: PWA (manifest + service worker) e Web Push.
-- [~] **STEP 7** — **README user-friendly + logo**, `CHANGELOG` 0.1.0, `DEPLOYMENT` completo, e
-      **release `v0.1.0`** taggata (workflow GHCR multi-arch attivato, `DOCKER_PUBLISH_ENABLED=true`).
+- [x] **STEP 7** — **README user-friendly + logo**, `CHANGELOG` 0.5.0, `DEPLOYMENT` completo, e
+      **release `v0.5.0`** taggata (workflow GHCR multi-arch attivato, `DOCKER_PUBLISH_ENABLED=true`).
       Login premium (logo + icone Google/Discord). **Rimandati**: test E2E (Playwright).
       **Nota**: login social Google/Discord bloccato da `redirect_uri_mismatch` lato OAuth AnimeUnion
       (config di Matteo, non del container); usare email/password.

@@ -11,6 +11,38 @@ e il progetto aderisce al [Semantic Versioning](https://semver.org/lang/it/).
 - Test E2E (Playwright).
 - Setup wizard migliorato (Step F, rimandato).
 
+## [0.5.0] - 2026-06-21
+
+### Added
+- **Gestore file incorporato**: sfoglia, rinomina, sposta, elimina, crea cartelle e
+  **ricollega file orfani** a un episodio, confinato alle root media.
+- **Classificazione e anteprima al download**: dialog "Classifica e scarica" con
+  tipo (tv/movie/special), stagione, serie madre/destinazione e **anteprima live**
+  del path prima di accodare.
+- **Override del tipo di serie** (`kind`) su `series_override` per forzare film,
+  special o stagione; migrazione `0009` applicata automaticamente.
+
+### Changed
+- **Brand cleanup**: nuovo slogan "La tua libreria anime, sempre aggiornata";
+  rimossi i riferimenti "Radarr/Sonarr" da README, about e docs.
+- **Download simultaneo bloccato a 1** (worker hardcoded) con UI "Premium" e
+  messaggio "in arrivo con il Premium".
+- **Impostazioni a sezioni navigabili** (rail desktop + pill mobile) al posto
+  della lista piatta.
+- **Fondazione di design condivisa**: `PageHeader`, `EmptyState`, card/skeleton
+  raffinati, safe-area e scala z-index coerenti.
+- **UX mobile**: eliminato il "sandwich" di barre, save-bar sopra il dock e
+  footer raggiungibile su telefono.
+- **PWA/HTTPS**: guida semplificata (Tailscale consigliato) con card in-app
+  "Perché serve HTTPS?".
+- **Accessibilità**: `aria-label` su pulsanti solo-icona, focus ring visibili e
+  semantica `radiogroup` per toggles personalizzati.
+
+### Fixed
+- **Destinazione sequel**: i sequel (es. SAO Alicization) possono atterrare nella
+  cartella del franchise scegliendo la serie madre.
+- **Warning IDE** su componenti toggles/accessibilità.
+
 ## [0.3.2] - 2026-06-21
 
 ### Fixed

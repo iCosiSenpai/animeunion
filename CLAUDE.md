@@ -23,6 +23,21 @@ Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
 
 ## Stato attuale (2026-06-21)
 
+**Batch UX/UI + gestore file (branch `feat/rifiniture-ux-gestore-file`):** brand cleanup (via
+"Radarr/Sonarr", nuovo claim "La tua libreria anime, sempre aggiornata"); **download simultaneo
+bloccato a 1** (worker hardcoded, UI "Premium" — config `maxConcurrent` resta per compat); **fix
+chrome mobile** (token spacing safe-area/dock in tailwind, save bar solo se dirty e sopra il dock,
+footer raggiungibile); **Impostazioni a sezioni navigabili** (rail desktop + pill mobile, niente
+lista piatta); **classificazione al download** (`series_override.kind` tv/movie/special +
+migrazione `0009`, `series-resolver.resolveWith`, `renamer.previewPath`, `series.previewPath`;
+dialog "Classifica e scarica" con tipo+stagione+serie madre+**anteprima path live**; risolve i casi
+SAO sequel/film); **gestore file incorporato** (`file-manager-service` + router `files`,
+list/rename/move/delete/mkdir/**relink orfano**, guardie root-confined, sync `episode_file`; UI
+`/library/files` con drag&drop + banner di avviso); **PWA/HTTPS** guida semplificata (Tailscale) +
+card in-app "Perché serve HTTPS"; **header coerenti** (`PageHeader`/`EmptyState`) su pagine
+principali; pass a11y (aria-label icon-only, focus ring). Migrazione `0009` (`series_override.kind`).
+**207 test verdi.** Tutti i comandi lint/typecheck/build verdi.
+
 **Batch rifiniture v0.3.0 (branch `feat/rifiniture-post-v0.2.0` → `main`):** footer completo +
 affordance link + fix UX (ricerca→⌘K, popup coda); **Telegram dall'app** (token in config, invia
 test); **centro notifiche potenziato** (click→destinazione, filtri, raggruppo giorno, tipi

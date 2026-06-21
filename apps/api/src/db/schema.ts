@@ -222,6 +222,13 @@ export const stats = sqliteTable('stats', {
   updatedAt: text('updated_at').notNull(),
 });
 
+export const pushSubscription = sqliteTable('push_subscription', {
+  endpoint: text('endpoint').primaryKey(),
+  p256dh: text('p256dh').notNull(),
+  auth: text('auth').notNull(),
+  createdAt: text('created_at').notNull(),
+});
+
 export const auth = sqliteTable('auth', {
   id: text('id').primaryKey().default('default'),
   accessToken: text('access_token'),
@@ -248,4 +255,5 @@ export const schema = {
   config,
   stats,
   auth,
+  pushSubscription,
 };

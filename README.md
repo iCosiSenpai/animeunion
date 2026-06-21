@@ -116,6 +116,10 @@ docker compose up -d --build
   opzionale: ora i token si configurano nell'app.) Vedi [`.env.example`](.env.example).
 - **Volumi**: `./data` = database/token; `/media` = la tua libreria.
 - **Diagnostica**: Impostazioni → Diagnostica mostra stato worker, spazio disco per cartella e sync.
+- **Blocco web UI** (opzionale) → Impostazioni → Sicurezza: imposta un passcode per proteggere
+  l'accesso in LAN. Recupero: env `WEB_LOCK_DISABLED=true`.
+- **App installabile + notifiche push** → richiedono HTTPS: vedi
+  [HTTPS, app installabile (PWA) e notifiche push](#https-app-installabile-pwa-e-notifiche-push).
 
 **Aggiornamento**:
 
@@ -144,6 +148,50 @@ Ricevi le notifiche dell'app (download completati/falliti, nuovi episodi) anche 
 
 I token sono salvati nel database locale dell'app (`./data`). In alternativa puoi impostarli via env
 `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID` (fallback usato solo se i campi nell'app sono vuoti).
+
+---
+
+## HTTPS, app installabile (PWA) e notifiche push
+
+L'app è una **PWA installabile** e può inviare **notifiche push del browser** (download
+completati/falliti, nuovi episodi, nuove stagioni) anche ad app chiusa. **Service worker e Push API
+funzionano solo in un contesto sicuro: servono HTTPS** (oppure `localhost`). Su `http://` puro in LAN
+queste funzioni restano disattivate e nelle Impostazioni vedrai "richiede HTTPS" — tutto il resto
+dell'app funziona comunque.
+
+### Esporre l'app in HTTPS (scegli una via)
+
+- **Tailscale** (rete privata, zero config DNS): col container/host Tailscale, esponi la porta web:
+  ```bash
+  tailscale serve --bg 7979
+  ```
+  Accedi poi da `https://<nome-host>.<tua-tailnet>.ts.net`. (In alternativa `tailscale cert` +
+  reverse proxy.) Il traffico è cifrato end-to-end e l'origine è HTTPS → push/PWA attive.
+- **Cloudflare Tunnel** (`cloudflared`): crea un tunnel e instrada un hostname pubblico verso il web:
+  ```yaml
+  # config.yml di cloudflared
+  tunnel: <ID>
+  credentials-file: /etc/cloudflared/<ID>.json
+  ingress:
+    - hostname: animeunion.tuodominio.com
+      service: http://web:3000   # o http://<ip-nas>:7979
+    - service: http_status:404
+  ```
+  Cloudflare termina il TLS → accedi via `https://animeunion.tuodominio.com`.
+- **Reverse proxy con TLS** (Caddy, Nginx Proxy Manager, reverse proxy di Synology/DSM): punta un
+  hostname HTTPS (Let's Encrypt) al servizio `web` sulla porta `7979`.
+
+> Dopo aver attivato l'HTTPS, se imposti `CORS_ORIGINS` aggiungi l'origine https (es.
+> `CORS_ORIGINS=https://animeunion.tuodominio.com`). Le chiavi VAPID per le push vengono generate e
+> salvate automaticamente: nessun segreto da configurare a mano.
+
+### Installare la PWA e attivare le push
+
+1. Apri l'app via **`https://…`**.
+2. **Installa**: dal menu del browser "Installa app" / "Aggiungi a schermata Home" (o il bottone
+   **Installa app** in Impostazioni → Notifiche, quando disponibile).
+3. **Push**: Impostazioni → Notifiche → **Attiva push** → concedi il permesso. Da quel momento ricevi
+   le notifiche del browser anche ad app chiusa; il click apre la scheda giusta.
 
 ---
 

@@ -2,6 +2,8 @@
 
 import { AccentPicker } from '@/components/settings/accent-picker';
 import { FolderInput } from '@/components/settings/folder-picker';
+import { InstallButton } from '@/components/settings/install-button';
+import { PushToggle } from '@/components/settings/push-toggle';
 import { SecuritySection } from '@/components/settings/security-section';
 import { WallpaperPicker } from '@/components/settings/wallpaper-picker';
 import { Button } from '@/components/ui/button';
@@ -569,18 +571,19 @@ export function SettingsView() {
           </div>
         </Field>
         <Field
-          label="Provider futuri"
-          hint="Web Push e Discord saranno disponibili in una prossima release."
+          label="Notifiche push"
+          hint="Notifiche del browser (anche ad app chiusa). Richiede HTTPS — vedi la guida nel README."
         >
+          <PushToggle />
+        </Field>
+        <Field label="App installabile" hint="Installa AnimeUnion come app (PWA). Richiede HTTPS.">
+          <InstallButton />
+        </Field>
+        <Field label="Provider futuri" hint="Discord sarà disponibile in una prossima release.">
           <div className="flex flex-wrap gap-2">
-            {['Web Push', 'Discord'].map((name) => (
-              <span
-                key={name}
-                className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs text-muted-foreground"
-              >
-                {name}
-              </span>
-            ))}
+            <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs text-muted-foreground">
+              Discord
+            </span>
           </div>
         </Field>
       </Section>

@@ -23,6 +23,8 @@ export const appConfigSchema = z.object({
   notifyTelegram: z.boolean().default(false),
   // Avvisa quando una serie seguita ottiene una nuova stagione/contenuto correlato.
   notifyNewSeasons: z.boolean().default(true),
+  // Inoltra le notifiche come push del browser (richiede HTTPS + sottoscrizione).
+  notifyWebPush: z.boolean().default(true),
   // Token del bot Telegram (da @BotFather) e chat id destinatario. Segreti in SQLite
   // (coerente con il modello token-in-SQLite); vuoti = usa il fallback da env, se presente.
   telegramBotToken: z.string().default(''),

@@ -28,6 +28,11 @@ const nextConfig: NextConfig = {
           },
         ],
       },
+      // Il service worker non deve restare in cache: così gli aggiornamenti arrivano subito.
+      {
+        source: '/sw.js',
+        headers: [{ key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' }],
+      },
     ];
   },
 };

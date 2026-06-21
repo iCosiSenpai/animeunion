@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { SECRET_MASK } from '@animeunion/shared';
 import { TRPCError } from '@trpc/server';
 import { describe, expect, it, vi } from 'vitest';
+import { schema } from '../db';
 import { createAuthService } from '../services/auth-service';
 import { createCatalogService } from '../services/catalog-service';
 import { createConfigService } from '../services/config-service';
@@ -14,6 +15,7 @@ import { createLibraryService } from '../services/library-service';
 import { createLockService } from '../services/lock-service';
 import { createNotificationService } from '../services/notification-service';
 import { createProfileService } from '../services/profile-service';
+import { createPushService } from '../services/push-service';
 import { createRenamerService } from '../services/renamer-service';
 import { createSeriesResolver } from '../services/series-resolver';
 import { createSeriesService } from '../services/series-service';
@@ -40,6 +42,7 @@ function makeCaller() {
   const series = createSeriesService({ db, resolver, catalog });
   const notifications = createNotificationService({ db, config });
   const lock = createLockService({ db, env: { WEB_LOCK_DISABLED: undefined } });
+  const push = createPushService({ db, logger: testLogger });
   const download = createDownloadService({
     db,
     worker: {
@@ -69,6 +72,7 @@ function makeCaller() {
       series,
       notifications,
       lock,
+      push,
     },
     logger: testLogger,
   };
@@ -111,6 +115,19 @@ describe('appRouter (integrazione)', () => {
     const unlocked = createCallerFactory(appRouter)({ ...ctx, sessionToken: res.token ?? '' });
     const search = await unlocked.catalog.search({ query: '' });
     expect(search.data.length).toBeGreaterThan(0);
+  });
+
+  it('push: publicKey VAPID e subscribe salvano la sottoscrizione', async () => {
+    const { caller, ctx } = makeCaller();
+    const { publicKey } = await caller.push.publicKey();
+    expect(typeof publicKey).toBe('string');
+    expect(publicKey.length).toBeGreaterThan(0);
+
+    await caller.push.subscribe({
+      endpoint: 'https://push.example/abc',
+      keys: { p256dh: 'p256', auth: 'auth' },
+    });
+    expect(ctx.db.select().from(schema.pushSubscription).all()).toHaveLength(1);
   });
 
   it('catalog.bySlug ritorna il dettaglio validato dal contratto', async () => {

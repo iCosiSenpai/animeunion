@@ -2,6 +2,7 @@
 
 import { AnimationProvider } from '@/components/layout/animation-provider';
 import { AppTheme } from '@/components/layout/app-theme';
+import { PwaRegister } from '@/components/layout/pwa-register';
 import { Toaster } from '@/components/ui/sonner';
 import { getSessionToken } from '@/lib/session';
 import { trpc } from '@/lib/trpc';
@@ -43,6 +44,7 @@ export function Providers({ children }: { children: ReactNode }) {
       <trpc.Provider client={trpcClient} queryClient={queryClient}>
         <QueryClientProvider client={queryClient}>
           <AppTheme />
+          <PwaRegister />
           <AnimationProvider>{children}</AnimationProvider>
           <Toaster richColors position="top-right" />
         </QueryClientProvider>

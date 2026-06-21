@@ -17,6 +17,7 @@ import { createLibraryService } from './services/library-service';
 import { createLockService } from './services/lock-service';
 import { createNotificationService } from './services/notification-service';
 import { createProfileService } from './services/profile-service';
+import { createPushService } from './services/push-service';
 import { createRenamerService } from './services/renamer-service';
 import { createSeriesResolver } from './services/series-resolver';
 import { createSeriesService } from './services/series-service';
@@ -51,7 +52,8 @@ export function createAppContext(options: { env?: Env; databasePath?: string } =
     }),
     logger,
   });
-  const notifications = createNotificationService({ db, config, telegram, logger });
+  const push = createPushService({ db, logger });
+  const notifications = createNotificationService({ db, config, telegram, push, logger });
   const catalog = createCatalogService({
     db,
     source,
@@ -168,6 +170,7 @@ export function createAppContext(options: { env?: Env; databasePath?: string } =
       series,
       notifications,
       lock,
+      push,
     },
     logger,
   };

@@ -5,6 +5,7 @@ import { schema } from '../db';
 import type { Logger } from '../lib/logger';
 import type { TelegramCredentials, TelegramNotifier } from '../lib/telegram';
 import type { ConfigService } from './config-service';
+import type { PushService } from './push-service';
 
 export interface CreateNotificationInput {
   type: NotificationType;
@@ -28,6 +29,7 @@ export interface NotificationServiceDeps {
   db: Db;
   config: ConfigService;
   telegram?: TelegramNotifier;
+  push?: PushService;
   logger?: Logger;
   now?: () => Date;
 }
@@ -48,8 +50,26 @@ function toNotification(row: Row, animeSlug: string | null = null): Notification
 }
 
 export function createNotificationService(deps: NotificationServiceDeps): NotificationService {
-  const { db, config, telegram, logger } = deps;
+  const { db, config, telegram, push, logger } = deps;
   const now = deps.now ?? (() => new Date());
+
+  // Destinazione del click sulla notifica push: scheda anime se risolvibile, altrimenti pagine note.
+  function pushUrlFor(input: CreateNotificationInput): string {
+    if (input.animeId) {
+      const row = db
+        .select({ slug: schema.anime.slug })
+        .from(schema.anime)
+        .where(eq(schema.anime.id, input.animeId))
+        .get();
+      if (row?.slug) {
+        return `/catalog/${row.slug}`;
+      }
+    }
+    if (input.type === 'download_complete' || input.type === 'download_failed') {
+      return '/downloads';
+    }
+    return '/';
+  }
 
   return {
     create(input) {
@@ -70,6 +90,15 @@ export function createNotificationService(deps: NotificationServiceDeps): Notifi
         void telegram.send(text).catch((error) => {
           logger?.debug({ err: error }, 'Notifica Telegram non inviata');
         });
+      }
+
+      // Web push best-effort (no-op se nessuna sottoscrizione).
+      if (push && config.get('notifyWebPush')) {
+        void push
+          .send({ title: input.title, body: input.body ?? null, url: pushUrlFor(input) })
+          .catch((error) => {
+            logger?.debug({ err: error }, 'Notifica push non inviata');
+          });
       }
       return toNotification(row);
     },

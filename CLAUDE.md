@@ -23,6 +23,21 @@ Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
 
 ## Stato attuale (2026-06-21)
 
+**Batch "altri accorgimenti" (branch `feat/accorgimenti-ux-file-manager-part`, v0.5.2):** fix
+**overflow popup** (DialogContent responsive `w-[calc(100%-2rem)]` + `max-h-[85dvh]` scroll); **nav
+mobile ibrida** (dock voci principali + drawer "Altro", hamburger navbar rimosso); **iOS PWA**
+`viewportFit:'cover'` (la safe-area ora funziona, dock non collide con la barra di sistema) + padding
+container responsive contro l'overflow ("mix" desktop/mobile); **sidebar desktop** con stato in
+`sidebar-store` + `AppMain` (toggle non più coperto/sovrapposto); **link MAL/AniList** nella scheda
+anime (dati già presenti); **404 anime spiegato** (`EmptyState` + CTA); **About** con sezioni
+"Perché" e "Privacy e cookie"; **gestore file**: niente falsi orfani per gli extra (`Specials`/
+`backdrops`/`theme-music` → badge "Extra", colonna shared `FileEntry.extra`), cartella → "Collega a
+AnimeUnion"/"Ri-scarica", strumenti "Rinomina secondo lo schema" e "Elimina cartelle vuote";
+**stagioni divise in parti** (`series_override.part_number`, migrazione `0010`, offset episodi
+continuo nel renamer, campo "Parte" nel dialog Classifica) — risolve War of Underworld 1/2; **loghi**
+leggermente più grandi. **212 test verdi.** Lint/typecheck/test/build verdi. **Rimandato:** GitHub
+Pages (landing + mascotte).
+
 **Batch UX/UI + gestore file (branch `feat/rifiniture-ux-gestore-file`):** brand cleanup (via
 "Radarr/Sonarr", nuovo claim "La tua libreria anime, sempre aggiornata"); **download simultaneo
 bloccato a 1** (worker hardcoded, UI "Premium" — config `maxConcurrent` resta per compat); **fix

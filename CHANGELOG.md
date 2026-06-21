@@ -10,6 +10,35 @@ e il progetto aderisce al [Semantic Versioning](https://semver.org/lang/it/).
 ### Da fare
 - Test E2E (Playwright).
 - Setup wizard migliorato (Step F, rimandato).
+- GitHub Pages (landing pubblica + spazio mascotte).
+
+## [0.5.2] - 2026-06-21
+
+### Added
+- **Link MyAnimeList e AniList** nella scheda anime (quando l'API fornisce gli ID).
+- **About**: sezioni "Perché AnimeUnion Docker" e "Privacy e cookie" (i cookie sono
+  gestiti da AnimeUnion, non da questa app self-hosted).
+- **Stagioni divise in parti** (es. "War of Underworld" 1 e 2): campo "Parte" nel
+  dialog di classificazione con **numerazione episodi continua** (part 1 1..N,
+  part 2 N+1..). Migrazione `0010` (`series_override.part_number`) automatica.
+- **Gestore file**: cartella → "Collega a AnimeUnion" con apertura scheda anime e
+  **ri-scarica** (elimina e riaccoda); strumenti cartella **"Rinomina secondo lo
+  schema"** e **"Elimina cartelle vuote"**.
+- **Navigazione mobile ibrida**: dock con voci principali + drawer "Altro".
+
+### Changed
+- **Loghi** leggermente più grandi (navbar, footer, login/wizard).
+
+### Fixed
+- **Popup che uscivano dai bordi** su schermi stretti: i dialog ora restano dentro
+  lo schermo con scroll quando troppo alti.
+- **iOS PWA**: aggiunto `viewport-fit=cover` così il dock rispetta la safe-area e non
+  collide più con la barra di sistema; corretto il "mix" desktop/mobile da overflow.
+- **Sidebar desktop**: il toggle non sparisce più quando si espande (niente
+  sovrapposizione con la navbar).
+- **Gestore file**: OP/ED e contenuti in cartelle extra (`Specials`, `backdrops`,
+  `theme-music`…) non sono più segnalati come "non collegato" (badge **Extra**).
+- **404 anime**: messaggio spiegato con azioni "Torna al catalogo" / "Cerca ancora".
 
 ## [0.5.0] - 2026-06-21
 

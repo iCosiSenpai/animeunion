@@ -17,6 +17,13 @@ import {
 } from './http-downloader';
 import type { Logger } from './logger';
 
+/**
+ * Download eseguiti in parallelo. Bloccato a 1 di proposito: il download simultaneo e' una
+ * funzione futura (Premium). La config `maxConcurrent` resta per compatibilita' ma il worker
+ * impone comunque un job alla volta.
+ */
+const MAX_CONCURRENT_DOWNLOADS = 1;
+
 export type WorkerEvent = 'enqueue' | 'start' | 'progress' | 'complete' | 'failed' | 'cancelled';
 
 export interface WorkerEvents {
@@ -352,7 +359,7 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
     if (stopped || paused) {
       return;
     }
-    while (activeCount() < config.get('maxConcurrent')) {
+    while (activeCount() < MAX_CONCURRENT_DOWNLOADS) {
       const next = pickNext();
       if (!next) {
         return;
@@ -426,7 +433,7 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
       timer = setInterval(safetyTick, SAFETY_TICK_MS);
       timer.unref?.();
       logger.info(
-        { everyMs: SAFETY_TICK_MS, maxConcurrent: config.get('maxConcurrent') },
+        { everyMs: SAFETY_TICK_MS, maxConcurrent: MAX_CONCURRENT_DOWNLOADS },
         'Download worker avviato',
       );
       void tryStartNext();

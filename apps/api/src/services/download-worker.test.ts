@@ -1,6 +1,6 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { createServer } from 'node:http';
-import type { AddressInfo } from 'node:net';
+import type { AddressInfo, Socket } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AnimeSource } from '@animeunion/shared';
@@ -733,6 +733,67 @@ describe('DownloadWorker (FSM)', () => {
       expect(proc?.status).toBe('failed');
     } finally {
       worker.stop();
+    }
+  });
+
+  it('forza 1 download alla volta anche con maxConcurrent=3 (Premium futuro)', async () => {
+    // Server che accetta la richiesta ma non completa mai la risposta: il primo job
+    // resta 'downloading' cosi' possiamo osservare che gli altri due restano 'queued'.
+    const sockets: Socket[] = [];
+    const server = createServer((_req, res) => {
+      res.writeHead(200, { 'content-type': 'video/mp4', 'content-length': '1000000' });
+      res.write(Buffer.alloc(64)); // qualche byte (passa lo sniff), poi blocca senza end()
+    });
+    server.on('connection', (s) => sockets.push(s));
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const { port } = server.address() as AddressInfo;
+    const url = `http://127.0.0.1:${port}/ep.mp4`;
+
+    const config = createConfigService({ db });
+    config.set('seriesPathSub', animePath);
+    config.set('maxConcurrent', 3); // anche se l'utente lo alza, il worker impone 1
+
+    const urls = new Map([
+      ['ef-1', url],
+      ['ef-2', url],
+      ['ef-3', url],
+    ]);
+    const worker = makeWorker(db, buildStubCatalog(urls), config);
+    seedEpisodeFiles(db, ['ef-1', 'ef-2', 'ef-3']);
+
+    try {
+      worker.start();
+      worker.enqueue('ef-1');
+      worker.enqueue('ef-2');
+      worker.enqueue('ef-3');
+      await worker.tryStartNext();
+
+      const downloadingCount = () =>
+        db
+          .select()
+          .from(schema.downloadQueue)
+          .all()
+          .filter((r) => r.status === 'downloading').length;
+
+      const deadline = Date.now() + 4000;
+      while (downloadingCount() === 0) {
+        if (Date.now() > deadline) {
+          throw new Error('nessun download avviato');
+        }
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      // Concedi tempo a un eventuale secondo job di partire: NON deve.
+      await new Promise((resolve) => setTimeout(resolve, 150));
+
+      const rows = db.select().from(schema.downloadQueue).all();
+      expect(rows.filter((r) => r.status === 'downloading')).toHaveLength(1);
+      expect(rows.filter((r) => r.status === 'queued')).toHaveLength(2);
+    } finally {
+      worker.stop();
+      for (const s of sockets) {
+        s.destroy();
+      }
+      await new Promise<void>((resolve) => server.close(() => resolve()));
     }
   });
 });

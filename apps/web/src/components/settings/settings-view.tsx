@@ -27,7 +27,7 @@ import {
 import { Separator } from '@/components/ui/separator';
 import { trpc } from '@/lib/trpc';
 import { type AppConfig, SECRET_MASK } from '@animeunion/shared';
-import { ExternalLink, Send } from 'lucide-react';
+import { ExternalLink, Lock, Send } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useRouter } from 'next/navigation';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
@@ -334,22 +334,17 @@ export function SettingsView() {
             />
           </Field>
         ))}
-        <Field label="Download simultanei" hint="Quanti episodi scaricare in parallelo (1-3).">
-          <Select
-            value={String(draft.maxConcurrent)}
-            onValueChange={(v) => update('maxConcurrent', Number(v))}
-          >
-            <SelectTrigger className="w-32">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {[1, 2, 3].map((n) => (
-                <SelectItem key={n} value={String(n)}>
-                  {n}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <Field
+          label="Download simultanei"
+          hint="Download simultaneo non disponibile per ora — in arrivo con il Premium."
+        >
+          <div className="inline-flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+            <Lock className="h-4 w-4" aria-hidden="true" />
+            <span>1 alla volta</span>
+            <span className="ml-1 rounded-full border border-primary/40 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-primary">
+              Premium
+            </span>
+          </div>
         </Field>
       </Section>
 
@@ -705,7 +700,7 @@ export function SettingsView() {
           <textarea
             value={importText}
             onChange={(e) => setImportText(e.target.value)}
-            placeholder='{ "themeAccent": "blue", "maxConcurrent": 2 }'
+            placeholder='{ "themeAccent": "blue", "language": "SUB_ITA" }'
             className="h-40 w-full resize-none rounded-md border bg-muted/40 p-2 font-mono text-xs"
           />
           <DialogFooter>

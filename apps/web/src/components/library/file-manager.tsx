@@ -95,7 +95,7 @@ function RelinkDialog({
                   <li key={a.id}>
                     <button
                       type="button"
-                      className="w-full p-2 text-left hover:bg-muted"
+                      className="w-full p-2 text-left hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
                       onClick={() => setSlug(a.slug)}
                     >
                       {a.titleIta ?? a.title}
@@ -123,7 +123,7 @@ function RelinkDialog({
                   <li key={ep.id}>
                     <button
                       type="button"
-                      className="flex w-full items-center justify-between p-2 text-left hover:bg-muted disabled:opacity-50"
+                      className="flex w-full items-center justify-between p-2 text-left hover:bg-muted focus-visible:bg-muted focus-visible:outline-none disabled:opacity-50"
                       disabled={relink.isPending}
                       onClick={() => relink.mutate({ path: file.path, episodeFileId: ep.id })}
                     >
@@ -306,7 +306,7 @@ export function FileManager() {
                 {isDir ? (
                   <button
                     type="button"
-                    className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                    className="flex min-w-0 flex-1 items-center gap-2 rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                     onClick={() => setPath(entry.path)}
                   >
                     <Folder className="h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
@@ -345,6 +345,7 @@ export function FileManager() {
                         size="icon"
                         className="h-8 w-8 text-primary"
                         title="Collega a un episodio"
+                        aria-label={`Collega ${entry.name} a un episodio`}
                         onClick={() => setRelinkTarget(entry)}
                       >
                         <Link2 className="h-4 w-4" />
@@ -355,6 +356,7 @@ export function FileManager() {
                       size="icon"
                       className="h-8 w-8"
                       title="Rinomina"
+                      aria-label={`Rinomina ${entry.name}`}
                       onClick={() => {
                         setRenameTarget(entry);
                         setRenameName(entry.name);
@@ -367,6 +369,7 @@ export function FileManager() {
                       size="icon"
                       className="h-8 w-8 text-destructive"
                       title="Elimina"
+                      aria-label={`Elimina ${entry.name}`}
                       onClick={() => setDeleteTarget(entry)}
                     >
                       <Trash2 className="h-4 w-4" />

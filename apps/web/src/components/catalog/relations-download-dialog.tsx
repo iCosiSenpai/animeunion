@@ -88,6 +88,7 @@ function RelationClassifyButton({ animeId, title }: { animeId: string; title: st
           size="icon"
           className="h-9 w-9 shrink-0 self-center text-muted-foreground"
           title="Classifica e scegli destinazione"
+          aria-label={`Classifica e scegli destinazione per ${title}`}
         >
           <SlidersHorizontal className="h-4 w-4" />
         </Button>

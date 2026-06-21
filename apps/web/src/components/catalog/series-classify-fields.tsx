@@ -68,7 +68,7 @@ export function ClassifyFields({
                 onClick={() => onChange({ ...value, kind: opt.kind })}
                 aria-pressed={isOn}
                 className={cn(
-                  'flex flex-col items-center gap-1 rounded-md border px-2 py-2.5 text-xs transition-colors',
+                  'flex flex-col items-center gap-1 rounded-md border px-2 py-2.5 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                   isOn
                     ? 'border-primary bg-primary/10 text-foreground'
                     : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
@@ -127,7 +127,7 @@ export function ClassifyFields({
                       <li key={a.id}>
                         <button
                           type="button"
-                          className="flex w-full items-center gap-2 p-2 text-left hover:bg-muted"
+                          className="flex w-full items-center gap-2 p-2 text-left hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
                           onClick={() => {
                             onChange({
                               ...value,

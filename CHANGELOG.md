@@ -11,9 +11,24 @@ e il progetto aderisce al [Semantic Versioning](https://semver.org/lang/it/).
 - Test E2E (Playwright).
 - Setup wizard migliorato (Step F, rimandato).
 - GitHub Pages (landing pubblica + spazio mascotte).
-- Hardening backend (TOCTOU gestore file, validazione serie madre, dedup auto-enqueue) — Fase 3.
 - Potenziamento Libreria & Gestore file (eliminazione affidabile sul disco, ordinamento
   "non importati" in cima, flusso "Mancanti" azionabile, ricerca e ordinamento) — Fase 4.
+
+## [0.6.1] - 2026-06-22
+
+### Added
+- **Avviso al cambio delle cartelle di download**: se cambi una cartella mentre ci sono già
+  file scaricati al suo interno, una notifica avvisa che quei file non vengono spostati
+  automaticamente (suggerendo "Scansiona libreria" / "Gestore file" o lo spostamento manuale).
+
+### Changed
+- **Validazione "Serie madre"**: la classificazione rifiuta una serie madre uguale a se stessa
+  o che creerebbe un ciclo, con un messaggio chiaro.
+- Gli URL di download firmati non compaiono più nei log (redazione).
+
+### Fixed
+- **Robustezza gestore file**: l'aggiornamento del database al rinomina/sposta/elimina avviene
+  ora in un'unica transazione, evitando incoerenze con un download in corso in parallelo.
 
 ## [0.6.0] - 2026-06-22
 

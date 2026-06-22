@@ -23,6 +23,17 @@ Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
 
 ## Stato attuale (2026-06-22)
 
+**Fase 3 hardening backend (branch `feat/fase-3-hardening`, v0.6.1):** patch mirata (gran parte della
+Fase 3 era gia' coperta: scheduler tutto in try/catch, `setOverride` gia' valida l'esistenza, no
+ri-accodamento dei completati). **3A** `setOverride` rifiuta serie madre = se stessa e 2-ciclo
+(`PreconditionError`). **3B** `syncMovedPaths`/`syncDeletedPaths` del gestore file ora in
+`db.transaction` (read+update atomici). **3C** redazione `downloadUrl`/`sourceUrl` nei log
+([logger.ts](apps/api/src/lib/logger.ts)). **3D** avviso al cambio di una cartella di download con file
+esistenti sotto la vecchia root (hook in `config.set` + `config.countDownloadsUnder`, notifica `info`).
+Rimandato di proposito: cooldown per i 4xx permanenti nell'auto-enqueue (il retry dei `failed` ogni
+30min e' voluto). **220 test verdi** (nuovi: self-parent/ciclo, `countDownloadsUnder`). Lint/typecheck/
+test/build verdi. **Prossime:** Fase 4 Libreria/Gestore file, Fase 5 rifiniture.
+
 **Fase 2 robustezza download (branch `feat/fase-2-robustezza-download`, v0.6.0):** dal piano a fasi.
 Migrazione `0011` (`download_queue.target_path/expected_bytes/source_url`). **Self-healing al riavvio**
 (`reconcileOrphans`: se il file e' gia' al `target_path` con la dimensione attesa, crash tra rename e

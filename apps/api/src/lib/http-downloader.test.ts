@@ -8,6 +8,13 @@ import { DownloadAbortedError, downloadToFile } from './http-downloader';
 
 const BASE = 'https://cdn.test';
 
+// Buffer "video" finto con firma MP4 valida (size + 'ftyp' ai byte 4-7) seguita dal payload, così
+// il controllo anti-pagina-errore (testo senza firma video) non scarta i fixture binari.
+function mp4(payload: Buffer | string = 'video-bytes'): Buffer {
+  const header = Buffer.from([0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70]);
+  return Buffer.concat([header, typeof payload === 'string' ? Buffer.from(payload) : payload]);
+}
+
 let agent: MockAgent;
 
 beforeEach(() => {
@@ -23,7 +30,7 @@ describe('downloadToFile', () => {
   it('scarica un MP4 finto e lo scrive su disco', async () => {
     const work = await mkdtemp(join(tmpdir(), 'au-dl-'));
     try {
-      const body = Buffer.from('fake-mp4-bytes-here');
+      const body = mp4('fake-mp4-bytes-here');
       agent
         .get(BASE)
         .intercept({ path: '/file.mp4', method: 'GET' })
@@ -121,6 +128,48 @@ describe('downloadToFile', () => {
     }
   });
 
+  it('rifiuta una pagina di errore testuale senza < o { iniziale (servita come video)', async () => {
+    const work = await mkdtemp(join(tmpdir(), 'au-dl-'));
+    try {
+      agent
+        .get(BASE)
+        .intercept({ path: '/forbidden', method: 'GET' })
+        .reply(200, 'Forbidden: this link is no longer valid', {
+          headers: { 'content-type': 'video/mp4' },
+        });
+
+      const dest = join(work, 'forbidden.mp4');
+      await expect(downloadToFile({ url: `${BASE}/forbidden`, destPath: dest })).rejects.toThrow(
+        /non un video|non valido/i,
+      );
+      expect(existsSync(dest)).toBe(false);
+    } finally {
+      await rm(work, { recursive: true, force: true });
+    }
+  });
+
+  it('rigetta un download troncato: meno byte del Content-Length dichiarato', async () => {
+    const work = await mkdtemp(join(tmpdir(), 'au-dl-'));
+    try {
+      const body = mp4('partial-content'); // dimensione reale
+      agent
+        .get(BASE)
+        .intercept({ path: '/trunc.mp4', method: 'GET' })
+        .reply(200, body, {
+          headers: {
+            'content-type': 'video/mp4',
+            'content-length': String(body.length + 100), // dichiara piu' di quanto invia
+          },
+        });
+
+      await expect(
+        downloadToFile({ url: `${BASE}/trunc.mp4`, destPath: join(work, 'trunc.mp4') }),
+      ).rejects.toThrow(/incompleto|content.?length|terminated|premature/i);
+    } finally {
+      await rm(work, { recursive: true, force: true });
+    }
+  });
+
   it('resume: con 206 riprende dal .part senza riscaricare i byte già presenti', async () => {
     const work = await mkdtemp(join(tmpdir(), 'au-dl-'));
     try {
@@ -166,7 +215,7 @@ describe('downloadToFile', () => {
   it('resume: se il server ignora il Range (200) riparte pulito da zero', async () => {
     const work = await mkdtemp(join(tmpdir(), 'au-dl-'));
     try {
-      const body = Buffer.from('fresh-full-content-9876');
+      const body = mp4('fresh-full-content-9876');
       const dest = join(work, 'r2.mp4');
       await writeFile(dest, Buffer.from('XXXXXXXXXX')); // parziale "sbagliato"
 
@@ -194,8 +243,8 @@ describe('downloadToFile', () => {
   it('AbortSignal interrompe il download e solleva DownloadAbortedError', async () => {
     const work = await mkdtemp(join(tmpdir(), 'au-dl-'));
     try {
-      // Risposta grande a chunk per dare tempo all'abort.
-      const big = Buffer.alloc(2 * 1024 * 1024, 'a');
+      // Risposta grande a chunk per dare tempo all'abort (con firma video valida).
+      const big = mp4(Buffer.alloc(2 * 1024 * 1024, 'a'));
       agent
         .get(BASE)
         .intercept({ path: '/big', method: 'GET' })

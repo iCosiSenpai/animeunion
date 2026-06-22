@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import { stat } from 'node:fs/promises';
+import { rm, stat } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import type { Language } from '@animeunion/shared';
 import { and, asc, desc, eq, inArray } from 'drizzle-orm';
@@ -201,6 +201,10 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
       const partial = tempPath(finalPath, queueId);
       await ensureDir(dirname(finalPath), logger);
 
+      // Persisti target e URL prima del download: il target_path abilita il self-healing al
+      // riavvio (vedi reconcileOrphans) e il source_url il resume sicuro (vedi sotto).
+      updateQueue(queueId, { targetPath: finalPath, sourceUrl: url });
+
       // Guardia spazio disco: evita di riempire completamente il volume.
       const free = await freeDiskBytes(dirname(finalPath));
       if (free != null && free < MIN_FREE_DISK_BYTES) {
@@ -239,6 +243,9 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
             bytesDownloaded: p.bytesDownloaded,
             totalBytes: total,
             speedBps: speed,
+            // expected_bytes resta la dimensione attesa (Content-Length) anche dopo il
+            // completamento, quando total_bytes viene sovrascritto coi byte effettivi.
+            ...(total != null ? { expectedBytes: total } : {}),
           });
         }
         emitter.emit('progress', {
@@ -249,10 +256,21 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
         });
       };
 
-      // Resume: se è rimasto un .part da un tentativo precedente, riprendi da lì.
-      const resumeFrom = await stat(partial)
+      // Resume sicuro: riprendi il .part solo se appartiene allo STESSO URL del tentativo
+      // precedente. Gli URL AnimeUnion scadono: riprendere un .part scaricato da un URL diverso
+      // concatenerebbe byte di sorgenti diverse (file corrotto). In tal caso si riparte da zero.
+      const existingPart = await stat(partial)
         .then((s) => s.size)
         .catch(() => 0);
+      let resumeFrom = 0;
+      if (existingPart > 0) {
+        if (item.sourceUrl === url) {
+          resumeFrom = existingPart;
+        } else {
+          await rm(partial).catch(() => {});
+          logger.debug({ queueId }, 'URL cambiato: .part precedente scartato, download da zero');
+        }
+      }
 
       const result = await downloadToFile({
         url,
@@ -385,21 +403,73 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
     void tryStartNext();
   }
 
-  function reconcileOrphans(): void {
-    // All'avvio nessun download e' davvero in volo: le righe lasciate 'downloading' o
-    // 'processing' da un processo precedente sono orfane. Le marchiamo come interrotte
-    // (failed) cosi' restano cancellabili/riavviabili dalla UI invece di bloccarsi.
-    const completedAt = new Date().toISOString();
-    const result = db
-      .update(schema.downloadQueue)
-      .set({ status: 'failed', error: 'Interrotto da riavvio del server', completedAt })
+  async function reconcileOrphans(): Promise<void> {
+    // All'avvio nessun download e' davvero in volo: le righe lasciate 'downloading' o 'processing'
+    // da un processo precedente sono orfane. Self-healing: se il file e' gia' al target_path con la
+    // dimensione attesa (crash tra il rename atomico e il commit DB), finalizziamo invece di
+    // perdere il download; altrimenti marchiamo failed (riavviabile/cancellabile dalla UI).
+    const orphans = db
+      .select()
+      .from(schema.downloadQueue)
       .where(inArray(schema.downloadQueue.status, ['downloading', 'processing']))
-      .run();
-    if (result.changes > 0) {
-      logger.warn(
-        { count: result.changes },
-        "Download orfani trovati all'avvio e segnati come interrotti",
+      .all();
+    if (orphans.length === 0) {
+      return;
+    }
+    const nowIso = new Date().toISOString();
+    let healed = 0;
+    let failed = 0;
+    for (const row of orphans) {
+      const size = row.targetPath
+        ? await stat(row.targetPath)
+            .then((s) => s.size)
+            .catch(() => null)
+        : null;
+      const sizeOk =
+        size != null && size > 0 && (row.expectedBytes == null || size === row.expectedBytes);
+      if (row.targetPath && sizeOk) {
+        const targetPath = row.targetPath;
+        db.transaction((tx) => {
+          tx.update(schema.episodeFile)
+            .set({
+              downloadStatus: 'downloaded',
+              localPath: targetPath,
+              fileSize: size,
+              downloadedAt: nowIso,
+              updatedAt: nowIso,
+            })
+            .where(eq(schema.episodeFile.id, row.episodeFileId))
+            .run();
+          tx.update(schema.downloadQueue)
+            .set({
+              status: 'completed',
+              progress: 1,
+              completedAt: nowIso,
+              error: null,
+              bytesDownloaded: size,
+              totalBytes: size,
+              speedBps: null,
+            })
+            .where(eq(schema.downloadQueue.id, row.id))
+            .run();
+        });
+        healed += 1;
+        continue;
+      }
+      db.update(schema.downloadQueue)
+        .set({ status: 'failed', error: 'Interrotto da riavvio del server', completedAt: nowIso })
+        .where(eq(schema.downloadQueue.id, row.id))
+        .run();
+      failed += 1;
+    }
+    if (healed > 0) {
+      logger.info(
+        { healed },
+        "Download orfani finalizzati all'avvio (file gia' presente al target)",
       );
+    }
+    if (failed > 0) {
+      logger.warn({ count: failed }, 'Download orfani interrotti da riavvio segnati come failed');
     }
   }
 
@@ -410,33 +480,40 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
       }
       stopped = false;
       paused = false;
-      reconcileOrphans();
-      // Conserva i .part dei job riavviabili (queued/failed) per poter riprendere; rimuove gli orfani.
-      const restartable = new Set(
-        db
-          .select({ id: schema.downloadQueue.id })
-          .from(schema.downloadQueue)
-          .where(inArray(schema.downloadQueue.status, ['queued', 'failed']))
-          .all()
-          .map((r) => r.id),
-      );
-      void Promise.all(
-        config.distinctDownloadRoots().map((root) => sweepPartFiles(root, logger, restartable)),
-      )
-        .then((counts) => {
+      // Reconcile (con self-healing) PRIMA dello sweep: cosi' lo sweep calcola i job riavviabili
+      // sugli stati definitivi e fa partire i job solo dopo aver ripulito i .part orfani.
+      void (async () => {
+        await reconcileOrphans();
+        // Conserva i .part dei job riavviabili (queued/failed) per riprenderli; rimuove gli orfani.
+        const restartable = new Set(
+          db
+            .select({ id: schema.downloadQueue.id })
+            .from(schema.downloadQueue)
+            .where(inArray(schema.downloadQueue.status, ['queued', 'failed']))
+            .all()
+            .map((r) => r.id),
+        );
+        try {
+          const counts = await Promise.all(
+            config.distinctDownloadRoots().map((root) => sweepPartFiles(root, logger, restartable)),
+          );
           const n = counts.reduce((sum, c) => sum + c, 0);
           if (n > 0) {
             logger.info({ removed: n }, "File .part orfani rimossi all'avvio");
           }
-        })
-        .catch(() => {});
+        } catch (error) {
+          logger.error({ err: error }, "Sweep dei .part orfani all'avvio fallito");
+        }
+        if (!stopped) {
+          void tryStartNext();
+        }
+      })();
       timer = setInterval(safetyTick, SAFETY_TICK_MS);
       timer.unref?.();
       logger.info(
         { everyMs: SAFETY_TICK_MS, maxConcurrent: MAX_CONCURRENT_DOWNLOADS },
         'Download worker avviato',
       );
-      void tryStartNext();
     },
 
     stop(): void {

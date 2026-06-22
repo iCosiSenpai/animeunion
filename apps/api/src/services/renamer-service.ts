@@ -66,8 +66,12 @@ export function createRenamerService(deps: RenamerServiceDeps): RenamerService {
     if (series.partNumber <= 1) {
       return 0;
     }
-    const row = db
-      .select({ total: sql<number>`COALESCE(SUM(${schema.anime.episodeCount}), 0)` })
+    // 1) Parti precedenti con override esplicito sulla stessa (serie madre, stagione).
+    const overrideRows = db
+      .select({
+        animeId: schema.seriesOverride.animeId,
+        episodeCount: schema.anime.episodeCount,
+      })
       .from(schema.seriesOverride)
       .innerJoin(schema.anime, eq(schema.anime.id, schema.seriesOverride.animeId))
       .where(
@@ -75,11 +79,41 @@ export function createRenamerService(deps: RenamerServiceDeps): RenamerService {
           eq(schema.seriesOverride.seriesAnimeId, series.seriesId),
           eq(schema.seriesOverride.seasonNumber, series.seasonNumber),
           sql`COALESCE(${schema.seriesOverride.partNumber}, 1) < ${series.partNumber}`,
-          sql<number>`${schema.anime.episodeCount} > 0`,
         ),
       )
+      .all();
+    const counted = new Set<string>();
+    let total = 0;
+    for (const row of overrideRows) {
+      if (row.episodeCount && row.episodeCount > 0 && !counted.has(row.animeId)) {
+        counted.add(row.animeId);
+        total += row.episodeCount;
+      }
+    }
+    // 2) La serie base/root e' implicitamente la PARTE 1 quando la stagione corrente coincide con
+    //    la sua (caso "Sakamoto Days": la prima parte e' la serie base, senza riga di override ->
+    //    senza questo l'offset sarebbe 0 e la parte 2 ripartirebbe da E01). Per una stagione divisa
+    //    non-root (es. "War of Underworld" = season 4) la root sta su un'altra stagione e NON va
+    //    contata: ci pensano gli override delle singole parti.
+    const base = db
+      .select({
+        id: schema.anime.id,
+        seasonNumber: schema.anime.seasonNumber,
+        episodeCount: schema.anime.episodeCount,
+      })
+      .from(schema.anime)
+      .where(eq(schema.anime.id, series.seriesId))
       .get();
-    return row?.total ?? 0;
+    if (
+      base &&
+      !counted.has(base.id) &&
+      (base.seasonNumber ?? 1) === series.seasonNumber &&
+      base.episodeCount &&
+      base.episodeCount > 0
+    ) {
+      total += base.episodeCount;
+    }
+    return total;
   }
 
   function relativeEpisodeNumber(series: SeriesInfo, episodeNumber: number): number {

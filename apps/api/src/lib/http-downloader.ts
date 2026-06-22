@@ -66,6 +66,47 @@ export interface DownloadOptions {
 const DEFAULT_PROGRESS_INTERVAL_MS = 200;
 const DEFAULT_STALL_TIMEOUT_MS = 60_000;
 
+/**
+ * Riconosce l'inizio di un file video valido dai magic bytes del primo chunk: box MP4/MOV
+ * (`ftyp` ai byte 4-7) o container Matroska/WebM (EBML `1A 45 DF A3`). Se il chunk e' troppo
+ * corto per giudicare ritorna true (non bloccare).
+ */
+function looksLikeVideoStart(chunk: Buffer): boolean {
+  if (chunk.length < 8) {
+    return true;
+  }
+  if (chunk[4] === 0x66 && chunk[5] === 0x74 && chunk[6] === 0x79 && chunk[7] === 0x70) {
+    return true; // 'ftyp' -> MP4/MOV
+  }
+  if (chunk[0] === 0x1a && chunk[1] === 0x45 && chunk[2] === 0xdf && chunk[3] === 0xa3) {
+    return true; // EBML -> MKV/WebM
+  }
+  return false;
+}
+
+/**
+ * Vero se i primi byte sono tutti testo ASCII stampabile (con tab/CR/LF): tipico delle pagine di
+ * errore ("link scaduto", "Forbidden") servite al posto del video. Combinata con
+ * `!looksLikeVideoStart` permette di rifiutare gli errori testuali SENZA rischiare falsi positivi
+ * su contenuti binari/video validi (che contengono subito byte non stampabili).
+ */
+function looksLikeText(chunk: Buffer): boolean {
+  const n = Math.min(chunk.length, 64);
+  if (n === 0) {
+    return false;
+  }
+  for (let i = 0; i < n; i++) {
+    const b = chunk[i] as number;
+    if (b === 0x09 || b === 0x0a || b === 0x0d) {
+      continue;
+    }
+    if (b < 0x20 || b > 0x7e) {
+      return false;
+    }
+  }
+  return true;
+}
+
 export async function downloadToFile(options: DownloadOptions): Promise<DownloadResult> {
   const {
     url,
@@ -177,6 +218,12 @@ export async function downloadToFile(options: DownloadOptions): Promise<Download
           );
           return;
         }
+        // Nessuna firma video ma contenuto testuale: pagina di errore servita come video
+        // (es. "link scaduto"/"Forbidden" senza '<'/'{' iniziale). I binari validi passano.
+        if (!looksLikeVideoStart(chunk) && looksLikeText(chunk)) {
+          cb(new PermanentDownloadError('Contenuto scaricato non valido (testo, non un video)'));
+          return;
+        }
       }
       bytesDownloaded += chunk.byteLength;
       if (onProgress) {
@@ -224,6 +271,13 @@ export async function downloadToFile(options: DownloadOptions): Promise<Download
     throw error;
   } finally {
     clearInterval(watchdog);
+  }
+
+  // Verifica integrità: se il server aveva dichiarato la dimensione (Content-Length/Range) ma
+  // abbiamo ricevuto meno byte, il file è troncato. Errore TRANSITORIO: conserviamo il .part e il
+  // worker può riprovare/riprendere, invece di accettare un .mp4 rotto in libreria.
+  if (totalBytes != null && bytesDownloaded !== totalBytes) {
+    throw new Error(`Download incompleto: ricevuti ${bytesDownloaded}/${totalBytes} byte`);
   }
 
   if (onProgress) {

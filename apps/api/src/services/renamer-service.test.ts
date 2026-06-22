@@ -327,4 +327,54 @@ describe('RenamerService', () => {
       renamer.computeEpisodePath({ animeId: 'p2', episodeNumber: 1, language: 'SUB_ITA' }),
     ).toBe(join('/data/anime', 'Root Show', 'Season 02', 'Root Show - S02E01 - SUB ITA.mp4'));
   });
+
+  it('stagione 1 divisa: la serie base conta come parte 1 senza override (Sakamoto Days)', () => {
+    // La parte 1 e' la serie base stessa (nessun override): solo la parte 2 (il correlato) ha
+    // un override. Senza il fix l'offset sarebbe 0 e la parte 2 ripartirebbe da S01E01.
+    insertAnime(db, {
+      id: 'saka',
+      slug: 'sakamoto-days',
+      title: 'Sakamoto Days',
+      episodeCount: 11,
+    });
+    insertAnime(db, {
+      id: 'saka-2',
+      slug: 'sakamoto-days-part-2',
+      title: 'Sakamoto Days Parte 2',
+      episodeCount: 11,
+    });
+    const ts = new Date().toISOString();
+    db.insert(schema.seriesOverride)
+      .values({
+        animeId: 'saka-2',
+        seriesAnimeId: 'saka',
+        seasonNumber: 1,
+        partNumber: 2,
+        kind: 'tv',
+        updatedAt: ts,
+      })
+      .run();
+    const renamer = makeRenamer(db, { seriesPathSub: '/media/Anime' });
+    const expected = join(
+      '/media/Anime',
+      'Sakamoto Days',
+      'Season 01',
+      'Sakamoto Days - S01E12 - SUB ITA.mp4',
+    );
+
+    // Parte 2 ep 1 (il sito riparte da 1) → continua dopo gli 11 episodi della parte 1 → S01E12.
+    expect(
+      renamer.computeEpisodePath({ animeId: 'saka-2', episodeNumber: 1, language: 'SUB_ITA' }),
+    ).toBe(expected);
+
+    // Stessa cosa in anteprima (dialog "Classifica"), prima ancora di salvare l'override.
+    expect(
+      renamer.previewPath({
+        animeId: 'saka-2',
+        episodeNumber: 1,
+        language: 'SUB_ITA',
+        override: { seriesAnimeId: 'saka', seasonNumber: 1, partNumber: 2 },
+      }),
+    ).toBe(expected);
+  });
 });

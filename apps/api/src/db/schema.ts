@@ -174,6 +174,15 @@ export const downloadQueue = sqliteTable(
     bytesDownloaded: integer('bytes_downloaded').default(0),
     totalBytes: integer('total_bytes'),
     speedBps: real('speed_bps'),
+    // Percorso finale calcolato, persistito prima dell'atomicMove: permette il self-healing al
+    // riavvio (se il file esiste gia' a questo path si finalizza invece di marcare failed).
+    targetPath: text('target_path'),
+    // Dimensione attesa (Content-Length) per la verifica d'integrita' al riavvio. Distinta da
+    // total_bytes che viene sovrascritta a fine download con i byte effettivi.
+    expectedBytes: integer('expected_bytes'),
+    // URL usato per l'ultimo tentativo: il resume del .part avviene solo se l'URL ri-risolto
+    // coincide (gli URL AnimeUnion scadono; riprendere un URL diverso corromperebbe il file).
+    sourceUrl: text('source_url'),
     createdAt: text('created_at').notNull(),
   },
   (table) => [

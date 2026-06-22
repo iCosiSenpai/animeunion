@@ -1,13 +1,14 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import type { AddressInfo, Socket } from 'node:net';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import type { AnimeSource } from '@animeunion/shared';
 import type { EpisodeDetail } from '@animeunion/shared';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { schema } from '../db';
+import { tempPath } from '../lib/download-fs';
 import { createDownloadWorker } from '../lib/download-worker';
 import { testLogger } from '../test/helpers';
 import type { CatalogService } from './catalog-service';
@@ -38,6 +39,13 @@ function buildStubCatalog(urlByFileId: Map<string, string | null>): CatalogServi
 
 function buildMockSource(): AnimeSource {
   return {} as AnimeSource;
+}
+
+// Buffer "video" finto con firma MP4 (size + 'ftyp' ai byte 4-7), così supera lo sniff del
+// downloader (che rifiuta i contenuti testuali senza firma video).
+function mp4(payload: Buffer | string = 'video-bytes'): Buffer {
+  const header = Buffer.from([0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70]);
+  return Buffer.concat([header, typeof payload === 'string' ? Buffer.from(payload) : payload]);
 }
 
 function makeWorker(
@@ -508,7 +516,7 @@ describe('DownloadWorker (FSM)', () => {
   });
 
   it('enqueue + tryStartNext scarica davvero e completa (regressione path normale)', async () => {
-    const body = Buffer.from('fake-mp4-bytes-0123456789');
+    const body = mp4('fake-mp4-bytes-0123456789');
     const server = createServer((_req, res) => {
       res.writeHead(200, {
         'content-type': 'video/mp4',
@@ -733,6 +741,164 @@ describe('DownloadWorker (FSM)', () => {
       expect(proc?.status).toBe('failed');
     } finally {
       worker.stop();
+    }
+  });
+
+  it('start: self-healing di un orfano col file già al target (crash dopo il rename)', async () => {
+    const config = createConfigService({ db });
+    config.set('seriesPathSub', animePath);
+    const renamer = createRenamerService({ db, config });
+    const worker = createDownloadWorker({
+      db,
+      catalog: buildStubCatalog(new Map()),
+      config,
+      logger: testLogger,
+      renamer,
+    });
+
+    const t = new Date().toISOString();
+    seedEpisodeFiles(db, ['ef-heal']);
+    // Simula il crash tra il rename atomico (file già al target) e il commit DB: la riga è
+    // rimasta 'processing' con target_path/expected_bytes valorizzati.
+    const finalPath = renamer.computeEpisodePath({
+      animeId: 'a-1',
+      episodeNumber: 1,
+      language: 'SUB_ITA',
+    });
+    const body = mp4('already-on-disk');
+    await mkdir(dirname(finalPath), { recursive: true });
+    await writeFile(finalPath, body);
+    db.insert(schema.downloadQueue)
+      .values({
+        id: 'q-heal',
+        episodeFileId: 'ef-heal',
+        status: 'processing',
+        targetPath: finalPath,
+        expectedBytes: body.length,
+        priority: 50,
+        createdAt: t,
+      })
+      .run();
+
+    worker.start();
+    try {
+      const deadline = Date.now() + 3000;
+      let q = db
+        .select()
+        .from(schema.downloadQueue)
+        .where(eq(schema.downloadQueue.id, 'q-heal'))
+        .get();
+      while (q && q.status === 'processing') {
+        if (Date.now() > deadline) {
+          throw new Error('timeout: reconcileOrphans non ha finalizzato');
+        }
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        q = db
+          .select()
+          .from(schema.downloadQueue)
+          .where(eq(schema.downloadQueue.id, 'q-heal'))
+          .get();
+      }
+      expect(q?.status).toBe('completed');
+      const ef = db
+        .select()
+        .from(schema.episodeFile)
+        .where(eq(schema.episodeFile.id, 'ef-heal'))
+        .get();
+      expect(ef?.downloadStatus).toBe('downloaded');
+      expect(ef?.localPath).toBe(finalPath);
+      expect(ef?.fileSize).toBe(body.length);
+    } finally {
+      worker.stop();
+    }
+  });
+
+  it('resume sicuro: URL cambiato → scarta il .part stantio e riscarica corretto', async () => {
+    const body = mp4('fresh-and-correct-content');
+    // Server che onora il Range (206): se il worker riprendesse il .part stantio otterrebbe un
+    // file corrotto. Col fix l'URL diverso fa scartare il .part → niente Range → 200 completo.
+    const server = createServer((req, res) => {
+      const range = req.headers.range;
+      if (typeof range === 'string') {
+        const off = Number(/bytes=(\d+)-/.exec(range)?.[1] ?? '0');
+        res.writeHead(206, {
+          'content-type': 'video/mp4',
+          'content-range': `bytes ${off}-${body.length - 1}/${body.length}`,
+          'content-length': String(body.length - off),
+        });
+        res.end(body.subarray(off));
+      } else {
+        res.writeHead(200, { 'content-type': 'video/mp4', 'content-length': String(body.length) });
+        res.end(body);
+      }
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const { port } = server.address() as AddressInfo;
+    const url = `http://127.0.0.1:${port}/ep.mp4`;
+
+    const config = createConfigService({ db });
+    config.set('seriesPathSub', animePath);
+    const renamer = createRenamerService({ db, config });
+    const worker = createDownloadWorker({
+      db,
+      catalog: buildStubCatalog(new Map([['ef-1', url]])),
+      config,
+      logger: testLogger,
+      renamer,
+    });
+
+    const t = new Date().toISOString();
+    seedEpisodeFiles(db, ['ef-1']);
+    const finalPath = renamer.computeEpisodePath({
+      animeId: 'a-1',
+      episodeNumber: 1,
+      language: 'SUB_ITA',
+    });
+    const partial = tempPath(finalPath, 'q-stale');
+    await mkdir(dirname(finalPath), { recursive: true });
+    await writeFile(partial, Buffer.from('XXXXXXXXXXXXXXXX')); // byte stantii non appartenenti a body
+    db.insert(schema.downloadQueue)
+      .values({
+        id: 'q-stale',
+        episodeFileId: 'ef-1',
+        status: 'queued',
+        sourceUrl: 'http://expired.example/old.mp4', // diverso dall'URL ri-risolto
+        priority: 50,
+        createdAt: t,
+      })
+      .run();
+
+    try {
+      worker.start();
+      const deadline = Date.now() + 4000;
+      let q = db
+        .select()
+        .from(schema.downloadQueue)
+        .where(eq(schema.downloadQueue.id, 'q-stale'))
+        .get();
+      while (q && q.status !== 'completed' && q.status !== 'failed') {
+        if (Date.now() > deadline) {
+          throw new Error(`timeout: stato '${q.status}'`);
+        }
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        q = db
+          .select()
+          .from(schema.downloadQueue)
+          .where(eq(schema.downloadQueue.id, 'q-stale'))
+          .get();
+      }
+      expect(q?.status).toBe('completed');
+      const ef = db
+        .select()
+        .from(schema.episodeFile)
+        .where(eq(schema.episodeFile.id, 'ef-1'))
+        .get();
+      expect(ef?.fileSize).toBe(body.length); // niente concatenazione coi byte stantii
+      const written = await readFile(finalPath);
+      expect(written.equals(body)).toBe(true);
+    } finally {
+      worker.stop();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
     }
   });
 

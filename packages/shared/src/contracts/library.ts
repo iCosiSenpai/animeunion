@@ -23,6 +23,8 @@ export const libraryItemSchema = z.object({
 export type LibraryItem = z.infer<typeof libraryItemSchema>;
 
 export const libraryMissingEntrySchema = z.object({
+  animeId: z.string(),
+  episodeFileId: z.string(),
   animeTitle: z.string().nullable(),
   animeSlug: z.string(),
   seasonNumber: z.number().int(),
@@ -53,11 +55,18 @@ export const libraryDeleteEpisodeInputSchema = z.object({ episodeFileId: z.strin
 export const libraryDeleteEntryInputSchema = z.object({
   animeId: z.string().min(1),
   language: languageSchema,
+  /** Rimuove anche l'intera cartella della serie (compresi file non tracciati/extra). */
+  deleteFolder: z.boolean().optional().default(false),
 });
-export const libraryDeleteSeriesInputSchema = z.object({ animeId: z.string().min(1) });
+export const libraryDeleteSeriesInputSchema = z.object({
+  animeId: z.string().min(1),
+  deleteFolder: z.boolean().optional().default(false),
+});
 
 export const libraryDeleteResultSchema = z.object({
   deletedFiles: z.number().int(),
   freedBytes: z.number().int(),
+  /** File che non è stato possibile eliminare (permessi/percorso): NON marcati come rimossi. */
+  failedFiles: z.number().int().default(0),
 });
 export type LibraryDeleteResult = z.infer<typeof libraryDeleteResultSchema>;

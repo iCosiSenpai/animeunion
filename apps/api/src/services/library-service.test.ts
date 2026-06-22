@@ -156,6 +156,9 @@ describe('LibraryService', () => {
     const result = await service.scan();
     expect(result.found).toBe(0);
     expect(result.missing).toBe(1);
+    // I missingEntries portano animeId/episodeFileId per il flusso "Mancanti" (ri-scarica).
+    expect(result.missingEntries[0]?.animeId).toBe('show-b');
+    expect(result.missingEntries[0]?.episodeFileId).toBe('file-b-1');
 
     const row = db
       .select()
@@ -210,7 +213,7 @@ describe('LibraryService', () => {
       .run();
 
     const res = await service.deleteEpisodeFile('file-d-1');
-    expect(res).toEqual({ deletedFiles: 1, freedBytes: 10 });
+    expect(res).toEqual({ deletedFiles: 1, freedBytes: 10, failedFiles: 0 });
     expect(existsSync(file)).toBe(false);
     // cartelle vuote ripulite (serie/Season).
     expect(existsSync(join(tmpDir, 'show-d', 'Season 01'))).toBe(false);
@@ -253,6 +256,32 @@ describe('LibraryService', () => {
       .get();
     expect(subRow?.downloadStatus).toBe('not_downloaded');
     expect(dubRow?.downloadStatus).toBe('downloaded');
+  });
+
+  it('deleteEntry con deleteFolder rimuove anche i file non tracciati nella cartella', async () => {
+    const db = createTestDb();
+    insertAnime(db, 'show-f');
+    insertEpisode(db, 'ep-f-1', 'show-f', 1);
+    insertFile(db, 'file-f-sub', 'ep-f-1', 'SUB_ITA');
+    const { service, renamer } = makeService(db, tmpDir);
+    const tracked = await placeEpisode(renamer, 'show-f', 1, 'SUB_ITA');
+    await service.scan();
+    // File extra NON tracciato nella stessa cartella serie (es. una sigla in Specials).
+    const seriesDir = join(tmpDir, 'show-f');
+    const extra = join(seriesDir, 'Specials', 'OP1.mp4');
+    await mkdir(dirname(extra), { recursive: true });
+    await writeFile(extra, 'op-bytes');
+
+    const res = await service.deleteEntry({
+      animeId: 'show-f',
+      language: 'SUB_ITA',
+      deleteFolder: true,
+    });
+    expect(existsSync(tracked)).toBe(false);
+    expect(existsSync(extra)).toBe(false);
+    expect(existsSync(seriesDir)).toBe(false);
+    expect(res.deletedFiles).toBeGreaterThanOrEqual(2); // tracciato + extra
+    expect(res.failedFiles).toBe(0);
   });
 
   it('deleteOrphans cancella i file orfani indicati', async () => {

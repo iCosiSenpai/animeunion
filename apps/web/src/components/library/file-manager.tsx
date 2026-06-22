@@ -531,6 +531,14 @@ export function FileManager() {
                     <span className="truncate font-medium">
                       {atRootsLevel ? entry.path : entry.name}
                     </span>
+                    {!atRootsLevel && !entry.managed ? (
+                      <Badge
+                        variant="outline"
+                        className="shrink-0 border-amber-500/50 text-amber-300"
+                      >
+                        Non importato
+                      </Badge>
+                    ) : null}
                   </button>
                 ) : (
                   <div className="flex min-w-0 flex-1 items-center gap-2">

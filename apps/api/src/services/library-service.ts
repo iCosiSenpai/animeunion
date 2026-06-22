@@ -1,5 +1,5 @@
-import { readdir, stat } from 'node:fs/promises';
-import { dirname, join, resolve, sep } from 'node:path';
+import { readdir, rm, stat } from 'node:fs/promises';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 import type {
   Language,
   LibraryDeleteResult,
@@ -24,9 +24,13 @@ export interface LibraryService {
   /** Elimina il file di un singolo episodio (episodio+lingua). */
   deleteEpisodeFile(episodeFileId: string): Promise<LibraryDeleteResult>;
   /** Elimina tutti i file scaricati di un anime in una lingua (una "stagione"). */
-  deleteEntry(input: { animeId: string; language: Language }): Promise<LibraryDeleteResult>;
+  deleteEntry(input: {
+    animeId: string;
+    language: Language;
+    deleteFolder?: boolean;
+  }): Promise<LibraryDeleteResult>;
   /** Elimina tutti i file scaricati dell'intera serie/franchise. */
-  deleteSeries(input: { animeId: string }): Promise<LibraryDeleteResult>;
+  deleteSeries(input: { animeId: string; deleteFolder?: boolean }): Promise<LibraryDeleteResult>;
   /** Elimina i file orfani indicati (rilevati dalla scansione). */
   deleteOrphans(paths: string[]): Promise<LibraryDeleteResult>;
 }
@@ -134,37 +138,60 @@ export function createLibraryService(deps: LibraryServiceDeps): LibraryService {
     return dirname(abs); // fallback: nessun pruning oltre la cartella diretta
   }
 
-  /** Cancella i file degli episode_file indicati, azzera lo stato e pulisce la coda. */
+  /** Percorso reale di un episode_file: il `localPath` salvato (fonte di verita') o, solo se
+   *  assente, quello ricalcolato dal renamer. */
+  function pathFor(file: typeof schema.episodeFile.$inferSelect): string | null {
+    if (file.localPath) {
+      return file.localPath;
+    }
+    const episode = db
+      .select()
+      .from(schema.episode)
+      .where(eq(schema.episode.id, file.episodeId))
+      .get();
+    if (!episode) {
+      return null;
+    }
+    return renamer.computeEpisodePath({
+      animeId: episode.animeId,
+      episodeNumber: episode.number,
+      language: file.language as Language,
+    });
+  }
+
+  /**
+   * Cancella i file degli episode_file indicati, azzera lo stato e pulisce la coda. Se la
+   * cancellazione del file fallisce (o il file resta su disco) l'episode_file NON viene marcato
+   * come rimosso (resta tracciato/riprovabile) e si incrementa `failedFiles`.
+   */
   async function removeFiles(episodeFileIds: string[]): Promise<LibraryDeleteResult> {
     let deletedFiles = 0;
     let freedBytes = 0;
+    let failedFiles = 0;
     for (const id of episodeFileIds) {
       const file = db.select().from(schema.episodeFile).where(eq(schema.episodeFile.id, id)).get();
       if (!file) {
         continue;
       }
       const wasDownloaded = file.downloadStatus === 'downloaded' || file.localPath != null;
-      let path = file.localPath;
-      if (!path) {
-        const episode = db
-          .select()
-          .from(schema.episode)
-          .where(eq(schema.episode.id, file.episodeId))
-          .get();
-        if (episode) {
-          path = renamer.computeEpisodePath({
-            animeId: episode.animeId,
-            episodeNumber: episode.number,
-            language: file.language as Language,
-          });
-        }
-      }
+      const path = pathFor(file);
+      let failed = false;
       if (path) {
         try {
           await deleteFileAndPrune(path, pruneRootFor(path), logger);
+          // Conferma che il file sia davvero sparito (un rm fallito silenzioso lascerebbe il NAS sporco).
+          const stillThere = await stat(path)
+            .then(() => true)
+            .catch(() => false);
+          failed = stillThere;
         } catch (error) {
           logger.error({ err: error, episodeFileId: id }, 'Eliminazione file libreria fallita');
+          failed = true;
         }
+      }
+      if (failed) {
+        failedFiles += 1;
+        continue; // non marcare come rimosso: il file e' ancora su disco
       }
       const now = new Date().toISOString();
       db.update(schema.episodeFile)
@@ -183,7 +210,69 @@ export function createLibraryService(deps: LibraryServiceDeps): LibraryService {
         freedBytes += file.fileSize ?? 0;
       }
     }
+    return { deletedFiles, freedBytes, failedFiles };
+  }
+
+  /** Cartelle "serie" (root + primo segmento) dei localPath dati, confinate sotto una root. */
+  function seriesFoldersOf(paths: string[]): string[] {
+    const roots = config.distinctDownloadRoots().map((r) => resolve(r));
+    const folders = new Set<string>();
+    for (const p of paths) {
+      const abs = resolve(p);
+      for (const root of roots) {
+        if (abs === root || !abs.startsWith(root + sep)) {
+          continue;
+        }
+        const first = relative(root, abs).split(sep)[0];
+        if (first && first !== '..' && first !== '.') {
+          folders.add(join(root, first));
+        }
+        break;
+      }
+    }
+    return [...folders];
+  }
+
+  /** Rimuove ricorsivamente le cartelle serie derivate dai path dati (file non tracciati/extra
+   *  rimasti). Da chiamare DOPO removeFiles: trova solo i leftover. Guardata dal confinamento di
+   *  `seriesFoldersOf`. Ritorna i file rimossi e i byte liberati. */
+  async function removeSeriesFolders(
+    paths: string[],
+  ): Promise<{ deletedFiles: number; freedBytes: number }> {
+    let deletedFiles = 0;
+    let freedBytes = 0;
+    for (const folder of seriesFoldersOf(paths)) {
+      try {
+        const files = await walk(folder, logger);
+        for (const f of files) {
+          const info = await stat(f).catch(() => null);
+          if (info) {
+            freedBytes += Number(info.size);
+            deletedFiles += 1;
+          }
+        }
+        await rm(folder, { recursive: true, force: true });
+      } catch (error) {
+        logger.error({ err: error, folder }, 'Rimozione cartella serie fallita');
+      }
+    }
     return { deletedFiles, freedBytes };
+  }
+
+  /** Risolve i percorsi reali (localPath o ricalcolo) degli episode_file indicati. */
+  function collectPaths(episodeFileIds: string[]): string[] {
+    const out: string[] = [];
+    for (const id of episodeFileIds) {
+      const file = db.select().from(schema.episodeFile).where(eq(schema.episodeFile.id, id)).get();
+      if (!file) {
+        continue;
+      }
+      const p = pathFor(file);
+      if (p) {
+        out.push(p);
+      }
+    }
+    return out;
   }
 
   return {
@@ -219,6 +308,8 @@ export function createLibraryService(deps: LibraryServiceDeps): LibraryService {
         for (const [path, entry] of expectedByPath) {
           if (!foundPaths.has(path)) {
             missingEntries.push({
+              animeId: entry.animeId,
+              episodeFileId: entry.episodeFileId,
               animeTitle: entry.animeTitle,
               animeSlug: entry.animeSlug,
               seasonNumber: resolver.resolve(entry.animeId).seasonNumber,
@@ -422,7 +513,7 @@ export function createLibraryService(deps: LibraryServiceDeps): LibraryService {
       return removeFiles([episodeFileId]);
     },
 
-    async deleteEntry({ animeId, language }) {
+    async deleteEntry({ animeId, language, deleteFolder }) {
       const ids = db
         .select({ id: schema.episodeFile.id })
         .from(schema.episodeFile)
@@ -436,10 +527,17 @@ export function createLibraryService(deps: LibraryServiceDeps): LibraryService {
         )
         .all()
         .map((row) => row.id);
-      return removeFiles(ids);
+      const paths = deleteFolder ? collectPaths(ids) : [];
+      const result = await removeFiles(ids);
+      if (deleteFolder) {
+        const folder = await removeSeriesFolders(paths);
+        result.deletedFiles += folder.deletedFiles;
+        result.freedBytes += folder.freedBytes;
+      }
+      return result;
     },
 
-    async deleteSeries({ animeId }) {
+    async deleteSeries({ animeId, deleteFolder }) {
       const series = resolver.resolve(animeId);
       const animeIds = new Set<string>([animeId]);
       for (const row of db
@@ -461,12 +559,20 @@ export function createLibraryService(deps: LibraryServiceDeps): LibraryService {
         )
         .all()
         .map((row) => row.id);
-      return removeFiles(ids);
+      const paths = deleteFolder ? collectPaths(ids) : [];
+      const result = await removeFiles(ids);
+      if (deleteFolder) {
+        const folder = await removeSeriesFolders(paths);
+        result.deletedFiles += folder.deletedFiles;
+        result.freedBytes += folder.freedBytes;
+      }
+      return result;
     },
 
     async deleteOrphans(paths) {
       let deletedFiles = 0;
       let freedBytes = 0;
+      let failedFiles = 0;
       for (const path of paths) {
         try {
           const info = await stat(path).catch(() => null);
@@ -477,9 +583,10 @@ export function createLibraryService(deps: LibraryServiceDeps): LibraryService {
           }
         } catch (error) {
           logger.error({ err: error, path }, 'Eliminazione orfano fallita');
+          failedFiles += 1;
         }
       }
-      return { deletedFiles, freedBytes };
+      return { deletedFiles, freedBytes, failedFiles };
     },
   };
 }

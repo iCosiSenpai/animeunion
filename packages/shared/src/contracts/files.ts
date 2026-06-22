@@ -14,6 +14,11 @@ export const fileEntrySchema = z.object({
    * da collegare, quindi non va segnalato come orfano.
    */
   extra: z.boolean().default(false),
+  /**
+   * Per le cartelle: true se contiene (a qualunque profondità) almeno un file scaricato dall'app
+   * (un `episode_file.localPath` tracciato). false = cartella "non importata" dall'app.
+   */
+  managed: z.boolean().default(false),
 });
 export type FileEntry = z.infer<typeof fileEntrySchema>;
 

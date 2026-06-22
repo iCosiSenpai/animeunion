@@ -40,12 +40,19 @@ type DeleteTarget =
 export function LibrarySeriesCard({ item }: { item: LibraryItem }) {
   const [expanded, setExpanded] = useState(false);
   const [target, setTarget] = useState<DeleteTarget | null>(null);
+  const [deleteFolder, setDeleteFolder] = useState(false);
   const title = item.anime.titleIta ?? item.anime.title;
   const totalSize = item.episodes.reduce((sum, ep) => sum + (ep.fileSize ?? 0), 0);
 
   const utils = trpc.useUtils();
-  const onSuccess = (res: { deletedFiles: number; freedBytes: number }) => {
-    toast.success(`Eliminati ${res.deletedFiles} file · ${formatBytes(res.freedBytes)} liberati`);
+  const onSuccess = (res: { deletedFiles: number; freedBytes: number; failedFiles: number }) => {
+    if (res.failedFiles > 0) {
+      toast.warning(
+        `${res.deletedFiles} file eliminati, ${res.failedFiles} non eliminati (controlla permessi o usa il Gestore file).`,
+      );
+    } else {
+      toast.success(`Eliminati ${res.deletedFiles} file · ${formatBytes(res.freedBytes)} liberati`);
+    }
     void utils.library.list.invalidate();
     void utils.library.stats.invalidate();
     void utils.download.queue.invalidate();
@@ -53,6 +60,7 @@ export function LibrarySeriesCard({ item }: { item: LibraryItem }) {
     // cosi' i tag "Scaricato" delle schede anime si aggiornano ovunque al ritorno.
     void utils.catalog.invalidate();
     setTarget(null);
+    setDeleteFolder(false);
   };
   const onError = () => toast.error('Eliminazione fallita');
   const delEpisode = trpc.library.deleteEpisode.useMutation({ onSuccess, onError });
@@ -65,9 +73,9 @@ export function LibrarySeriesCard({ item }: { item: LibraryItem }) {
     if (target.scope === 'episode') {
       delEpisode.mutate({ episodeFileId: target.episodeFileId });
     } else if (target.scope === 'entry') {
-      delEntry.mutate({ animeId: item.anime.id, language: item.language });
+      delEntry.mutate({ animeId: item.anime.id, language: item.language, deleteFolder });
     } else {
-      delSeries.mutate({ animeId: item.anime.id });
+      delSeries.mutate({ animeId: item.anime.id, deleteFolder });
     }
   }
 
@@ -225,7 +233,15 @@ export function LibrarySeriesCard({ item }: { item: LibraryItem }) {
         ) : null}
       </CardContent>
 
-      <Dialog open={target !== null} onOpenChange={(open) => !open && setTarget(null)}>
+      <Dialog
+        open={target !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setTarget(null);
+            setDeleteFolder(false);
+          }
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="text-destructive">{target?.title}</DialogTitle>
@@ -233,6 +249,20 @@ export function LibrarySeriesCard({ item }: { item: LibraryItem }) {
               {target?.warning} L&apos;operazione &egrave; <strong>irreversibile</strong>.
             </DialogDescription>
           </DialogHeader>
+          {target?.scope === 'entry' || target?.scope === 'series' ? (
+            <label className="flex cursor-pointer items-start gap-2 rounded-md border p-3 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 shrink-0 accent-destructive"
+                checked={deleteFolder}
+                onChange={(e) => setDeleteFolder(e.target.checked)}
+              />
+              <span>
+                Elimina anche la cartella della serie sul disco, compresi i{' '}
+                <strong>file non tracciati / extra</strong> (sigle, sottotitoli, ecc.).
+              </span>
+            </label>
+          ) : null}
           <DialogFooter>
             <Button variant="outline" onClick={() => setTarget(null)} disabled={pending}>
               Annulla

@@ -12,19 +12,64 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { EmptyState } from '@/components/ui/empty-state';
+import { Input } from '@/components/ui/input';
 import { PageHeader } from '@/components/ui/page-header';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { trpc } from '@/lib/trpc';
 import { formatBytes } from '@/lib/utils';
-import type { LibraryScanResult } from '@animeunion/shared';
-import { FolderOpen, FolderTree, HardDrive, Play, RefreshCw, Trash2, Tv } from 'lucide-react';
+import type { LibraryItem, LibraryScanResult } from '@animeunion/shared';
+import {
+  ArrowDownUp,
+  FolderOpen,
+  FolderTree,
+  HardDrive,
+  Play,
+  RefreshCw,
+  Search,
+  Trash2,
+  Tv,
+} from 'lucide-react';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { LibrarySeriesCard } from './library-series-card';
 import { LibrarySkeleton } from './library-skeleton';
+import { MissingDialog } from './missing-dialog';
 
-function ScanSummary({ result }: { result: LibraryScanResult }) {
+type SortKey = 'title' | 'recent' | 'size' | 'episodes';
+
+const SORT_LABELS: Record<SortKey, string> = {
+  title: 'Alfabetico',
+  recent: 'Ultimo aggiunto',
+  size: 'Dimensione',
+  episodes: 'N. episodi',
+};
+
+function lastAddedOf(item: LibraryItem): number {
+  return item.episodes.reduce((max, e) => {
+    const t = e.downloadedAt ? Date.parse(e.downloadedAt) : 0;
+    return Number.isFinite(t) && t > max ? t : max;
+  }, 0);
+}
+
+function sizeOf(item: LibraryItem): number {
+  return item.episodes.reduce((s, e) => s + (e.fileSize ?? 0), 0);
+}
+
+function ScanSummary({
+  result,
+  onShowMissing,
+}: {
+  result: LibraryScanResult;
+  onShowMissing: () => void;
+}) {
   if (result.found === 0 && result.orphans === 0 && result.missing === 0) {
     return (
       <p className="text-sm text-muted-foreground">Nessuna novità: libreria già sincronizzata.</p>
@@ -44,9 +89,14 @@ function ScanSummary({ result }: { result: LibraryScanResult }) {
         </Badge>
       ) : null}
       {result.missing > 0 ? (
-        <Badge variant="destructive" className="gap-1">
-          Mancanti: {result.missing}
-        </Badge>
+        <button type="button" onClick={onShowMissing} title="Gestisci gli episodi mancanti">
+          <Badge
+            variant="destructive"
+            className="cursor-pointer gap-1 transition-opacity hover:opacity-80"
+          >
+            Mancanti: {result.missing} →
+          </Badge>
+        </button>
       ) : null}
       {result.orphans > 0 ? (
         <Badge variant="outline" className="gap-1">
@@ -106,6 +156,7 @@ export function LibraryView() {
 
   const [lastScan, setLastScan] = useState<LibraryScanResult | null>(null);
   const [confirmOrphans, setConfirmOrphans] = useState(false);
+  const [missingOpen, setMissingOpen] = useState(false);
 
   const deleteOrphans = trpc.library.deleteOrphans.useMutation({
     onSuccess: (res) => {
@@ -131,6 +182,34 @@ export function LibraryView() {
   }
 
   const items = listQuery.data ?? [];
+
+  const [search, setSearch] = useState('');
+  const [sortKey, setSortKey] = useState<SortKey>('title');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+
+  const displayed = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const filtered = q
+      ? items.filter((it) => (it.anime.titleIta ?? it.anime.title).toLowerCase().includes(q))
+      : items;
+    const sorted = [...filtered].sort((a, b) => {
+      let cmp = 0;
+      if (sortKey === 'title') {
+        cmp = (a.anime.titleIta ?? a.anime.title).localeCompare(
+          b.anime.titleIta ?? b.anime.title,
+          'it',
+        );
+      } else if (sortKey === 'recent') {
+        cmp = lastAddedOf(a) - lastAddedOf(b);
+      } else if (sortKey === 'size') {
+        cmp = sizeOf(a) - sizeOf(b);
+      } else {
+        cmp = a.episodes.length - b.episodes.length;
+      }
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+    return sorted;
+  }, [items, search, sortKey, sortDir]);
 
   return (
     <div className="space-y-6">
@@ -168,7 +247,7 @@ export function LibraryView() {
             {scanMutation.isPending ? (
               <Skeleton className="h-5 w-48" />
             ) : lastScan ? (
-              <ScanSummary result={lastScan} />
+              <ScanSummary result={lastScan} onShowMissing={() => setMissingOpen(true)} />
             ) : null}
             {lastScan && lastScan.orphanPaths.length > 0 ? (
               <Button
@@ -218,8 +297,53 @@ export function LibraryView() {
         </DialogContent>
       </Dialog>
 
-      <div className="space-y-1">
+      <MissingDialog
+        open={missingOpen}
+        entries={lastScan?.missingEntries ?? []}
+        onOpenChange={setMissingOpen}
+        onChanged={() => {
+          void utils.download.queue.invalidate();
+          void utils.library.list.invalidate();
+        }}
+      />
+
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="text-lg font-semibold tracking-tight">Serie scaricate</h2>
+        {items.length > 0 ? (
+          <div className="flex items-center gap-2">
+            <div className="relative w-full sm:w-56">
+              <Search className="-translate-y-1/2 absolute top-1/2 left-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Cerca nella libreria…"
+                className="pl-8"
+              />
+            </div>
+            <Select value={sortKey} onValueChange={(v) => setSortKey(v as SortKey)}>
+              <SelectTrigger className="w-[150px] shrink-0">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {(Object.keys(SORT_LABELS) as SortKey[]).map((k) => (
+                  <SelectItem key={k} value={k}>
+                    {SORT_LABELS[k]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              variant="outline"
+              size="icon"
+              className="shrink-0"
+              aria-label={sortDir === 'asc' ? 'Ordine crescente' : 'Ordine decrescente'}
+              title={sortDir === 'asc' ? 'Crescente' : 'Decrescente'}
+              onClick={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
+            >
+              <ArrowDownUp className="h-4 w-4" />
+            </Button>
+          </div>
+        ) : null}
       </div>
 
       {listQuery.isLoading ? (
@@ -235,9 +359,15 @@ export function LibraryView() {
             </Button>
           }
         />
+      ) : displayed.length === 0 ? (
+        <EmptyState
+          icon={Search}
+          title="Nessun risultato"
+          description={`Nessuna serie corrisponde a "${search}".`}
+        />
       ) : (
         <div className="grid gap-4">
-          {items.map((item) => (
+          {displayed.map((item) => (
             <LibrarySeriesCard
               key={`${item.anime.id}-${item.seasonNumber}-${item.language}`}
               item={item}

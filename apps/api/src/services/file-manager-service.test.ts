@@ -152,6 +152,24 @@ describe('FileManagerService', () => {
     expect(s1.entries.find((e) => e.name === 'Show - S01E01.mp4')?.extra).toBe(false);
   });
 
+  it('marca le cartelle importate (managed) e mette le non importate in cima', async () => {
+    // Cartella "Show": importata (contiene un episode_file tracciato).
+    await mkdir(join(root, 'Show', 'Season 01'), { recursive: true });
+    const tracked = join(root, 'Show', 'Season 01', 'Show - S01E01.mp4');
+    await writeFile(tracked, 'x');
+    seedEpisode(db, { localPath: tracked, status: 'downloaded' });
+    // Cartella "Altro": non importata (solo file non collegati).
+    await mkdir(join(root, 'Altro'), { recursive: true });
+    await writeFile(join(root, 'Altro', 'video.mp4'), 'x');
+
+    const list = await service.list(root);
+    expect(list.entries.find((e) => e.name === 'Show')?.managed).toBe(true);
+    expect(list.entries.find((e) => e.name === 'Altro')?.managed).toBe(false);
+    // Ordinamento: la cartella non importata viene prima di quella importata.
+    const dirs = list.entries.filter((e) => e.type === 'dir').map((e) => e.name);
+    expect(dirs.indexOf('Altro')).toBeLessThan(dirs.indexOf('Show'));
+  });
+
   it('renameToScheme sposta i file tracciati nel percorso atteso dal renamer', async () => {
     const wrong = join(root, 'random', 'whatever.mp4');
     await mkdir(dirname(wrong), { recursive: true });

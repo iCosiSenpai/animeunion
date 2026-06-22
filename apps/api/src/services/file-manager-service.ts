@@ -178,6 +178,8 @@ export function createFileManagerService(deps: FileManagerDeps): FileManagerServ
           size: null,
           episodeFileId: null,
           extra: false,
+          // Le radici configurate sono per definizione cartelle dell'app.
+          managed: true,
         });
       }
     }
@@ -202,6 +204,12 @@ export function createFileManagerService(deps: FileManagerDeps): FileManagerServ
           tracked.set(resolve(row.localPath), row.id);
         }
       }
+      const trackedPaths = [...tracked.keys()];
+      // Una cartella e' "importata" (managed) se contiene, a qualunque profondita', un file tracciato.
+      const isManagedDir = (full: string): boolean => {
+        const dirAbs = resolve(full);
+        return trackedPaths.some((tp) => tp === dirAbs || tp.startsWith(dirAbs + sep));
+      };
 
       const entries: FileEntry[] = [];
       for (const d of dirents) {
@@ -217,6 +225,7 @@ export function createFileManagerService(deps: FileManagerDeps): FileManagerServ
             size: null,
             episodeFileId: null,
             extra: isExtraPath(full),
+            managed: isManagedDir(full),
           });
         } else if (d.isFile() && isVideo(d.name)) {
           let size: number | null = null;
@@ -232,12 +241,18 @@ export function createFileManagerService(deps: FileManagerDeps): FileManagerServ
             size,
             episodeFileId: tracked.get(resolve(full)) ?? null,
             extra: isExtraPath(full),
+            managed: false,
           });
         }
       }
       entries.sort((a, b) => {
+        // Cartelle prima dei file.
         if (a.type !== b.type) {
           return a.type === 'dir' ? -1 : 1;
+        }
+        // Tra le cartelle: quelle NON importate (non scaricate dall'app) per prime.
+        if (a.type === 'dir' && a.managed !== b.managed) {
+          return a.managed ? 1 : -1;
         }
         return a.name.localeCompare(b.name, 'it');
       });

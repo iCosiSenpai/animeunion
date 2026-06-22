@@ -23,6 +23,21 @@ Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
 
 ## Stato attuale (2026-06-22)
 
+**Fase 2 robustezza download (branch `feat/fase-2-robustezza-download`, v0.6.0):** dal piano a fasi.
+Migrazione `0011` (`download_queue.target_path/expected_bytes/source_url`). **Self-healing al riavvio**
+(`reconcileOrphans`: se il file e' gia' al `target_path` con la dimensione attesa, crash tra rename e
+commit, la riga viene finalizzata invece di marcata failed). **Resume sicuro**: il `.part` si riprende
+solo se `source_url` salvato == URL ri-risolto (gli URL AnimeUnion scadono; altrimenti si scarta il
+parziale e si riparte da zero). **Integrita'**: il downloader rifiuta i troncamenti (`bytesDownloaded
+!= Content-Length`) e i contenuti testuali senza firma video (helper `looksLikeVideoStart`/
+`looksLikeText`). **Sweep `.part`**: errori loggati invece che ingoiati. **Fix numerazione parti**: in
+`previousPartsEpisodeCount` la serie base/root conta come parte 1 quando la stagione corrente e' la sua
+(Sakamoto Days parte 2 -> `S01E12`; War of Underworld season 4 con override su entrambe le parti resta
+corretto). Nota: la guardia disco pre-move del piano e' stata scartata (l'`atomicMove` e' un rename
+same-volume, non consuma spazio). **217 test verdi** (nuovi: renamer Sakamoto, http-downloader
+troncamento/testo, worker self-healing/resume sicuro). Lint/typecheck/test/build verdi. **Prossime:**
+Fase 3 hardening, Fase 4 Libreria/Gestore file, Fase 5 rifiniture.
+
 **Fase 1 accorgimenti UX (branch `feat/accorgimenti-fase-1-ux`, v0.5.3):** fix bug UI a basso
 rischio dal piano a fasi (`plans/proponimi-un-piano-di-flickering-pelican.md`). **Popup overflow**
 risolto alla radice (`DialogContent` con `overflow-x-hidden` + `ClassifyFields` con griglie

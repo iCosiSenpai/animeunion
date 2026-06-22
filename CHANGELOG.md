@@ -11,10 +11,33 @@ e il progetto aderisce al [Semantic Versioning](https://semver.org/lang/it/).
 - Test E2E (Playwright).
 - Setup wizard migliorato (Step F, rimandato).
 - GitHub Pages (landing pubblica + spazio mascotte).
-- Robustezza download/salvataggio (finalizzazione atomica, resume sicuro, integrità) +
-  fix numerazione parti (Sakamoto Days) — pianificati per la 0.6.0.
+- Hardening backend (TOCTOU gestore file, validazione serie madre, dedup auto-enqueue) — Fase 3.
 - Potenziamento Libreria & Gestore file (eliminazione affidabile sul disco, ordinamento
-  "non importati" in cima, flusso "Mancanti" azionabile, ricerca e ordinamento) — pianificati.
+  "non importati" in cima, flusso "Mancanti" azionabile, ricerca e ordinamento) — Fase 4.
+
+## [0.6.0] - 2026-06-22
+
+### Added
+- **Verifica d'integrità dei download**: i file troncati (meno byte del `Content-Length`
+  dichiarato) e i contenuti testuali serviti al posto del video (pagine di errore senza
+  firma video) vengono rifiutati, così non finiscono in libreria come `.mp4` rotti.
+- **Self-healing all'avvio**: se il server si riavvia subito dopo aver spostato il file ma
+  prima di registrarlo, al riavvio il download viene **finalizzato** (file già presente al
+  posto giusto con la dimensione attesa) invece di risultare orfano.
+
+### Changed
+- **Resume sicuro**: un download interrotto riprende dal `.part` **solo** se l'URL della
+  sorgente è ancora lo stesso. Gli URL AnimeUnion scadono, quindi un `.part` di un URL ormai
+  diverso viene scartato e il download riparte pulito (niente file corrotti da concatenazione).
+- Migrazione `0011` automatica (`download_queue.target_path/expected_bytes/source_url`).
+
+### Fixed
+- **Numerazione episodi delle stagioni divise quando la parte 1 è la serie base** (caso
+  "Sakamoto Days"): scaricando il correlato come stagione 1 / parte 2 l'anteprima e il file
+  ora continuano la numerazione (`S01E12`) invece di ripartire da `S01E01`. "War of
+  Underworld" (stagione 4 divisa) resta corretto.
+- Errori nello sweep dei file `.part` orfani all'avvio ora vengono **loggati** invece di
+  essere silenziosamente ignorati.
 
 ## [0.5.3] - 2026-06-22
 

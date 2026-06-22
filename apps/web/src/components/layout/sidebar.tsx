@@ -136,7 +136,7 @@ export function Sidebar() {
               <span className="text-[10px]">Altro</span>
             </button>
           </SheetTrigger>
-          <SheetContent side="bottom" className="rounded-t-2xl pb-safe-b">
+          <SheetContent side="bottom" className="rounded-t-2xl">
             <SheetTitle>Altro</SheetTitle>
             <div className="mt-4">
               <SearchTrigger onOpen={() => setMoreOpen(false)} />

@@ -62,7 +62,7 @@ export function ClassifyFields({
     <div className="space-y-4">
       <div className="space-y-1.5">
         <p className="text-sm font-medium">Tipo</p>
-        <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Tipo">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3" role="radiogroup" aria-label="Tipo">
           {KIND_OPTIONS.map((opt) => {
             const Icon = opt.icon;
             const isOn = value.kind === opt.kind;
@@ -92,7 +92,7 @@ export function ClassifyFields({
       {value.kind === 'tv' ? (
         <>
           <div className="space-y-1.5">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <p className="text-sm font-medium">Numero di stagione</p>
                 <Input
@@ -182,7 +182,7 @@ export function ClassifyFields({
 
       <div className="space-y-1.5">
         <p className="text-sm font-medium">Verrà salvato in</p>
-        <p className="max-w-full overflow-x-auto whitespace-pre-wrap break-all rounded-md border bg-muted/40 px-3 py-2 font-mono text-xs text-muted-foreground">
+        <p className="w-full whitespace-pre-wrap break-all rounded-md border bg-muted/40 px-3 py-2 font-mono text-xs text-muted-foreground">
           {preview.isFetching && !preview.data ? 'Calcolo…' : (preview.data?.path ?? '—')}
         </p>
       </div>

@@ -2,6 +2,7 @@
 
 import { useCommandPalette } from '@/lib/command-palette-store';
 import { trpc } from '@/lib/trpc';
+import { useShortcutLabel } from '@/lib/use-shortcut-label';
 import {
   BarChart3,
   Calendar,
@@ -41,6 +42,7 @@ export function CommandPalette() {
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const shortcut = useShortcutLabel('K');
 
   const enabled = open && query.trim().length >= 2;
   const search = trpc.catalog.search.useQuery({ query, page: 1 }, { enabled });
@@ -291,7 +293,7 @@ export function CommandPalette() {
           <span>↑↓ naviga</span>
           <span>↵ apri</span>
           <span className="ml-auto flex items-center gap-1">
-            <Download className="h-3 w-3" /> ⌘K
+            <Download className="h-3 w-3" /> {shortcut}
           </span>
         </div>
       </div>

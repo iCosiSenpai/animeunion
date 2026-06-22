@@ -1,6 +1,7 @@
 'use client';
 
 import { useCommandPalette } from '@/lib/command-palette-store';
+import { useShortcutLabel } from '@/lib/use-shortcut-label';
 import { cn } from '@/lib/utils';
 import { Search } from 'lucide-react';
 
@@ -14,6 +15,7 @@ export function SearchTrigger({
   className?: string;
 }) {
   const setOpen = useCommandPalette((s) => s.setOpen);
+  const shortcut = useShortcutLabel('K');
   return (
     <button
       type="button"
@@ -28,7 +30,9 @@ export function SearchTrigger({
     >
       <Search className="h-4 w-4 shrink-0" />
       <span className="flex-1 truncate">Cerca anime…</span>
-      <kbd className="hidden shrink-0 rounded border px-1.5 py-0.5 text-[10px] sm:inline">⌘K</kbd>
+      <kbd className="hidden shrink-0 rounded border px-1.5 py-0.5 text-[10px] sm:inline">
+        {shortcut}
+      </kbd>
     </button>
   );
 }

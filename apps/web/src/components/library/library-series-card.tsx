@@ -49,7 +49,9 @@ export function LibrarySeriesCard({ item }: { item: LibraryItem }) {
     void utils.library.list.invalidate();
     void utils.library.stats.invalidate();
     void utils.download.queue.invalidate();
-    void utils.catalog.bySlug.invalidate({ slug: item.anime.slug });
+    // Invalida tutto il catalogo: deleteSeries tocca piu' stagioni/sequel (slug diversi),
+    // cosi' i tag "Scaricato" delle schede anime si aggiornano ovunque al ritorno.
+    void utils.catalog.invalidate();
     setTarget(null);
   };
   const onError = () => toast.error('Eliminazione fallita');

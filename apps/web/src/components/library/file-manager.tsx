@@ -334,6 +334,12 @@ export function FileManager() {
 
   const refresh = () => {
     void utils.files.list.invalidate();
+    // Le operazioni sui file cambiano episode_file (stato/localPath): aggiorna anche libreria,
+    // coda e schede anime (tag "Scaricato"/"Collegato").
+    void utils.library.list.invalidate();
+    void utils.library.stats.invalidate();
+    void utils.download.queue.invalidate();
+    void utils.catalog.invalidate();
   };
 
   const renameMut = trpc.files.rename.useMutation({

@@ -216,7 +216,7 @@ export function NotificationBell() {
           ))}
         </div>
 
-        <ScrollArea className="max-h-96">
+        <ScrollArea viewportClassName="max-h-96">
           {filtered.length === 0 ? (
             <p className="px-4 py-8 text-center text-sm text-muted-foreground">Nessuna notifica.</p>
           ) : (

@@ -70,10 +70,15 @@ export function DownloadStatus() {
       item.status === 'processing' ||
       item.status === 'failed',
   ).length;
-  const active = items.filter(
-    (item) =>
-      item.status === 'queued' || item.status === 'downloading' || item.status === 'processing',
-  );
+  // Prima il file in corso (downloading/processing), poi i queued in ordine di richiesta.
+  const activeRank = (status: string): number =>
+    status === 'downloading' || status === 'processing' ? 0 : 1;
+  const active = items
+    .filter(
+      (item) =>
+        item.status === 'queued' || item.status === 'downloading' || item.status === 'processing',
+    )
+    .sort((a, b) => activeRank(a.status) - activeRank(b.status));
   const completed = items.filter((item) => item.status === 'completed').slice(0, 5);
   const hasError = items.some((item) => item.status === 'failed');
   const isPaused = pausedQuery.data?.paused ?? false;
@@ -118,7 +123,7 @@ export function DownloadStatus() {
           ) : null}
         </div>
 
-        <ScrollArea className="max-h-80">
+        <ScrollArea viewportClassName="max-h-80">
           {active.length === 0 && completed.length === 0 ? (
             <p className="px-4 py-6 text-center text-sm text-muted-foreground">
               Nessun download in coda.

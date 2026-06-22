@@ -1,6 +1,7 @@
 'use client';
 
 import { AnimeGrid } from '@/components/anime/anime-grid';
+import { AniListIcon, MalIcon } from '@/components/anime/brand-icons';
 import { FollowButton } from '@/components/anime/follow-button';
 import { LanguageBadge } from '@/components/anime/language-badge';
 import { Badge } from '@/components/ui/badge';
@@ -40,7 +41,6 @@ import {
   AlertCircle,
   ChevronDown,
   Download,
-  ExternalLink,
   FolderTree,
   Loader2,
   Search,
@@ -293,7 +293,7 @@ function Hero({
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
               >
-                <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+                <MalIcon className="h-3.5 w-3.5 rounded-[2px]" />
                 MyAnimeList
               </a>
             ) : null}
@@ -304,7 +304,7 @@ function Hero({
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
               >
-                <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+                <AniListIcon className="h-3.5 w-3.5" />
                 AniList
               </a>
             ) : null}

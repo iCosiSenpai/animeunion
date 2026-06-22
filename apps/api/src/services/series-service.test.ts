@@ -111,6 +111,23 @@ describe('SeriesService.confirmed', () => {
     expect(service.getResolved('a-1').confirmed).toBe(true);
   });
 
+  it('setOverride rifiuta la serie madre uguale a se stessa', () => {
+    insertAnime(db, 'a-1');
+    expect(() => makeService(db).setOverride({ animeId: 'a-1', seriesAnimeId: 'a-1' })).toThrow(
+      /se stessa/i,
+    );
+  });
+
+  it('setOverride rifiuta un 2-ciclo tra le serie madri', () => {
+    insertAnime(db, 'a-1');
+    insertAnime(db, 'a-2');
+    const service = makeService(db);
+    service.setOverride({ animeId: 'a-1', seriesAnimeId: 'a-2', seasonNumber: 2 });
+    expect(() =>
+      service.setOverride({ animeId: 'a-2', seriesAnimeId: 'a-1', seasonNumber: 2 }),
+    ).toThrow(/ciclo/i);
+  });
+
   it('previewPath ritorna il percorso e il kind effettivo (override movie)', () => {
     insertAnime(db, 'mov', 'mov');
     const resolver = createSeriesResolver({ db });

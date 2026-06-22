@@ -1,10 +1,18 @@
 import { mkdir, readdir, rm, stat, writeFile } from 'node:fs/promises';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, resolve, sep } from 'node:path';
 import { type AppConfig, type ConfigKey, type Language, appConfigSchema } from '@animeunion/shared';
 import type { Db } from '../db';
 import { schema } from '../db';
 
 export type DownloadDirKey = 'seriesPathSub' | 'seriesPathDub' | 'moviePathSub' | 'moviePathDub';
+
+/** Le 4 chiavi di config che rappresentano cartelle di download (per rilevarne il cambio). */
+export const DOWNLOAD_DIR_KEYS: DownloadDirKey[] = [
+  'seriesPathSub',
+  'seriesPathDub',
+  'moviePathSub',
+  'moviePathDub',
+];
 
 export interface DownloadDirStatus {
   key: DownloadDirKey;
@@ -33,6 +41,8 @@ export interface ConfigService {
   isConfigured(): boolean;
   /** Tutte le cartelle radice distinte effettivamente in uso (per scan/sweep). */
   distinctDownloadRoots(): string[];
+  /** Quanti episode_file scaricati hanno il `localPath` sotto la cartella `root` indicata. */
+  countDownloadsUnder(root: string): number;
   /** Stato (esistenza/scrivibilità) delle 4 cartelle configurabili. */
   downloadDirsStatus(): Promise<DownloadDirStatus[]>;
   /** Elenca le sottocartelle di `path` (browser cartelle delle Impostazioni). */
@@ -126,6 +136,28 @@ export function createConfigService(deps: { db: Db }): ConfigService {
     resolveDownloadRoot,
     isConfigured,
     distinctDownloadRoots,
+
+    countDownloadsUnder(root: string): number {
+      const target = resolve(root);
+      if (target === '' || root.trim() === '') {
+        return 0;
+      }
+      const rows = deps.db
+        .select({ localPath: schema.episodeFile.localPath })
+        .from(schema.episodeFile)
+        .all();
+      let n = 0;
+      for (const row of rows) {
+        if (!row.localPath) {
+          continue;
+        }
+        const local = resolve(row.localPath);
+        if (local === target || local.startsWith(target + sep)) {
+          n += 1;
+        }
+      }
+      return n;
+    },
 
     async downloadDirsStatus(): Promise<DownloadDirStatus[]> {
       const c = getAll();

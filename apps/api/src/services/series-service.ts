@@ -9,7 +9,7 @@ import type {
 import { and, eq } from 'drizzle-orm';
 import type { Db } from '../db';
 import { schema } from '../db';
-import { NotFoundError } from '../lib/errors';
+import { NotFoundError, PreconditionError } from '../lib/errors';
 import type { CatalogService } from './catalog-service';
 import type { ConfigService } from './config-service';
 import type { RenamerService } from './renamer-service';
@@ -137,6 +137,9 @@ export function createSeriesService(deps: SeriesServiceDeps): SeriesService {
         throw new NotFoundError(`Anime non trovato: ${animeId}`);
       }
       if (seriesAnimeId) {
+        if (seriesAnimeId === animeId) {
+          throw new PreconditionError('Una serie non può essere madre di se stessa.');
+        }
         const root = db
           .select({ id: schema.anime.id })
           .from(schema.anime)
@@ -144,6 +147,22 @@ export function createSeriesService(deps: SeriesServiceDeps): SeriesService {
           .get();
         if (!root) {
           throw new NotFoundError(`Serie madre non trovata: ${seriesAnimeId}`);
+        }
+        // Evita il 2-ciclo: la serie madre proposta ha già questa serie come propria madre.
+        const reverse = db
+          .select({ animeId: schema.seriesOverride.animeId })
+          .from(schema.seriesOverride)
+          .where(
+            and(
+              eq(schema.seriesOverride.animeId, seriesAnimeId),
+              eq(schema.seriesOverride.seriesAnimeId, animeId),
+            ),
+          )
+          .get();
+        if (reverse) {
+          throw new PreconditionError(
+            'Ciclo non valido: la serie madre scelta ha già questa serie come madre.',
+          );
         }
       }
       const effectiveKind = kind ?? 'auto';

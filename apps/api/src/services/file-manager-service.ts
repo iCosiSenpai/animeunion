@@ -102,52 +102,63 @@ export function createFileManagerService(deps: FileManagerDeps): FileManagerServ
 
   /** Aggiorna episode_file quando un file/cartella tracciato viene rinominato o spostato. */
   function syncMovedPaths(oldAbs: string, newAbs: string): void {
-    const rows = db
-      .select({ id: schema.episodeFile.id, localPath: schema.episodeFile.localPath })
-      .from(schema.episodeFile)
-      .all();
-    const oldPrefix = oldAbs + sep;
-    const ts = new Date().toISOString();
-    for (const row of rows) {
-      if (!row.localPath) {
-        continue;
+    // Read + update in un'unica transazione: evita che un download concorrente, accodato tra la
+    // SELECT e le UPDATE, sfugga (o venga toccato per errore).
+    db.transaction((tx) => {
+      const rows = tx
+        .select({ id: schema.episodeFile.id, localPath: schema.episodeFile.localPath })
+        .from(schema.episodeFile)
+        .all();
+      const oldPrefix = oldAbs + sep;
+      const ts = new Date().toISOString();
+      for (const row of rows) {
+        if (!row.localPath) {
+          continue;
+        }
+        const local = resolve(row.localPath);
+        let nextPath: string | null = null;
+        if (local === oldAbs) {
+          nextPath = newAbs;
+        } else if (local.startsWith(oldPrefix)) {
+          nextPath = newAbs + local.slice(oldAbs.length);
+        }
+        if (nextPath) {
+          tx.update(schema.episodeFile)
+            .set({ localPath: nextPath, updatedAt: ts })
+            .where(eq(schema.episodeFile.id, row.id))
+            .run();
+        }
       }
-      const local = resolve(row.localPath);
-      let nextPath: string | null = null;
-      if (local === oldAbs) {
-        nextPath = newAbs;
-      } else if (local.startsWith(oldPrefix)) {
-        nextPath = newAbs + local.slice(oldAbs.length);
-      }
-      if (nextPath) {
-        db.update(schema.episodeFile)
-          .set({ localPath: nextPath, updatedAt: ts })
-          .where(eq(schema.episodeFile.id, row.id))
-          .run();
-      }
-    }
+    });
   }
 
   /** Azzera lo stato di download dei file tracciati eliminati. */
   function syncDeletedPaths(removedAbs: string): void {
-    const rows = db
-      .select({ id: schema.episodeFile.id, localPath: schema.episodeFile.localPath })
-      .from(schema.episodeFile)
-      .all();
-    const prefix = removedAbs + sep;
-    const ts = new Date().toISOString();
-    for (const row of rows) {
-      if (!row.localPath) {
-        continue;
+    db.transaction((tx) => {
+      const rows = tx
+        .select({ id: schema.episodeFile.id, localPath: schema.episodeFile.localPath })
+        .from(schema.episodeFile)
+        .all();
+      const prefix = removedAbs + sep;
+      const ts = new Date().toISOString();
+      for (const row of rows) {
+        if (!row.localPath) {
+          continue;
+        }
+        const local = resolve(row.localPath);
+        if (local === removedAbs || local.startsWith(prefix)) {
+          tx.update(schema.episodeFile)
+            .set({
+              downloadStatus: 'not_downloaded',
+              localPath: null,
+              fileSize: null,
+              updatedAt: ts,
+            })
+            .where(eq(schema.episodeFile.id, row.id))
+            .run();
+        }
       }
-      const local = resolve(row.localPath);
-      if (local === removedAbs || local.startsWith(prefix)) {
-        db.update(schema.episodeFile)
-          .set({ downloadStatus: 'not_downloaded', localPath: null, fileSize: null, updatedAt: ts })
-          .where(eq(schema.episodeFile.id, row.id))
-          .run();
-      }
-    }
+    });
   }
 
   async function listRoots(): Promise<FileList> {

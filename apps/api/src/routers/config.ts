@@ -8,6 +8,7 @@ import {
 } from '@animeunion/shared';
 import { z } from 'zod';
 import { APP_VERSION } from '../lib/version';
+import { DOWNLOAD_DIR_KEYS } from '../services/config-service';
 import { publicProcedure, router } from '../trpc';
 
 // Non inviare mai i segreti in chiaro al FE: token impostato → SECRET_MASK, vuoto → ''.
@@ -36,10 +37,30 @@ export const configRouter = router({
     return { key: input.key, value };
   }),
 
-  set: publicProcedure.input(configSetInputSchema).mutation(({ ctx, input }) => ({
-    key: input.key,
-    value: ctx.services.config.set(input.key, input.value),
-  })),
+  set: publicProcedure.input(configSetInputSchema).mutation(({ ctx, input }) => {
+    // Cambio di una cartella di download: i file gia' scaricati restano nella vecchia cartella
+    // (non li spostiamo). Se ce ne sono, avvisa l'utente con una notifica.
+    const isDownloadDir = (DOWNLOAD_DIR_KEYS as string[]).includes(input.key);
+    const previous = isDownloadDir ? ctx.services.config.get(input.key) : null;
+    const value = ctx.services.config.set(input.key, input.value);
+    if (
+      isDownloadDir &&
+      typeof previous === 'string' &&
+      typeof value === 'string' &&
+      previous.trim() !== '' &&
+      previous !== value
+    ) {
+      const affected = ctx.services.config.countDownloadsUnder(previous);
+      if (affected > 0) {
+        ctx.services.notifications.create({
+          type: 'info',
+          title: 'Cartella di download cambiata',
+          body: `${affected} file restano nella cartella precedente (${previous}): non vengono spostati automaticamente. Spostali a mano oppure usa "Scansiona libreria" / "Gestore file".`,
+        });
+      }
+    }
+    return { key: input.key, value };
+  }),
 
   downloadDirs: publicProcedure.query(({ ctx }) => ctx.services.config.downloadDirsStatus()),
 

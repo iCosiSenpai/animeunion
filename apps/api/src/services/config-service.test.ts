@@ -1,3 +1,4 @@
+import { resolve } from 'node:path';
 import { appConfigSchema } from '@animeunion/shared';
 import { eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
@@ -35,6 +36,57 @@ describe('ConfigService', () => {
     const service = createConfigService({ db: createTestDb() });
     expect(() => service.set('maxConcurrent', 99)).toThrow(ZodError);
     expect(service.get('maxConcurrent')).toBe(1);
+  });
+
+  it('countDownloadsUnder conta solo i file con localPath sotto la root', () => {
+    const db = createTestDb();
+    const service = createConfigService({ db });
+    const ts = new Date().toISOString();
+    db.insert(schema.anime)
+      .values({
+        id: 'a',
+        slug: 'a',
+        title: 'A',
+        type: 'TV',
+        status: 'ONGOING',
+        episodeCount: 2,
+        createdAt: ts,
+        updatedAt: ts,
+      })
+      .run();
+    db.insert(schema.episode)
+      .values([
+        { id: 'e1', animeId: 'a', number: 1, createdAt: ts, updatedAt: ts },
+        { id: 'e2', animeId: 'a', number: 2, createdAt: ts, updatedAt: ts },
+      ])
+      .run();
+    db.insert(schema.episodeFile)
+      .values([
+        {
+          id: 'f1',
+          episodeId: 'e1',
+          language: 'SUB_ITA',
+          downloadStatus: 'downloaded',
+          localPath: resolve('/media/anime/A/Season 01/A - S01E01.mp4'),
+          createdAt: ts,
+          updatedAt: ts,
+        },
+        {
+          id: 'f2',
+          episodeId: 'e2',
+          language: 'SUB_ITA',
+          downloadStatus: 'downloaded',
+          localPath: resolve('/other/B - S01E01.mp4'),
+          createdAt: ts,
+          updatedAt: ts,
+        },
+      ])
+      .run();
+
+    expect(service.countDownloadsUnder('/media/anime')).toBe(1);
+    expect(service.countDownloadsUnder('/media/anime/A')).toBe(1);
+    expect(service.countDownloadsUnder('/nowhere')).toBe(0);
+    expect(service.countDownloadsUnder('')).toBe(0);
   });
 
   it('getAll ignora chiavi sconosciute e valori corrotti', () => {

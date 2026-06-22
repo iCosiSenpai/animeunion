@@ -23,6 +23,21 @@ Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
 
 ## Stato attuale (2026-06-22)
 
+**Fase 4 potenziamento Libreria & Gestore file (branch `feat/fase-4-libreria-gestore-file`,
+v0.7.0):** richiesta principale dell'utente. **4A Eliminazione affidabile**: `removeFiles` usa sempre
+`localPath`, verifica che il file sia davvero sparito e conta i fallimenti (`failedFiles`) senza
+marcare "non scaricato" cio' che resta su disco; opzione `deleteFolder` che rimuove ricorsivamente la
+cartella serie (`<root>/<primo-segmento>`, confinata) compresi file non tracciati/extra. **4B**
+`FileEntry.managed` per le cartelle (contiene un file tracciato) + ordinamento "non importate" in cima
++ badge UI. **4C Flusso Mancanti**: `missingEntries` ora porta `animeId`/`episodeFileId`; "Mancanti"
+diventa un pulsante -> `missing-dialog.tsx` con classificazione (`ClassifyFields`) e ri-scarica in
+blocco (`download.addMissing`). **4D**: ricerca + ordinamento libreria (alfabetico/ultimo aggiunto/
+dimensione/episodi, asc/desc), client-side su `library.list`. Shared:
+`libraryDeleteResult.failedFiles`, `deleteFolder` negli input delete, `FileEntry.managed`. **222 test
+verdi** (nuovi: deleteFolder, missingEntries arricchiti, managed+sort). Lint/typecheck/test/build
+verdi. Nota: un flake una-tantum su `follow-service` sotto carico parallelo non riproducibile (file
+non toccato). **Prossima:** Fase 5 (rifiniture frontend + a11y).
+
 **Fase 3 hardening backend (branch `feat/fase-3-hardening`, v0.6.1):** patch mirata (gran parte della
 Fase 3 era gia' coperta: scheduler tutto in try/catch, `setOverride` gia' valida l'esistenza, no
 ri-accodamento dei completati). **3A** `setOverride` rifiuta serie madre = se stessa e 2-ciclo

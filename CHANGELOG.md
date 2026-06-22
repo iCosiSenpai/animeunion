@@ -11,8 +11,25 @@ e il progetto aderisce al [Semantic Versioning](https://semver.org/lang/it/).
 - Test E2E (Playwright).
 - Setup wizard migliorato (Step F, rimandato).
 - GitHub Pages (landing pubblica + spazio mascotte).
-- Potenziamento Libreria & Gestore file (eliminazione affidabile sul disco, ordinamento
-  "non importati" in cima, flusso "Mancanti" azionabile, ricerca e ordinamento) — Fase 4.
+- Rifiniture frontend diffuse + a11y (Fase 5).
+
+## [0.7.0] - 2026-06-22
+
+### Added
+- **Ricerca e ordinamento nella Libreria**: campo di ricerca per titolo + ordinamento
+  (alfabetico, ultimo aggiunto, dimensione, numero episodi) crescente/decrescente.
+- **Flusso "Mancanti" azionabile**: il riepilogo della scansione mostra "Mancanti" come
+  pulsante che apre un pannello con gli episodi mancanti raggruppati per anime; puoi
+  **correggere la classificazione** (tipo/stagione/parte/serie madre) e **ri-scaricarli**.
+- **Gestore file**: le cartelle **non importate dall'app** (senza file scaricati) sono mostrate
+  in cima con un badge "Non importato".
+- **Eliminazione completa dal disco**: nell'eliminare una stagione/serie puoi spuntare
+  "elimina anche la cartella" per rimuovere pure i file non tracciati/extra rimasti.
+
+### Fixed
+- **File rimasti sul NAS dopo l'eliminazione**: l'app ora verifica che il file sia stato davvero
+  rimosso e, se la cancellazione fallisce, **lo segnala** invece di marcarlo come non scaricato
+  lasciandolo su disco.
 
 ## [0.6.1] - 2026-06-22
 

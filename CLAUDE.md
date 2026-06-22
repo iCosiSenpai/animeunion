@@ -23,6 +23,15 @@ Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
 
 ## Stato attuale (2026-06-22)
 
+**Fase 5 rifiniture frontend (branch `feat/fase-5-rifiniture`, v0.7.1):** patch mirata — l'audit ha
+confermato che la Fase 5 era **in gran parte gia' coperta** dalle fasi 1-4 (a11y icon-only completa,
+focus-trap via Radix, dialog responsive puliti grazie alla base di Fase 1, command palette non
+collide con la safe-area). Restavano due fix: **5A** `pb-safe-b` nella variante `bottom` del `Sheet`
+([sheet.tsx](apps/web/src/components/ui/sheet.tsx)) cosi' i bottom-sheet (filtri catalogo) non vanno
+sotto l'home indicator iOS (rimosso il duplicato nel drawer "Altro"); **5B** troncamento dei titoli
+lunghi nei risultati di ricerca dei dialog del gestore file. Solo CSS, **222 test verdi**,
+lint/typecheck/build verdi. **Roadmap a fasi completata** (Fasi 1-5 rilasciate v0.5.3 -> v0.7.1).
+
 **Fase 4 potenziamento Libreria & Gestore file (branch `feat/fase-4-libreria-gestore-file`,
 v0.7.0):** richiesta principale dell'utente. **4A Eliminazione affidabile**: `removeFiles` usa sempre
 `localPath`, verifica che il file sia davvero sparito e conta i fallimenti (`failedFiles`) senza

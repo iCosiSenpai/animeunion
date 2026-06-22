@@ -11,7 +11,14 @@ e il progetto aderisce al [Semantic Versioning](https://semver.org/lang/it/).
 - Test E2E (Playwright).
 - Setup wizard migliorato (Step F, rimandato).
 - GitHub Pages (landing pubblica + spazio mascotte).
-- Rifiniture frontend diffuse + a11y (Fase 5).
+
+## [0.7.1] - 2026-06-22
+
+### Fixed
+- **iOS PWA**: i pannelli a comparsa dal basso (es. i filtri del catalogo) rispettano la
+  safe-area inferiore e non finiscono più sotto l'home indicator dell'iPhone.
+- **Gestore file**: i titoli lunghi nei risultati di ricerca dei dialog (collega orfano / collega
+  cartella) ora si troncano e restano leggibili sugli schermi stretti.
 
 ## [0.7.0] - 2026-06-22
 

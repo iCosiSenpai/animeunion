@@ -21,7 +21,23 @@ Shared: `packages/shared` (zod + interfaccia `AnimeSource`). Video: ffmpeg-stati
 Scheduler: setInterval (node-cron non usato). Lint: Biome. Test: Vitest (+ Playwright in futuro).
 Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
 
-## Stato attuale (2026-06-21)
+## Stato attuale (2026-06-22)
+
+**Fase 1 accorgimenti UX (branch `feat/accorgimenti-fase-1-ux`, v0.5.3):** fix bug UI a basso
+rischio dal piano a fasi (`plans/proponimi-un-piano-di-flickering-pelican.md`). **Popup overflow**
+risolto alla radice (`DialogContent` con `overflow-x-hidden` + `ClassifyFields` con griglie
+`grid-cols-1 sm:grid-cols-N` e campo percorso che va a capo); **safe-area iOS top** sulla navbar
+(`pt-safe-t`, il dock in basso già usava `pb-safe-b`); **scorciatoia `Ctrl K`** su Windows/Linux
+(hook `use-shortcut-label`, l'handler già accettava ctrl+meta); **popup notifiche/download ora
+scrollano** (vincolo altezza spostato sul viewport dello `ScrollArea` via `viewportClassName`);
+**icone ufficiali MAL/AniList** (`brand-icons.tsx`); **popup download** ordina il file in corso in
+cima; **tag "Scaricato" persistente** risolto invalidando `catalog` nelle mutation di
+delete/relink/file-manager (i tag "In corso"/"In coda" erano già dinamici via polling 2s).
+**212 test verdi.** Lint/typecheck/test/build verdi. **Prossime fasi (dal piano):** Fase 2
+robustezza download + migrazione `0011` (Sakamoto Days), Fase 3 hardening, Fase 4 potenziamento
+Libreria/Gestore file, Fase 5 rifiniture diffuse.
+
+## Stato precedente (2026-06-21)
 
 **Batch "altri accorgimenti" (branch `feat/accorgimenti-ux-file-manager-part`, v0.5.2):** fix
 **overflow popup** (DialogContent responsive `w-[calc(100%-2rem)]` + `max-h-[85dvh]` scroll); **nav

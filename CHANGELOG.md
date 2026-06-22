@@ -11,6 +11,34 @@ e il progetto aderisce al [Semantic Versioning](https://semver.org/lang/it/).
 - Test E2E (Playwright).
 - Setup wizard migliorato (Step F, rimandato).
 - GitHub Pages (landing pubblica + spazio mascotte).
+- Robustezza download/salvataggio (finalizzazione atomica, resume sicuro, integrità) +
+  fix numerazione parti (Sakamoto Days) — pianificati per la 0.6.0.
+- Potenziamento Libreria & Gestore file (eliminazione affidabile sul disco, ordinamento
+  "non importati" in cima, flusso "Mancanti" azionabile, ricerca e ordinamento) — pianificati.
+
+## [0.5.3] - 2026-06-22
+
+### Added
+- **Icone ufficiali MyAnimeList e AniList** nei link esterni della scheda anime (al posto
+  della generica icona "link esterno").
+
+### Changed
+- **Scorciatoia ricerca**: su Windows/Linux mostra `Ctrl K` invece di `⌘K` (rilevamento
+  piattaforma; l'handler già accettava entrambe).
+- **Popup download**: in cima il file effettivamente in corso, poi i successivi nell'ordine
+  di richiesta.
+
+### Fixed
+- **Popup che uscivano dai bordi**: i dialog ora non traboccano più in orizzontale
+  (`overflow-x` sul contenitore) e i campi del dialog "Classifica" si impilano su mobile
+  (niente più bottone "Film"/percorso tagliati).
+- **PWA iOS**: la barra dell'app (logo/icone) non si scontra più con la status bar
+  dell'iPhone (safe-area superiore applicata alla navbar).
+- **Popup notifiche e popup download**: ora scrollano correttamente quando l'elenco è lungo
+  (vincolo di altezza spostato sul viewport dello `ScrollArea`).
+- **Tag "Scaricato" persistente**: eliminando un anime dalla libreria o operando dal gestore
+  file, le schede anime aggiornano subito lo stato episodi (invalidazione cache del catalogo);
+  i tag "In corso"/"In coda" erano già dinamici.
 
 ## [0.5.2] - 2026-06-21
 

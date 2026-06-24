@@ -330,6 +330,10 @@ potrebbe bloccare l'accesso, da fare con una scelta UX esplicita.
 12. Error handling: mai `catch {}` vuoto, almeno `logger.error/​debug`.
 13. **Niente "Scarica intera serie" cross-stagione**: un episodio alla volta; ammesso accodare gli
     episodi mancanti della stessa entry/stagione (`download.addMissing/addAll`).
+14. **Ogni step di un batch va prima approfondito, poi implementato a checkbox**: (1) approfondire lo
+    step nel file di piano con contesto tecnico verificato (file + righe, contratti, impatto sui
+    test) e sotto-task a checkbox `- [ ]`; (2) implementare spuntando le checkbox; (3) chiudere con
+    `lint`/`typecheck`/`test`/`build` verdi e un commit dedicato (Regola #9).
 
 ## Convenzioni
 

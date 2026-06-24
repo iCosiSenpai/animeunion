@@ -2,6 +2,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import type { HistoryEntry } from '@animeunion/shared';
 import Link from 'next/link';
+import { CardCarousel } from './card-carousel';
 
 function titleFromSlug(slug: string): string {
   return slug
@@ -36,10 +37,10 @@ export function ContinueWatchingCard({ entry }: { entry: HistoryEntry }) {
 
 export function ContinueWatchingGrid({ entries }: { entries: HistoryEntry[] }) {
   return (
-    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+    <CardCarousel>
       {entries.map((entry) => (
         <ContinueWatchingCard key={`${entry.animeId}_${entry.episodeNumber}`} entry={entry} />
       ))}
-    </div>
+    </CardCarousel>
   );
 }

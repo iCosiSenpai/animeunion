@@ -136,7 +136,13 @@ export function Sidebar() {
               <span className="text-[10px]">Altro</span>
             </button>
           </SheetTrigger>
-          <SheetContent side="bottom" className="rounded-t-2xl">
+          <SheetContent
+            side="bottom"
+            className="rounded-t-2xl"
+            // Alla chiusura non riportare il focus sul trigger "Altro": ruberebbe il focus
+            // all'input della ricerca (command palette) e su iOS la tastiera si richiuderebbe.
+            onCloseAutoFocus={(e) => e.preventDefault()}
+          >
             <SheetTitle>Altro</SheetTitle>
             <div className="mt-4">
               <SearchTrigger onOpen={() => setMoreOpen(false)} />

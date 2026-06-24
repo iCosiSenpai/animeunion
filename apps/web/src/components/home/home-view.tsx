@@ -1,6 +1,6 @@
 'use client';
 
-import { AnimeGrid, AnimeGridSkeleton } from '@/components/anime/anime-grid';
+import { AnimeCard } from '@/components/anime/anime-card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { trpc } from '@/lib/trpc';
@@ -19,6 +19,7 @@ import {
 import Link from 'next/link';
 import type { ElementType, ReactNode } from 'react';
 import { useEffect, useState } from 'react';
+import { CardCarousel, CardCarouselSkeleton } from './card-carousel';
 import { ContinueWatchingGrid } from './continue-watching';
 import { EpisodeGrid } from './episode-card';
 import { NewsCard } from './news-card';
@@ -107,7 +108,15 @@ function Section({
   return (
     <section className="space-y-1">
       <SectionHeader icon={icon} title={title} href={href} />
-      {isLoading ? <AnimeGridSkeleton count={6} /> : <AnimeGrid anime={items.slice(0, 12)} />}
+      {isLoading ? (
+        <CardCarouselSkeleton count={6} />
+      ) : (
+        <CardCarousel>
+          {items.slice(0, 12).map((item) => (
+            <AnimeCard key={item.id} anime={item} />
+          ))}
+        </CardCarousel>
+      )}
     </section>
   );
 }

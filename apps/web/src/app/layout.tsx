@@ -20,6 +20,11 @@ export const viewport: Viewport = {
   // Necessario su iOS: senza viewport-fit=cover env(safe-area-inset-*) resta 0 e il
   // dock mobile (pb-safe-b) finirebbe sotto l'home indicator.
   viewportFit: 'cover',
+  // PWA installata: disattiva il pinch-zoom per un comportamento da app nativa (scelta utente).
+  // Tradeoff a11y: niente ingrandimento con le dita; rispettato nella PWA standalone, non nel
+  // Safari mobile normale.
+  maximumScale: 1,
+  userScalable: false,
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

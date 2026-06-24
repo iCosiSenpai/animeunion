@@ -19,6 +19,7 @@ import { Download, Play } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { CardCarousel } from './card-carousel';
 
 const LANGUAGE_LABELS: Record<LatestEpisode['language'], string> = {
   SUB_ITA: 'SUB ITA',
@@ -116,13 +117,13 @@ export function EpisodeCard({ episode }: { episode: LatestEpisode }) {
 
 export function EpisodeGrid({ episodes }: { episodes: LatestEpisode[] }) {
   return (
-    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+    <CardCarousel className="lg:grid-cols-5">
       {episodes.map((episode) => (
         <EpisodeCard
           key={`${episode.animeId}_${episode.episodeNumber}_${episode.language}`}
           episode={episode}
         />
       ))}
-    </div>
+    </CardCarousel>
   );
 }

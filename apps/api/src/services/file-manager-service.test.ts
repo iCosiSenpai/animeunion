@@ -131,7 +131,7 @@ describe('FileManagerService', () => {
     expect(row?.localPath).toBe(res.path);
   });
 
-  it('non segnala come orfani i file nelle cartelle extra (Specials/backdrops)', async () => {
+  it('classifica i file: Specials/OVA = contenuto, backdrops = extra, Season = contenuto', async () => {
     await mkdir(join(root, 'Show', 'Specials'), { recursive: true });
     await mkdir(join(root, 'Show', 'backdrops'), { recursive: true });
     await mkdir(join(root, 'Show', 'Season 01'), { recursive: true });
@@ -139,17 +139,37 @@ describe('FileManagerService', () => {
     await writeFile(join(root, 'Show', 'backdrops', 'opening.mp4'), 'x');
     await writeFile(join(root, 'Show', 'Season 01', 'Show - S01E01.mp4'), 'x');
 
+    // Special = contenuto: il file non e' extra (sara' un orfano collegabile).
     const specials = await service.list(join(root, 'Show', 'Specials'));
     const ova = specials.entries.find((e) => e.name === 'OVA.mp4');
-    expect(ova?.extra).toBe(true);
+    expect(ova?.extra).toBe(false);
     expect(ova?.episodeFileId).toBeNull();
 
+    // backdrops = cartella cosmetica: i file sono extra.
     const backdrops = await service.list(join(root, 'Show', 'backdrops'));
     expect(backdrops.entries.find((e) => e.name === 'opening.mp4')?.extra).toBe(true);
 
     // Una cartella di stagione normale non e' extra.
     const s1 = await service.list(join(root, 'Show', 'Season 01'));
     expect(s1.entries.find((e) => e.name === 'Show - S01E01.mp4')?.extra).toBe(false);
+  });
+
+  it('classifica le cartelle: Season/Specials = contenuto, backdrops/altro = extra', async () => {
+    await mkdir(join(root, 'Show', 'Season 01'), { recursive: true });
+    await mkdir(join(root, 'Show', 'Specials'), { recursive: true });
+    await mkdir(join(root, 'Show', 'backdrops'), { recursive: true });
+    await mkdir(join(root, 'Show', 'PV'), { recursive: true });
+
+    const dirs = await service.list(join(root, 'Show'));
+    const byName = (n: string) => dirs.entries.find((e) => e.name === n);
+    expect(byName('Season 01')?.extra).toBe(false);
+    expect(byName('Specials')?.extra).toBe(false);
+    expect(byName('backdrops')?.extra).toBe(true);
+    expect(byName('PV')?.extra).toBe(true);
+
+    // La cartella-serie di livello 1 non e' mai extra.
+    const root1 = await service.list(root);
+    expect(root1.entries.find((e) => e.name === 'Show')?.extra).toBe(false);
   });
 
   it('marca le cartelle importate (managed) e mette le non importate in cima', async () => {

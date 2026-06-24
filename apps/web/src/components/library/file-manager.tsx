@@ -423,8 +423,14 @@ export function FileManager() {
           file non associato a un episodio del catalogo
         </span>
         <span className="flex items-center gap-1.5">
+          <Badge variant="outline" className="border-amber-500/50 text-amber-300">
+            Non importato
+          </Badge>
+          cartella di contenuto non scaricata dall’app
+        </span>
+        <span className="flex items-center gap-1.5">
           <Badge variant="secondary">Extra</Badge>
-          sigle, OP/ED, special e contenuti speciali
+          copertine, sigle, trailer e altre cartelle non di contenuto
         </span>
       </div>
 
@@ -532,12 +538,18 @@ export function FileManager() {
                       {atRootsLevel ? entry.path : entry.name}
                     </span>
                     {!atRootsLevel && !entry.managed ? (
-                      <Badge
-                        variant="outline"
-                        className="shrink-0 border-amber-500/50 text-amber-300"
-                      >
-                        Non importato
-                      </Badge>
+                      entry.extra ? (
+                        <Badge variant="secondary" className="shrink-0">
+                          Extra
+                        </Badge>
+                      ) : (
+                        <Badge
+                          variant="outline"
+                          className="shrink-0 border-amber-500/50 text-amber-300"
+                        >
+                          Non importato
+                        </Badge>
+                      )
                     ) : null}
                   </button>
                 ) : (

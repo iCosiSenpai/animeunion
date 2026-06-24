@@ -17,28 +17,18 @@ function isVideo(name: string): boolean {
   return dot >= 0 && VIDEO_EXTENSIONS.has(name.slice(dot).toLowerCase());
 }
 
-// Cartelle "extra" alla Jellyfin: i video al loro interno sono sigle/OP/ED/trailer/special,
-// non episodi da collegare. Vanno mostrati ma non segnalati come orfani.
-const EXTRA_DIR_NAMES = new Set([
-  'specials',
-  'season 00',
-  'extras',
-  'backdrops',
-  'theme-music',
-  'theme music',
-  'trailers',
-  'featurettes',
-  'behind the scenes',
-  'deleted scenes',
-  'interviews',
-  'scenes',
-  'shorts',
-  'other',
-]);
-
-/** Vero se uno dei segmenti del percorso è una cartella extra (case-insensitive). */
-function isExtraPath(fullPath: string): boolean {
-  return fullPath.split(/[/\\]+/).some((segment) => EXTRA_DIR_NAMES.has(segment.toLowerCase()));
+// Contenuto vero alla Jellyfin: le cartelle di livello "stagione" che contengono episodi da
+// collegare (Season NN, Specials, OVA/ONA, Movie/Film). Tutto il resto a quel livello (backdrops,
+// theme-music, trailer, cartelle arbitrarie...) e' "extra": va mostrato ma non segnalato come
+// orfano o "non importato".
+function isContentFolderName(name: string): boolean {
+  const n = name.trim().toLowerCase();
+  return (
+    /^(season|stagione)\s*\d+$/.test(n) || // Season NN, Stagione NN, Season 00/0
+    /^specials?$/.test(n) || // Special, Specials
+    /^(ova|ona)s?(\s*\d+)?$/.test(n) || // OVA, OVAs, ONA, OVA 1
+    /^(movie|film)s?$/.test(n) // Movie(s), Film(s)
+  );
 }
 
 // Nomi file/cartella sicuri: niente separatori di percorso né caratteri illegali su NTFS.
@@ -98,6 +88,18 @@ export function createFileManagerService(deps: FileManagerDeps): FileManagerServ
 
   function isRoot(abs: string): boolean {
     return roots().some((r) => r === abs);
+  }
+
+  // Una entry e' "extra" se la sua cartella di livello stagione (segs[1] dal root) non e' contenuto.
+  // Le cartelle-serie (livello 1) e i file sciolti a livello 2 NON sono extra: restano collegabili.
+  function isExtraEntry(full: string, isDir: boolean): boolean {
+    const root = rootOf(full);
+    if (!root) {
+      return false;
+    }
+    const segs = relative(root, resolve(full)).split(sep).filter(Boolean);
+    const minDepth = isDir ? 2 : 3;
+    return segs.length >= minDepth && segs[1] != null && !isContentFolderName(segs[1]);
   }
 
   /** Aggiorna episode_file quando un file/cartella tracciato viene rinominato o spostato. */
@@ -224,7 +226,7 @@ export function createFileManagerService(deps: FileManagerDeps): FileManagerServ
             type: 'dir',
             size: null,
             episodeFileId: null,
-            extra: isExtraPath(full),
+            extra: isExtraEntry(full, true),
             managed: isManagedDir(full),
           });
         } else if (d.isFile() && isVideo(d.name)) {
@@ -240,7 +242,7 @@ export function createFileManagerService(deps: FileManagerDeps): FileManagerServ
             type: 'file',
             size,
             episodeFileId: tracked.get(resolve(full)) ?? null,
-            extra: isExtraPath(full),
+            extra: isExtraEntry(full, false),
             managed: false,
           });
         }

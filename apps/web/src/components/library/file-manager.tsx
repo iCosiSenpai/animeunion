@@ -221,7 +221,7 @@ function FolderActionsDialog({
     <Dialog open onOpenChange={(o) => (o ? null : onClose())}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle className="truncate">Collega “{folder.name}” a AnimeUnion</DialogTitle>
+          <DialogTitle>Collega “{folder.name}” a AnimeUnion</DialogTitle>
           <DialogDescription>
             Trova l’anime a cui appartiene questa cartella: potrai aprirne la scheda o ri-scaricarlo
             (elimina la cartella e rimette in coda gli episodi).

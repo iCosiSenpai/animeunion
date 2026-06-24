@@ -103,7 +103,7 @@ function ClassifyButton({ animeId, title }: { animeId: string; title: string }) 
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle className="truncate">Classifica: {title}</DialogTitle>
+          <DialogTitle>Classifica: {title}</DialogTitle>
           <DialogDescription>
             Correggi tipo, stagione, parte e serie madre prima di ri-scaricare.
           </DialogDescription>

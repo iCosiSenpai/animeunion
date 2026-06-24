@@ -77,9 +77,10 @@ export interface DownloadService {
   /**
    * Accoda nuovi episodi per i follow con auto-download attivo (chiamato dallo scheduler).
    * Effettivo = follow.autoDownload, oppure (se null) status==='watching'. Richiede il master
-   * config.autoDownload.
+   * config.autoDownload. Status-aware: i COMPLETED sono esclusi (niente nuovi episodi); per gli
+   * ONGOING rinfresca prima il catalogo (forceRefresh) per rilevare i nuovi episodi.
    */
-  enqueueForAutoFollows(): number;
+  enqueueForAutoFollows(): Promise<number>;
 }
 
 export interface DownloadServiceDeps {
@@ -374,7 +375,7 @@ export function createDownloadService(deps: DownloadServiceDeps): DownloadServic
       return result.changes;
     },
 
-    enqueueForAutoFollows() {
+    async enqueueForAutoFollows() {
       if (!config.get('autoDownload') || !config.isConfigured()) {
         return 0;
       }
@@ -383,14 +384,31 @@ export function createDownloadService(deps: DownloadServiceDeps): DownloadServic
           animeId: schema.follow.animeId,
           status: schema.follow.status,
           autoDownload: schema.follow.autoDownload,
+          animeStatus: schema.anime.status,
+          slug: schema.anime.slug,
         })
         .from(schema.follow)
+        .innerJoin(schema.anime, eq(schema.follow.animeId, schema.anime.id))
         .all();
       let count = 0;
       for (const f of follows) {
-        const effective = f.autoDownload != null ? f.autoDownload === 1 : f.status === 'watching';
-        if (!effective) {
+        const wanted = f.autoDownload != null ? f.autoDownload === 1 : f.status === 'watching';
+        // Una serie conclusa non riceve nuovi episodi: niente auto-download ricorrente.
+        if (!wanted || f.animeStatus === 'COMPLETED') {
           continue;
+        }
+        // Per le serie in corso rinfresca il catalogo: i nuovi episodi vengono rilevati anche
+        // quando il sito non aggiorna il segnale `?updatedSince` dei preferiti. Best-effort:
+        // se il refresh fallisce si prosegue comunque con la cache locale.
+        if (f.animeStatus === 'ONGOING') {
+          try {
+            await catalog.getBySlug(f.slug, { forceRefresh: true });
+          } catch (error) {
+            logger.debug(
+              { err: error, slug: f.slug },
+              'Refresh auto-download fallito (best-effort)',
+            );
+          }
         }
         const added = this.addMissing({ animeId: f.animeId });
         if (added > 0) {

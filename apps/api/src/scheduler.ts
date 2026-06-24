@@ -48,18 +48,20 @@ export function createScheduler(ctx: Context): Scheduler {
       favTimer.unref?.();
       timers.push(favTimer);
 
-      // Auto-enqueue per i follow watching.
-      const dlTimer = setInterval(
-        () => {
-          try {
-            const enqueued = services.download.enqueueForAutoFollows();
-            if (enqueued > 0) {
-              logger.info({ enqueued }, 'Auto-enqueue follow: nuovi episodi accodati');
-            }
-          } catch (error) {
-            logger.debug({ err: error }, 'Tick auto-enqueue watching fallito');
+      // Auto-enqueue per i follow watching/auto-download (status-aware: rinfresca gli ONGOING,
+      // salta i COMPLETED — vedi download-service.enqueueForAutoFollows). Ora è async.
+      const autoEnqueue = async () => {
+        try {
+          const enqueued = await services.download.enqueueForAutoFollows();
+          if (enqueued > 0) {
+            logger.info({ enqueued }, 'Auto-enqueue follow: nuovi episodi accodati');
           }
-        },
+        } catch (error) {
+          logger.debug({ err: error }, 'Tick auto-enqueue watching fallito');
+        }
+      };
+      const dlTimer = setInterval(
+        () => void autoEnqueue(),
         DOWNLOAD_AUTODOWNLOAD_MINUTES * 60 * 1000,
       );
       dlTimer.unref?.();

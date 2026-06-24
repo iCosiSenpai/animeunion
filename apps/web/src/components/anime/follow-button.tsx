@@ -14,15 +14,23 @@ import {
 import { FOLLOW_STATUSES, FOLLOW_STATUS_LABELS } from '@/lib/follow';
 import { trpc } from '@/lib/trpc';
 import { cn } from '@/lib/utils';
-import type { FollowStatus } from '@animeunion/shared';
+import type { AnimeStatus, FollowStatus } from '@animeunion/shared';
 import { Check, ChevronDown, Loader2, Plus } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
-export function FollowButton({ animeId }: { animeId: string }) {
+export function FollowButton({
+  animeId,
+  animeStatus,
+}: {
+  animeId: string;
+  animeStatus?: AnimeStatus;
+}) {
   const utils = trpc.useUtils();
   const follows = trpc.follow.list.useQuery();
   const current = follows.data?.find((follow) => follow.animeId === animeId) ?? null;
+  // Serie conclusa: non riceve nuovi episodi, quindi l'auto-download non ha senso.
+  const isCompleted = animeStatus === 'COMPLETED';
 
   const [open, setOpen] = useState(false);
   const [status, setStatus] = useState<FollowStatus>('watching');
@@ -58,8 +66,13 @@ export function FollowButton({ animeId }: { animeId: string }) {
     if (next) {
       const initialStatus = current?.status ?? 'watching';
       setStatus(initialStatus);
-      setAutoDownload(current?.autoDownload ?? initialStatus === 'watching');
-      setAutoTouched(current?.autoDownload != null);
+      if (isCompleted) {
+        setAutoDownload(false);
+        setAutoTouched(false);
+      } else {
+        setAutoDownload(current?.autoDownload ?? initialStatus === 'watching');
+        setAutoTouched(current?.autoDownload != null);
+      }
       setDownloadExisting(false);
     }
     setOpen(next);
@@ -67,7 +80,7 @@ export function FollowButton({ animeId }: { animeId: string }) {
 
   function pickStatus(next: FollowStatus) {
     setStatus(next);
-    if (!autoTouched) {
+    if (!autoTouched && !isCompleted) {
       setAutoDownload(next === 'watching');
     }
   }
@@ -148,11 +161,17 @@ export function FollowButton({ animeId }: { animeId: string }) {
             </div>
 
             <div className="space-y-2 rounded-md border p-3">
-              <label className="flex items-center gap-2 text-sm">
+              <label
+                className={cn(
+                  'flex items-center gap-2 text-sm',
+                  isCompleted && 'cursor-not-allowed opacity-50',
+                )}
+              >
                 <input
                   type="checkbox"
                   className="h-4 w-4 accent-primary"
-                  checked={autoDownload}
+                  checked={isCompleted ? false : autoDownload}
+                  disabled={isCompleted}
                   onChange={(e) => {
                     setAutoDownload(e.target.checked);
                     setAutoTouched(true);
@@ -160,6 +179,12 @@ export function FollowButton({ animeId }: { animeId: string }) {
                 />
                 Scarica automaticamente i nuovi episodi
               </label>
+              {isCompleted ? (
+                <p className="pl-6 text-xs text-muted-foreground">
+                  Serie completata: non ci sono nuovi episodi da scaricare automaticamente. Usa
+                  l&apos;opzione qui sotto per gli episodi già usciti.
+                </p>
+              ) : null}
               <label className="flex items-center gap-2 text-sm">
                 <input
                   type="checkbox"

@@ -324,7 +324,7 @@ function Hero({
           </div>
         ) : null}
 
-        <FollowButton animeId={anime.id} />
+        <FollowButton animeId={anime.id} animeStatus={anime.status} />
       </div>
     </div>
   );

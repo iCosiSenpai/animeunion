@@ -11,10 +11,14 @@ import { createDownloadService } from './download-service';
 import { createRenamerService } from './renamer-service';
 
 function buildStubCatalog(): CatalogService {
-  return {} as unknown as CatalogService;
+  return { getBySlug: vi.fn().mockResolvedValue(undefined) } as unknown as CatalogService;
 }
 
-function insertAnime(db: ReturnType<typeof import('../test/helpers').createTestDb>, id: string) {
+function insertAnime(
+  db: ReturnType<typeof import('../test/helpers').createTestDb>,
+  id: string,
+  status: 'ONGOING' | 'COMPLETED' | 'UPCOMING' = 'ONGOING',
+) {
   const ts = new Date().toISOString();
   db.insert(schema.anime)
     .values({
@@ -23,7 +27,7 @@ function insertAnime(db: ReturnType<typeof import('../test/helpers').createTestD
       title: id,
       titleIta: null,
       type: 'TV',
-      status: 'ONGOING',
+      status,
       coverImage: null,
       episodeCount: 2,
       createdAt: ts,
@@ -91,7 +95,10 @@ describe('DownloadService', () => {
     await rm(animePath, { recursive: true, force: true });
   });
 
-  function makeService(catalog: CatalogService = buildStubCatalog()) {
+  function makeService(
+    catalog: CatalogService = buildStubCatalog(),
+    onAutoEnqueued?: (animeId: string, count: number) => void,
+  ) {
     const config = createConfigService({ db });
     config.set('seriesPathSub', animePath);
     config.set('autoDownload', true);
@@ -110,6 +117,7 @@ describe('DownloadService', () => {
       catalog,
       config,
       logger: testLogger,
+      onAutoEnqueued,
     });
     service.start();
     return { service, config };
@@ -325,7 +333,7 @@ describe('DownloadService', () => {
     expect(ids).toEqual(['q-new', 'q-queued']);
   });
 
-  it('enqueueForAutoFollows salta se il master autoDownload=false', () => {
+  it('enqueueForAutoFollows salta se il master autoDownload=false', async () => {
     const { service, config } = makeService();
     config.set('autoDownload', false);
     insertAnime(db, 'a-1');
@@ -342,12 +350,12 @@ describe('DownloadService', () => {
         notes: null,
       })
       .run();
-    const n = service.enqueueForAutoFollows();
+    const n = await service.enqueueForAutoFollows();
     expect(n).toBe(0);
     expect(enqueueSpy).not.toHaveBeenCalled();
   });
 
-  it('enqueueForAutoFollows rispetta autoDownload per-follow (override dello stato)', () => {
+  it('enqueueForAutoFollows rispetta autoDownload per-follow (override dello stato)', async () => {
     const { service } = makeService();
     insertAnime(db, 'a-1');
     insertAnime(db, 'a-2');
@@ -383,13 +391,13 @@ describe('DownloadService', () => {
       })
       .run();
 
-    const n = service.enqueueForAutoFollows();
+    const n = await service.enqueueForAutoFollows();
     expect(n).toBe(1);
     expect(enqueueSpy).toHaveBeenCalledWith('ef-2');
     expect(enqueueSpy).not.toHaveBeenCalledWith('ef-1');
   });
 
-  it('enqueueForAutoFollows accoda per watching (default) non per plan_to_watch', () => {
+  it('enqueueForAutoFollows accoda per watching (default) non per plan_to_watch', async () => {
     const { service } = makeService();
     insertAnime(db, 'a-1');
     insertAnime(db, 'a-2');
@@ -421,8 +429,111 @@ describe('DownloadService', () => {
       })
       .run();
 
-    const n = service.enqueueForAutoFollows();
+    const n = await service.enqueueForAutoFollows();
     expect(n).toBe(1);
+    expect(enqueueSpy).toHaveBeenCalledWith('ef-1');
+  });
+
+  it('enqueueForAutoFollows esclude gli anime COMPLETED (niente refresh né accodamento)', async () => {
+    const getBySlug = vi.fn().mockResolvedValue(undefined);
+    const catalog = { getBySlug } as unknown as CatalogService;
+    const { service } = makeService(catalog);
+    insertAnime(db, 'a-1', 'COMPLETED');
+    insertEpisode(db, 'e-1', 'a-1', 1);
+    insertFile(db, 'ef-1', 'e-1', 'SUB_ITA');
+    db.insert(schema.follow)
+      .values({
+        id: 'f-1',
+        animeId: 'a-1',
+        status: 'watching',
+        addedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        lastCheckAt: null,
+        notes: null,
+      })
+      .run();
+
+    const n = await service.enqueueForAutoFollows();
+    expect(n).toBe(0);
+    expect(enqueueSpy).not.toHaveBeenCalled();
+    expect(getBySlug).not.toHaveBeenCalled();
+  });
+
+  it('enqueueForAutoFollows rinfresca gli ONGOING e accoda i nuovi episodi', async () => {
+    const getBySlug = vi.fn().mockResolvedValue({ id: 'a-1' });
+    const catalog = { getBySlug } as unknown as CatalogService;
+    const onAutoEnqueued = vi.fn();
+    const { service } = makeService(catalog, onAutoEnqueued);
+    insertAnime(db, 'a-1', 'ONGOING');
+    insertEpisode(db, 'e-1', 'a-1', 1);
+    insertFile(db, 'ef-1', 'e-1', 'SUB_ITA');
+    db.insert(schema.follow)
+      .values({
+        id: 'f-1',
+        animeId: 'a-1',
+        status: 'watching',
+        addedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        lastCheckAt: null,
+        notes: null,
+      })
+      .run();
+
+    const n = await service.enqueueForAutoFollows();
+    expect(n).toBe(1);
+    expect(getBySlug).toHaveBeenCalledWith('a-1', { forceRefresh: true });
+    expect(enqueueSpy).toHaveBeenCalledWith('ef-1');
+    expect(onAutoEnqueued).toHaveBeenCalledWith('a-1', 1);
+  });
+
+  it("enqueueForAutoFollows: autoDownload=1 non basta se l'anime è COMPLETED", async () => {
+    const getBySlug = vi.fn().mockResolvedValue(undefined);
+    const catalog = { getBySlug } as unknown as CatalogService;
+    const { service } = makeService(catalog);
+    insertAnime(db, 'a-1', 'COMPLETED');
+    insertEpisode(db, 'e-1', 'a-1', 1);
+    insertFile(db, 'ef-1', 'e-1', 'SUB_ITA');
+    db.insert(schema.follow)
+      .values({
+        id: 'f-1',
+        animeId: 'a-1',
+        status: 'plan_to_watch',
+        autoDownload: 1,
+        addedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        lastCheckAt: null,
+        notes: null,
+      })
+      .run();
+
+    const n = await service.enqueueForAutoFollows();
+    expect(n).toBe(0);
+    expect(enqueueSpy).not.toHaveBeenCalled();
+    expect(getBySlug).not.toHaveBeenCalled();
+  });
+
+  it('enqueueForAutoFollows: refresh best-effort, accoda dalla cache se getBySlug fallisce', async () => {
+    const getBySlug = vi.fn().mockRejectedValue(new Error('offline'));
+    const catalog = { getBySlug } as unknown as CatalogService;
+    const { service } = makeService(catalog);
+    insertAnime(db, 'a-1', 'ONGOING');
+    insertEpisode(db, 'e-1', 'a-1', 1);
+    insertFile(db, 'ef-1', 'e-1', 'SUB_ITA');
+    db.insert(schema.follow)
+      .values({
+        id: 'f-1',
+        animeId: 'a-1',
+        status: 'watching',
+        addedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        lastCheckAt: null,
+        notes: null,
+      })
+      .run();
+
+    const n = await service.enqueueForAutoFollows();
+    expect(n).toBe(1);
+    expect(getBySlug).toHaveBeenCalledWith('a-1', { forceRefresh: true });
     expect(enqueueSpy).toHaveBeenCalledWith('ef-1');
   });
 

@@ -21,12 +21,12 @@ Shared: `packages/shared` (zod + interfaccia `AnimeSource`). Video: ffmpeg-stati
 Scheduler: setInterval (node-cron non usato). Lint: Biome. Test: Vitest (+ Playwright in futuro).
 Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
 
-## Stato attuale (2026-06-24)
+## Stato attuale (2026-06-25)
 
 **Batch rifiniture IN CORSO (branch `feat/follow-status-aware-e-rifiniture`, non ancora merge/
 release):** piano a step in `~/.claude/plans/dobbiamo-potenziare-la-logica-parallel-pnueli.md`
 (vedi banner "AVANZAMENTO" in cima). **Regola #14** attiva: ogni step prima approfondito (checkbox)
-poi implementato + commit dedicato. **Fatti: Step 0-4.** **0** regola di processo (`683787e`).
+poi implementato + commit dedicato. **Fatti: Step 0-5.** **0** regola di processo (`683787e`).
 **1** follow status-aware: per gli anime `COMPLETED` la spunta auto-download e' disabilitata/
 oscurata (con nota); `enqueueForAutoFollows` ora e' async, esclude i COMPLETED e per gli ONGOING fa
 refresh attivo del catalogo (`getBySlug forceRefresh`) per rilevare i nuovi episodi (`94d3afd`).
@@ -35,10 +35,12 @@ refresh attivo del catalogo (`getBySlug forceRefresh`) per rilevare i nuovi epis
 solo Home) (`18d158e`). **3** popup: `DialogTitle` con `break-words/leading-tight/pr-6` + rimosso
 `truncate` dai titoli dinamici (`4fca848`). **4** gestore file: contenuto = Season/Special/OVA/ONA
 (+Movie); resto = Extra (nuovo `isExtraEntry` su `segs[1]`); UI badge "Extra" vs "Non importato";
-gli Special passano a contenuto (`7890843`). **227 test verdi**, lint/typecheck/build web verdi a
-ogni step. **PROSSIMO: Step 5** (libreria: una card per serie/franchise con SUB+DUB e stagioni
-unite + split TV/Film; tocca il contratto shared `library.ts`) → poi **Step 6** (doc Jellyfin).
-Restano solo verifiche manuali a runtime (annotate nel piano).
+gli Special passano a contenuto (`7890843`). **5** libreria: `library.list()` raggruppa per
+(categoria, `seriesId`) → una card per serie/franchise con SUB+DUB e stagioni unite; contratto
+shared rifatto (`libraryEntrySchema`/`libraryGroupSchema`, rimosso `libraryItemSchema`); UI con
+sezioni "Serie TV"/"Film" e card che annida stagione→lingua→episodi (`8ed6731`). **230 test verdi**,
+lint/typecheck/build web verdi a ogni step. **PROSSIMO: Step 6** (Jellyfin: solo doc `docs/JELLYFIN.md`
++ accenno qui). Restano solo verifiche manuali a runtime (annotate nel piano).
 
 ## Stato precedente (2026-06-22)
 

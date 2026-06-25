@@ -49,6 +49,11 @@ export interface SyncStatus {
 export interface CatalogService {
   search(input: { query: string; page: number }): Promise<PaginatedAnime>;
   getBySlug(slug: string, opts?: { forceRefresh?: boolean }): Promise<AnimeDetail>;
+  /** Lookup esatto per id esterno (MAL/AniList) contro la cache locale. null se assente. */
+  findByExternalId(input: { malId?: number; anilistId?: number }): {
+    id: string;
+    slug: string;
+  } | null;
   byGenre(genreSlug: string, page: number): Promise<PaginatedAnime>;
   bySeason(season: Season, year: number, page: number): Promise<PaginatedAnime>;
   byYear(year: number, page: number): Promise<PaginatedAnime>;
@@ -585,6 +590,26 @@ export function createCatalogService(options: CatalogServiceOptions): CatalogSer
         }
         throw error;
       }
+    },
+
+    findByExternalId(input): { id: string; slug: string } | null {
+      const conditions: SQL[] = [];
+      if (input.malId != null) {
+        conditions.push(eq(schema.anime.malId, input.malId));
+      }
+      if (input.anilistId != null) {
+        conditions.push(eq(schema.anime.anilistId, input.anilistId));
+      }
+      if (conditions.length === 0) {
+        return null;
+      }
+      const where = conditions.length === 1 ? conditions[0] : or(...conditions);
+      const row = db
+        .select({ id: schema.anime.id, slug: schema.anime.slug })
+        .from(schema.anime)
+        .where(where)
+        .get();
+      return row ?? null;
     },
 
     async byGenre(genreSlug, page): Promise<PaginatedAnime> {

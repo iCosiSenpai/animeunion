@@ -43,7 +43,12 @@ export const anime = sqliteTable(
     createdAt: text('created_at').notNull(),
     updatedAt: text('updated_at').notNull(),
   },
-  (table) => [index('idx_anime_series').on(table.seriesId)],
+  (table) => [
+    index('idx_anime_series').on(table.seriesId),
+    // Lookup esatto per id esterno (richieste in ingresso stile Seerr in ontologia anime).
+    index('idx_anime_mal').on(table.malId),
+    index('idx_anime_anilist').on(table.anilistId),
+  ],
 );
 
 export const genre = sqliteTable('genre', {

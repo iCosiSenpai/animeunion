@@ -12,6 +12,27 @@ e il progetto aderisce al [Semantic Versioning](https://semver.org/lang/it/).
 - Setup wizard migliorato (Step F, rimandato).
 - GitHub Pages (landing pubblica + spazio mascotte).
 
+## [0.9.0] - 2026-06-25
+
+### Added
+- **Richieste in ingresso stile Seerr** (`POST /api/integration/requests`): un servizio esterno
+  (bot, automazione, una futura istanza Seerr o plugin) può chiedere all'app di **seguire e
+  scaricare** un anime, identificandolo in **ontologia anime** (`slug` / `anilistId` / `malId` /
+  `title` + `season`), senza dipendere da TMDB/TVDB. Autenticazione con header **`X-Api-Key`**
+  (generabile in **Impostazioni → Integrazioni**, mostrata una sola volta, salvata come hash). Riusa
+  il flusso esistente di follow + download (un episodio alla volta, solo la stessa entry). Contratto
+  completo in `docs/INTEGRATION_API.md`.
+- **Stato di disponibilità** (`GET /api/integration/anime/:slug/status`): episodi scaricati/totali,
+  per i caller che vogliono mostrare "disponibile".
+- **Sezione "Integrazioni"** nelle Impostazioni per generare/rigenerare/revocare la chiave API.
+
+### Changed
+- Indici DB su `mal_id` e `anilist_id` (migrazione `0012`) per il lookup per id esterno.
+
+### Note
+- Il match per `anilistId`/`malId` avviene **solo contro la cache locale** (l'API AnimeUnion non
+  espone un lookup per id esterno): per il match robusto cross-sistema usare `slug` o `title`.
+
 ## [0.8.0] - 2026-06-25
 
 ### Added

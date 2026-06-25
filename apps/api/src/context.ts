@@ -21,6 +21,7 @@ import { createProfileService } from './services/profile-service';
 import { createPushService } from './services/push-service';
 import { createRenamerService } from './services/renamer-service';
 import { createRequestAuthService } from './services/request-auth-service';
+import { createRequestService } from './services/request-service';
 import { createSeriesResolver } from './services/series-resolver';
 import { createSeriesService } from './services/series-service';
 import { createSource } from './sources';
@@ -157,6 +158,7 @@ export function createAppContext(options: { env?: Env; databasePath?: string } =
 
   const lock = createLockService({ db, env: resolvedEnv });
   const requestAuth = createRequestAuthService({ db });
+  const requests = createRequestService({ catalog, resolver, follow, download, config });
 
   return {
     db,
@@ -177,6 +179,7 @@ export function createAppContext(options: { env?: Env; databasePath?: string } =
       lock,
       push,
       requestAuth,
+      requests,
     },
     logger,
   };

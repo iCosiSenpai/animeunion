@@ -1,9 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { NotFoundError } from '../lib/errors';
 import { createMockSource } from '../sources/mock-source';
 import { createTestDb, testLogger } from '../test/helpers';
 import { createCatalogService } from './catalog-service';
 import { createConfigService } from './config-service';
+import { createDownloadService } from './download-service';
+import { createFollowService } from './follow-service';
 import { createRequestService } from './request-service';
 import { createSeriesResolver } from './series-resolver';
 
@@ -13,7 +15,21 @@ function setup() {
   const config = createConfigService({ db });
   const catalog = createCatalogService({ db, source, config, logger: testLogger });
   const resolver = createSeriesResolver({ db });
-  const requests = createRequestService({ catalog, resolver });
+  const follow = createFollowService({ db, source, logger: testLogger });
+  const download = createDownloadService({
+    db,
+    worker: {
+      enqueue: vi.fn(),
+      cancel: vi.fn(),
+      retry: vi.fn(),
+      start: vi.fn(),
+      stop: vi.fn(),
+    } as never,
+    catalog,
+    config,
+    logger: testLogger,
+  });
+  const requests = createRequestService({ catalog, resolver, follow, download, config });
   return { requests, catalog };
 }
 

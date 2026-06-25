@@ -1,5 +1,6 @@
 import { requestInputSchema } from '@animeunion/shared';
 import type { FastifyPluginAsync } from 'fastify';
+import { NotFoundError, PreconditionError } from './lib/errors';
 import type { Context } from './trpc';
 
 // Plugin Fastify per le integrazioni esterne (es. richieste stile Seerr), FUORI da tRPC perche il
@@ -24,8 +25,21 @@ export function integrationRoutes(ctx: Context): FastifyPluginAsync {
         await reply.code(400).send({ error: 'invalid_request', issues: parsed.error.issues });
         return;
       }
-      // Lo skeleton si ferma qui: la risoluzione + follow/download arrivano nello Step 3.
-      await reply.code(501).send({ error: 'not_implemented' });
+      try {
+        const result = await ctx.services.requests.handle(parsed.data);
+        await reply.code(200).send(result);
+      } catch (err) {
+        if (err instanceof NotFoundError) {
+          await reply.code(404).send({ error: 'not_found', message: err.message });
+          return;
+        }
+        if (err instanceof PreconditionError) {
+          await reply.code(412).send({ error: 'precondition_failed', message: err.message });
+          return;
+        }
+        ctx.logger.error({ err }, 'Richiesta in ingresso fallita');
+        await reply.code(500).send({ error: 'internal_error' });
+      }
     });
   };
 }

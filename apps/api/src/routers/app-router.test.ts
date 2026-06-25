@@ -19,6 +19,7 @@ import { createProfileService } from '../services/profile-service';
 import { createPushService } from '../services/push-service';
 import { createRenamerService } from '../services/renamer-service';
 import { createRequestAuthService } from '../services/request-auth-service';
+import { createRequestService } from '../services/request-service';
 import { createSeriesResolver } from '../services/series-resolver';
 import { createSeriesService } from '../services/series-service';
 import { createMockSource } from '../sources/mock-source';
@@ -60,6 +61,7 @@ function makeCaller() {
     config,
     logger: testLogger,
   });
+  const requests = createRequestService({ catalog, resolver, follow, download, config });
   const ctx: Context = {
     db,
     source,
@@ -79,6 +81,7 @@ function makeCaller() {
       lock,
       push,
       requestAuth,
+      requests,
     },
     logger: testLogger,
   };

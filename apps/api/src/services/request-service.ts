@@ -1,7 +1,10 @@
-import type { AnimeSummary, RequestInput } from '@animeunion/shared';
+import type { AnimeSummary, Language, RequestInput, RequestResult } from '@animeunion/shared';
 import { NotFoundError } from '../lib/errors';
 import type { Logger } from '../lib/logger';
 import type { CatalogService } from './catalog-service';
+import type { ConfigService } from './config-service';
+import type { DownloadService } from './download-service';
+import type { FollowService } from './follow-service';
 import type { SeriesResolver } from './series-resolver';
 
 /** Entry AnimeUnion risolta da una richiesta in ingresso (il cour/stagione esatto). */
@@ -18,16 +21,29 @@ export interface RequestService {
    * Priorita: slug (esatto) → anilistId/malId (esatto, solo cache) → title (fuzzy via ricerca).
    */
   resolve(input: RequestInput): Promise<ResolvedEntry>;
+  /**
+   * Esegue la richiesta su una entry risolta: segue l'anime (watching + auto-download) e, se
+   * richiesto, accoda gli episodi gia disponibili (Regola #13: solo la stessa entry).
+   */
+  fulfill(
+    entry: ResolvedEntry,
+    opts: { language?: Language; download: boolean },
+  ): Promise<RequestResult>;
+  /** resolve + fulfill: punto d'ingresso unico per la rotta REST. */
+  handle(input: RequestInput): Promise<RequestResult>;
 }
 
 export interface RequestServiceDeps {
   catalog: CatalogService;
   resolver: SeriesResolver;
+  follow: FollowService;
+  download: DownloadService;
+  config: ConfigService;
   logger?: Logger;
 }
 
 export function createRequestService(deps: RequestServiceDeps): RequestService {
-  const { catalog, resolver } = deps;
+  const { catalog, resolver, follow, download, config } = deps;
 
   function normalize(value: string): string {
     return value.trim().toLowerCase();
@@ -53,60 +69,89 @@ export function createRequestService(deps: RequestServiceDeps): RequestService {
     return { animeId, slug, title, seasonNumber };
   }
 
-  return {
-    async resolve(input): Promise<ResolvedEntry> {
-      // 1. slug: identificatore esatto, popola anche la cache.
-      if (input.slug) {
-        const detail = await catalog.getBySlug(input.slug);
+  async function resolve(input: RequestInput): Promise<ResolvedEntry> {
+    // 1. slug: identificatore esatto, popola anche la cache.
+    if (input.slug) {
+      const detail = await catalog.getBySlug(input.slug);
+      return toEntry(detail.id, detail.slug, detail.titleIta ?? detail.title);
+    }
+
+    // 2. id esterno (MAL/AniList): match esatto ma solo contro la cache locale.
+    if (input.anilistId != null || input.malId != null) {
+      const hit = catalog.findByExternalId({ anilistId: input.anilistId, malId: input.malId });
+      if (hit) {
+        const detail = await catalog.getBySlug(hit.slug);
         return toEntry(detail.id, detail.slug, detail.titleIta ?? detail.title);
       }
+      // Niente in cache: senza un title di fallback non possiamo risolvere (l'API
+      // AnimeUnion non espone lookup per id esterno).
+      if (!input.title) {
+        throw new NotFoundError(
+          "Anime non in cache per l'id esterno fornito. Riprova con slug o title.",
+        );
+      }
+    }
 
-      // 2. id esterno (MAL/AniList): match esatto ma solo contro la cache locale.
-      if (input.anilistId != null || input.malId != null) {
-        const hit = catalog.findByExternalId({ anilistId: input.anilistId, malId: input.malId });
-        if (hit) {
-          const detail = await catalog.getBySlug(hit.slug);
-          return toEntry(detail.id, detail.slug, detail.titleIta ?? detail.title);
-        }
-        // Niente in cache: senza un title di fallback non possiamo risolvere (l'API
-        // AnimeUnion non espone lookup per id esterno).
-        if (!input.title) {
-          throw new NotFoundError(
-            "Anime non in cache per l'id esterno fornito. Riprova con slug o title.",
-          );
-        }
+    // 3. title: match fuzzy via ricerca (colpisce l'API live tramite il catalog).
+    if (input.title) {
+      const page = await catalog.search({ query: input.title, page: 1 });
+      if (page.data.length === 0) {
+        throw new NotFoundError(`Nessun anime trovato per "${input.title}"`);
       }
 
-      // 3. title: match fuzzy via ricerca (colpisce l'API live tramite il catalog).
-      if (input.title) {
-        const page = await catalog.search({ query: input.title, page: 1 });
-        if (page.data.length === 0) {
-          throw new NotFoundError(`Nessun anime trovato per "${input.title}"`);
-        }
-
-        const season = input.season;
-        if (season != null && season > 1) {
-          // Disambigua la stagione: scegli il candidato la cui stagione risolta combacia.
-          for (const candidate of page.data) {
-            if (resolver.resolve(candidate.id).seasonNumber === season) {
-              const detail = await catalog.getBySlug(candidate.slug);
-              return toEntry(detail.id, detail.slug, detail.titleIta ?? detail.title, season);
-            }
+      const season = input.season;
+      if (season != null && season > 1) {
+        // Disambigua la stagione: scegli il candidato la cui stagione risolta combacia.
+        for (const candidate of page.data) {
+          if (resolver.resolve(candidate.id).seasonNumber === season) {
+            const detail = await catalog.getBySlug(candidate.slug);
+            return toEntry(detail.id, detail.slug, detail.titleIta ?? detail.title, season);
           }
-          throw new NotFoundError(
-            `Stagione ${season} non trovata per "${input.title}". Specifica lo slug della stagione.`,
-          );
         }
-
-        const best = pickBest(page.data, input.title);
-        if (!best) {
-          throw new NotFoundError(`Nessun anime trovato per "${input.title}"`);
-        }
-        const detail = await catalog.getBySlug(best.slug);
-        return toEntry(detail.id, detail.slug, detail.titleIta ?? detail.title);
+        throw new NotFoundError(
+          `Stagione ${season} non trovata per "${input.title}". Specifica lo slug della stagione.`,
+        );
       }
 
-      throw new NotFoundError('Richiesta non risolvibile: nessun identificatore valido');
-    },
-  };
+      const best = pickBest(page.data, input.title);
+      if (!best) {
+        throw new NotFoundError(`Nessun anime trovato per "${input.title}"`);
+      }
+      const detail = await catalog.getBySlug(best.slug);
+      return toEntry(detail.id, detail.slug, detail.titleIta ?? detail.title);
+    }
+
+    throw new NotFoundError('Richiesta non risolvibile: nessun identificatore valido');
+  }
+
+  async function fulfill(
+    entry: ResolvedEntry,
+    opts: { language?: Language; download: boolean },
+  ): Promise<RequestResult> {
+    // Download prima del follow: se le cartelle non sono configurate, addAllBySlug lancia
+    // PreconditionError e non lasciamo un follow "orfano" come effetto collaterale.
+    let enqueued = 0;
+    if (opts.download) {
+      const language = opts.language ?? config.get('language');
+      enqueued = await download.addAllBySlug({ slug: entry.slug, language });
+    }
+    const alreadyFollowed = follow.list().some((f) => f.animeId === entry.animeId);
+    follow.add({ animeId: entry.animeId, status: 'watching', autoDownload: true });
+    return {
+      ok: true,
+      animeId: entry.animeId,
+      slug: entry.slug,
+      title: entry.title,
+      seasonNumber: entry.seasonNumber,
+      status: alreadyFollowed ? 'already' : 'followed',
+      enqueued,
+    };
+  }
+
+  async function handle(input: RequestInput): Promise<RequestResult> {
+    const entry = await resolve(input);
+    return fulfill(entry, { language: input.language, download: input.download });
+  }
+
+  return { resolve, fulfill, handle };
 }

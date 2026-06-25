@@ -12,6 +12,36 @@ e il progetto aderisce al [Semantic Versioning](https://semver.org/lang/it/).
 - Setup wizard migliorato (Step F, rimandato).
 - GitHub Pages (landing pubblica + spazio mascotte).
 
+## [0.8.0] - 2026-06-25
+
+### Added
+- **Libreria per serie/franchise**: SUB e DUB dello stesso anime, e le diverse stagioni dello
+  stesso franchise, ora appaiono in **un'unica card** (badge lingue aggregati, contenuto annidato
+  stagione → lingua → episodi); la pagina separa **Serie TV** dai **Film**.
+- **Caroselli orizzontali nella Home** su mobile: le sezioni scorrono in orizzontale (con peek)
+  invece di allungare lo scroll verticale; su desktop restano a griglia.
+- **Documentazione integrazione Jellyfin** (`docs/JELLYFIN.md`): idee future (refresh dopo il
+  download, sidecar NFO/artwork, scrobble, import "visto", ecc.) raccolte e prioritizzate per un
+  batch successivo. Solo documentazione, nessuna implementazione.
+
+### Changed
+- **Auto-download consapevole dello stato**: per un anime **Completato** la spunta "scarica
+  automaticamente i nuovi episodi" è disabilitata (una serie conclusa non ne riceve); per gli anime
+  **in corso** il controllo periodico fa un **refresh attivo del catalogo**, così i nuovi episodi
+  vengono rilevati anche senza il segnale del sito.
+- **Gestore file**: le cartelle che non sono di contenuto (copertine, sigle, trailer…) mostrano il
+  badge **"Extra"** invece di "Non importato"; gli **Special** sono ora classificati come contenuto.
+- **PWA**: disabilitato il pinch-zoom sull'app installata (niente più zoom accidentale).
+
+### Fixed
+- **Titoli lunghi nei popup**: i titoli di anime/cartelle nei dialog ora vanno **a capo** invece di
+  essere tagliati o uscire dal riquadro.
+- **Ricerca da "Altro" su iOS**: la tastiera non si richiude più subito dopo l'apertura.
+
+### Migrazione da 0.7.x
+- Nessuna migrazione del database. Cambiano solo logica/UI e il contratto interno della libreria
+  (raggruppamento per serie); nessuna azione manuale richiesta.
+
 ## [0.7.1] - 2026-06-22
 
 ### Fixed

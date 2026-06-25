@@ -3,6 +3,7 @@ import { type FastifyTRPCPluginOptions, fastifyTRPCPlugin } from '@trpc/server/a
 import fastify from 'fastify';
 import { env } from './config/env';
 import { createAppContext } from './context';
+import { integrationRoutes } from './integration-routes';
 import { logger } from './lib/logger';
 import { type AppRouter, appRouter } from './routers';
 import { createScheduler } from './scheduler';
@@ -39,6 +40,8 @@ async function main(): Promise<void> {
     } satisfies FastifyTRPCPluginOptions<AppRouter>['trpcOptions'],
   });
   app.get('/health', async () => ({ status: 'ok' }));
+  // Rotte REST per integrazioni esterne (richieste stile Seerr), auth via header X-Api-Key.
+  await app.register(integrationRoutes(ctx), { prefix: '/api/integration' });
 
   const scheduler = createScheduler(ctx);
 

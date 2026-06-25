@@ -4,6 +4,7 @@ import { AccentPicker } from '@/components/settings/accent-picker';
 import { FolderInput } from '@/components/settings/folder-picker';
 import { InstallButton } from '@/components/settings/install-button';
 import { PushToggle } from '@/components/settings/push-toggle';
+import { RequestsSection } from '@/components/settings/requests-section';
 import { SecuritySection } from '@/components/settings/security-section';
 import { WallpaperPicker } from '@/components/settings/wallpaper-picker';
 import { Button } from '@/components/ui/button';
@@ -42,6 +43,7 @@ import {
   Send,
   Shield,
   SlidersHorizontal,
+  Webhook,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useRouter } from 'next/navigation';
@@ -121,6 +123,7 @@ type SectionId =
   | 'notifiche'
   | 'aspetto'
   | 'sicurezza'
+  | 'integrazioni'
   | 'avanzate';
 
 const SECTIONS: { id: SectionId; label: string; icon: LucideIcon }[] = [
@@ -131,6 +134,7 @@ const SECTIONS: { id: SectionId; label: string; icon: LucideIcon }[] = [
   { id: 'notifiche', label: 'Notifiche', icon: Bell },
   { id: 'aspetto', label: 'Aspetto', icon: Palette },
   { id: 'sicurezza', label: 'Sicurezza', icon: Shield },
+  { id: 'integrazioni', label: 'Integrazioni', icon: Webhook },
   { id: 'avanzate', label: 'Avanzate', icon: SlidersHorizontal },
 ];
 
@@ -783,6 +787,10 @@ export function SettingsView() {
 
           <div className={cn(active !== 'sicurezza' && 'hidden')}>
             <SecuritySection />
+          </div>
+
+          <div className={cn(active !== 'integrazioni' && 'hidden')}>
+            <RequestsSection />
           </div>
         </div>
       </div>

@@ -15,6 +15,7 @@ import { meRouter } from './me';
 import { notificationsRouter } from './notifications';
 import { profileRouter } from './profile';
 import { pushRouter } from './push';
+import { requestsRouter } from './requests';
 import { seriesRouter } from './series';
 import { statsRouter } from './stats';
 import { themeRouter } from './theme';
@@ -38,6 +39,7 @@ export const appRouter = router({
   theme: themeRouter,
   lock: lockRouter,
   push: pushRouter,
+  requests: requestsRouter,
   stats: statsRouter,
 });
 

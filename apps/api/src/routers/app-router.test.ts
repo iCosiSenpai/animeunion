@@ -18,6 +18,7 @@ import { createNotificationService } from '../services/notification-service';
 import { createProfileService } from '../services/profile-service';
 import { createPushService } from '../services/push-service';
 import { createRenamerService } from '../services/renamer-service';
+import { createRequestAuthService } from '../services/request-auth-service';
 import { createSeriesResolver } from '../services/series-resolver';
 import { createSeriesService } from '../services/series-service';
 import { createMockSource } from '../sources/mock-source';
@@ -44,6 +45,7 @@ function makeCaller() {
   const series = createSeriesService({ db, resolver, catalog, renamer, config });
   const notifications = createNotificationService({ db, config });
   const lock = createLockService({ db, env: { WEB_LOCK_DISABLED: undefined } });
+  const requestAuth = createRequestAuthService({ db });
   const push = createPushService({ db, logger: testLogger });
   const download = createDownloadService({
     db,
@@ -76,6 +78,7 @@ function makeCaller() {
       notifications,
       lock,
       push,
+      requestAuth,
     },
     logger: testLogger,
   };

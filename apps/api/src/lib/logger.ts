@@ -15,6 +15,10 @@ export const logger = pino({
       'headers.authorization',
       'req.headers.authorization',
       'request.headers.authorization',
+      // Chiave API delle richieste in ingresso (header con trattini → notazione a bracket).
+      'headers["x-api-key"]',
+      'req.headers["x-api-key"]',
+      'request.headers["x-api-key"]',
       // URL di download firmati (scadono, ma non devono comparire nei log).
       'downloadUrl',
       'sourceUrl',

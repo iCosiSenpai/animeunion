@@ -18,6 +18,7 @@ import type { LockService } from './services/lock-service';
 import type { NotificationService } from './services/notification-service';
 import type { ProfileService } from './services/profile-service';
 import type { PushService } from './services/push-service';
+import type { RequestAuthService } from './services/request-auth-service';
 import type { SeriesService } from './services/series-service';
 
 export interface Context {
@@ -38,6 +39,7 @@ export interface Context {
     notifications: NotificationService;
     lock: LockService;
     push: PushService;
+    requestAuth: RequestAuthService;
   };
   /** Token di sessione del blocco web UI, dall'header x-app-session (per richiesta). */
   sessionToken?: string;

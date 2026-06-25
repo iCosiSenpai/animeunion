@@ -61,7 +61,7 @@ function makeCaller() {
     config,
     logger: testLogger,
   });
-  const requests = createRequestService({ catalog, resolver, follow, download, config });
+  const requests = createRequestService({ db, catalog, resolver, follow, download, config });
   const ctx: Context = {
     db,
     source,

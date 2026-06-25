@@ -23,7 +23,28 @@ Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
 
 ## Stato attuale (2026-06-25)
 
-**Batch rifiniture IN CORSO (branch `feat/follow-status-aware-e-rifiniture`, non ancora merge/
+**Batch "Seerr per AnimeUnion" — API di richiesta in ingresso (branch `feat/seerr-request-api`, non
+ancora merge/release):** apre il nodo **#15** di [docs/JELLYFIN.md](docs/JELLYFIN.md). Insight: i due
+"nodi aperti" (mapping id TMDB/TVDB, stagioni) esistevano **solo** perché Seerr ragiona in TMDB/TVDB;
+restando in **ontologia anime-native** (slug/MAL/AniList — ogni cour è già una entry) si sciolgono.
+Decisione con l'utente: niente plugin Jellyfin C# (rompe lo stack) né interop Jellyseerr ora — la web
+UI resta la vetrina, si aggiunge **solo** un'API REST in ingresso. Piano a step (Regola #14) in
+`~/.claude/plans/apri-la-sessione-per-purring-waffle.md`. **Fatto: Step 0-4.** **0** contratto shared
+`requests.ts` (`requestInputSchema`/`requestResultSchema`/`requestStatusSchema`). **1** auth
+`X-Api-Key` (`request-auth-service`, clone `lock-service`: scrypt+hash a riposo) + rotta Fastify fuori
+da tRPC + router tRPC `requests` + card "Integrazioni" in Impostazioni + redazione header nei log.
+**2** risoluzione anime-native (`request-service.resolve`: slug→anilistId/malId→title+season) +
+migrazione `0012` (indici `idx_anime_mal`/`idx_anime_anilist`) + `catalog.findByExternalId`. **3**
+azione `fulfill` = follow (watching+auto) + `download.addAllBySlug` (Regola #13), idempotente, rotta
+`POST /api/integration/requests` (200/400/401/404/412). **4** `GET /api/integration/anime/:slug/status`
+(disponibilità) + docs [docs/INTEGRATION_API.md](docs/INTEGRATION_API.md) + riscrittura #15 in
+JELLYFIN.md. **Limite onesto:** gli id esterni risolvono solo contro la cache (l'API AnimeUnion non
+espone lookup per id) → per il match robusto usare slug o title. **255 test verdi**, lint/typecheck/
+build web verdi. **Batch COMPLETO (Step 0-4).**
+
+## Stato precedente (2026-06-25)
+
+**Batch rifiniture (branch `feat/follow-status-aware-e-rifiniture`, non ancora merge/
 release):** piano a step in `~/.claude/plans/dobbiamo-potenziare-la-logica-parallel-pnueli.md`
 (vedi banner "AVANZAMENTO" in cima). **Regola #14** attiva: ogni step prima approfondito (checkbox)
 poi implementato + commit dedicato. **Fatti: Step 0-6.** **0** regola di processo (`683787e`).

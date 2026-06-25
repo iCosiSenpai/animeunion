@@ -39,7 +39,7 @@ function buildCtx(opts: { downloadConfigured?: boolean } = {}) {
     logger: testLogger,
   });
   const requestAuth = createRequestAuthService({ db });
-  const requests = createRequestService({ catalog, resolver, follow, download, config });
+  const requests = createRequestService({ db, catalog, resolver, follow, download, config });
   const ctx = {
     db,
     services: { requestAuth, requests, follow, download, catalog, config },
@@ -147,6 +147,44 @@ describe('integration routes /api/integration/requests', () => {
     expect(res.statusCode).toBe(412);
     // Nessun follow "orfano": il download fallisce prima di seguire.
     expect(follow.list()).toHaveLength(0);
+    await app.close();
+  });
+
+  it('GET status: dopo una richiesta riflette total/downloaded/pending', async () => {
+    const { app, key } = await makeApp();
+    await post(app, { slug: 'jujutsu-kaisen' }, key);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/integration/anime/jujutsu-kaisen/status',
+      headers: { 'x-api-key': key },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.slug).toBe('jujutsu-kaisen');
+    expect(body.total).toBeGreaterThan(0);
+    expect(body.downloaded).toBe(0);
+    await app.close();
+  });
+
+  it('GET status senza chiave risponde 401', async () => {
+    const { app } = await makeApp();
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/integration/anime/jujutsu-kaisen/status',
+    });
+    expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it('GET status per slug non in cache risponde 404', async () => {
+    const { app, key } = await makeApp();
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/integration/anime/non-esiste/status',
+      headers: { 'x-api-key': key },
+    });
+    expect(res.statusCode).toBe(404);
     await app.close();
   });
 });

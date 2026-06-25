@@ -124,34 +124,35 @@ Scrivere accanto ai video i file metadati standard, attingendo ai dati già in D
 
 ---
 
-## Tier 4 — Ipotesi a lungo termine (da rivalutare)
+## Tier 4 — Estensioni a lungo termine
 
-### #15 — Richieste stile Jellyseerr/Overseerr (Seerr)
+### #15 — Richieste in ingresso stile Seerr ✅ IMPLEMENTATO (in ontologia anime)
 
-> **Solo ipotesi.** Non semplice: due nodi tecnici irrisolti (sotto). Da riprendere **dopo** aver
-> fatto il resto. Annotata qui per non perderla.
+> **Fatto** (branch `feat/seerr-request-api`). Realizzato **non** piegandosi al mondo Seerr/TMDB ma
+> restando in **ontologia anime-native** (slug / MAL / AniList). Vedi
+> [docs/INTEGRATION_API.md](INTEGRATION_API.md) per il contratto completo.
 
-- **Concetto.** Un'istanza Seerr/Overseerr/[Jellyseerr](https://github.com/seerr-team/seerr)
-  (integrata a Jellyfin) propone contenuti simili per genere; su richiesta dell'utente **chiama il
-  docker AnimeUnion**, che scarica l'anime. Trasformerebbe l'app in un "backend di download" per anime.
-- **Meccanismo ipotizzato.** Una rotta REST **in ingresso** dedicata (es. `POST
-  /api/integration/requests`), **fuori da tRPC** perché il chiamante è un servizio esterno (la Regola
-  #2 "tRPC è la legge" vale per il *frontend*; Fastify può ospitare la rotta accanto al plugin tRPC).
-  Auth con header **API-key** (`X-Api-Key`): nuovo secret `requestApiKey`, generato e incollabile in
-  Impostazioni, mascherato come gli altri. Aggancio a Seerr tramite il suo "Webhook notification
-  agent".
-- **Problema aperto #1 — mapping id.** Seerr ragiona in **TMDB/TVDB**; la tabella `anime` ha
-  `malId`/`anilistId` ma **non** tmdb/tvdb → servirebbe un layer di mappatura (anime-lists/Anime-IDs,
-  oppure ricerca per titolo+genere nel catalogo). I tag-genere aiutano la *proposta*, non bastano per
-  il *match esatto*.
-- **Problema aperto #2 — stagioni.** Seerr richiede per-stagione; l'app splitta stagioni/parti con
-  euristiche slug + `series_override`. Tradurre "stagione N di Seerr" → entry/slug giusta è il nodo
-  centrale. Risolto lo slug, si **riuserebbe** il flusso esistente (`follow-service` +
-  `download.addAllBySlug`/`addMissing`), nel rispetto della **Regola #13** (un episodio alla volta,
-  solo i mancanti della stessa entry — niente "intera serie" cross-stagione).
-- **Sforzo:** alto. **Pro:** integrazione nell'ecosistema Seerr.
-  **Contro:** superficie API in ingresso (sicurezza: API-key + rate-limit + validazione zod),
-  dipendenza da mappatura id esterna, complessità stagioni.
+- **Cosa fa.** Una rotta REST **fuori da tRPC** — `POST /api/integration/requests` accanto a
+  `/health` in [index.ts](../apps/api/src/index.ts), auth header **`X-Api-Key`** — risolve l'anime,
+  lo **segue** (watching + auto-download) e ne **accoda** gli episodi già usciti riusando il flusso
+  esistente (`follow-service.add` + `download.addAllBySlug`, **Regola #13**). C'è anche
+  `GET /api/integration/anime/:slug/status` per la disponibilità (scaricati/totali).
+- **Perché i due "nodi aperti" si sono sciolti.** Esistevano **solo** perché Seerr ragiona in
+  **TMDB/TVDB**:
+  - *Nodo #1 (mapping id)* → la richiesta parla **slug / anilistId / malId / title**, non TMDB.
+    Nessun layer di mappatura. (`anime` ha già `malId`/`anilistId`, ora indicizzati per il lookup —
+    migrazione `0012`.) **Limite onesto:** gli id esterni risolvono solo contro la **cache locale**
+    (l'API AnimeUnion non espone lookup per id); per il match robusto si usa `slug` o `title`.
+  - *Nodo #2 (stagioni)* → in ontologia anime **ogni cour è già una entry/slug**, quindi la richiesta
+    punta direttamente al pezzo giusto. Con `title`+`season` c'è una disambiguazione best-effort via
+    `series-resolver`; per la stagione esatta basta passare lo `slug`.
+- **Auth.** `request-auth-service` (clone del pattern `lock-service`: `scrypt` + `timingSafeEqual`,
+  hash a riposo, niente chiave in chiaro in SQLite). Generazione/revoca in **Impostazioni →
+  Integrazioni**, chiave mostrata una sola volta. Header redatto nei log.
+- **Estensioni possibili SOPRA questa API** (non necessarie ora): ricezione dei **webhook
+  Jellyseerr** con un layer di mapping TMDB/TVDB→AnimeUnion (riapre i due nodi, da valutare solo se
+  si vuole interop col mondo Seerr esistente); un **plugin Jellyfin**/UI dedicata come "front door"
+  alternativa. La web UI dell'app resta la vetrina di scoperta primaria.
 
 ---
 

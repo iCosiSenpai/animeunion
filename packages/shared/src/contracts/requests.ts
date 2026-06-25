@@ -26,6 +26,16 @@ export const requestInputSchema = z
   });
 export type RequestInput = z.infer<typeof requestInputSchema>;
 
+// Stato di disponibilita di un anime (GET /api/integration/anime/:slug/status): quanti episodi
+// sono scaricati rispetto al totale noto in cache. Utile ai caller stile Seerr per "disponibile".
+export const requestStatusSchema = z.object({
+  slug: z.string(),
+  total: z.number().int().nonnegative(),
+  downloaded: z.number().int().nonnegative(),
+  pending: z.number().int().nonnegative(),
+});
+export type RequestStatus = z.infer<typeof requestStatusSchema>;
+
 export const requestResultSchema = z.object({
   ok: z.literal(true),
   animeId: z.string(),

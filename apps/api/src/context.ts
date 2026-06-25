@@ -158,7 +158,7 @@ export function createAppContext(options: { env?: Env; databasePath?: string } =
 
   const lock = createLockService({ db, env: resolvedEnv });
   const requestAuth = createRequestAuthService({ db });
-  const requests = createRequestService({ catalog, resolver, follow, download, config });
+  const requests = createRequestService({ db, catalog, resolver, follow, download, config });
 
   return {
     db,

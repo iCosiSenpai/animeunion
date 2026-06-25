@@ -1,4 +1,13 @@
-import type { AnimeSummary, Language, RequestInput, RequestResult } from '@animeunion/shared';
+import type {
+  AnimeSummary,
+  Language,
+  RequestInput,
+  RequestResult,
+  RequestStatus,
+} from '@animeunion/shared';
+import { eq } from 'drizzle-orm';
+import type { Db } from '../db';
+import { schema } from '../db';
 import { NotFoundError } from '../lib/errors';
 import type { Logger } from '../lib/logger';
 import type { CatalogService } from './catalog-service';
@@ -31,9 +40,12 @@ export interface RequestService {
   ): Promise<RequestResult>;
   /** resolve + fulfill: punto d'ingresso unico per la rotta REST. */
   handle(input: RequestInput): Promise<RequestResult>;
+  /** Stato di disponibilita locale (episodi scaricati vs totali in cache) per uno slug. */
+  availability(slug: string): RequestStatus;
 }
 
 export interface RequestServiceDeps {
+  db: Db;
   catalog: CatalogService;
   resolver: SeriesResolver;
   follow: FollowService;
@@ -43,7 +55,7 @@ export interface RequestServiceDeps {
 }
 
 export function createRequestService(deps: RequestServiceDeps): RequestService {
-  const { catalog, resolver, follow, download, config } = deps;
+  const { db, catalog, resolver, follow, download, config } = deps;
 
   function normalize(value: string): string {
     return value.trim().toLowerCase();
@@ -153,5 +165,25 @@ export function createRequestService(deps: RequestServiceDeps): RequestService {
     return fulfill(entry, { language: input.language, download: input.download });
   }
 
-  return { resolve, fulfill, handle };
+  function availability(slug: string): RequestStatus {
+    const animeRow = db
+      .select({ id: schema.anime.id })
+      .from(schema.anime)
+      .where(eq(schema.anime.slug, slug))
+      .get();
+    if (!animeRow) {
+      throw new NotFoundError(`Anime non in cache: ${slug}. Invia prima una richiesta.`);
+    }
+    const rows = db
+      .select({ status: schema.episodeFile.downloadStatus })
+      .from(schema.episodeFile)
+      .innerJoin(schema.episode, eq(schema.episodeFile.episodeId, schema.episode.id))
+      .where(eq(schema.episode.animeId, animeRow.id))
+      .all();
+    const total = rows.length;
+    const downloaded = rows.filter((r) => r.status === 'downloaded').length;
+    return { slug, total, downloaded, pending: total - downloaded };
+  }
+
+  return { resolve, fulfill, handle, availability };
 }

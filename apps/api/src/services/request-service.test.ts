@@ -29,7 +29,7 @@ function setup() {
     config,
     logger: testLogger,
   });
-  const requests = createRequestService({ catalog, resolver, follow, download, config });
+  const requests = createRequestService({ db, catalog, resolver, follow, download, config });
   return { requests, catalog };
 }
 
@@ -90,5 +90,23 @@ describe('RequestService.resolve', () => {
     await expect(
       requests.resolve({ title: 'Jujutsu Kaisen', season: 2, download: true }),
     ).rejects.toBeInstanceOf(NotFoundError);
+  });
+});
+
+describe('RequestService.availability', () => {
+  it('conta episodi totali e scaricati per uno slug in cache', async () => {
+    const { requests, catalog } = setup();
+    await catalog.getBySlug('jujutsu-kaisen');
+
+    const status = requests.availability('jujutsu-kaisen');
+    expect(status.slug).toBe('jujutsu-kaisen');
+    expect(status.total).toBeGreaterThan(0);
+    expect(status.downloaded).toBe(0);
+    expect(status.pending).toBe(status.total);
+  });
+
+  it('per uno slug non in cache lancia NotFound', () => {
+    const { requests } = setup();
+    expect(() => requests.availability('non-esiste')).toThrow(NotFoundError);
   });
 });

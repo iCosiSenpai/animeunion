@@ -41,5 +41,19 @@ export function integrationRoutes(ctx: Context): FastifyPluginAsync {
         await reply.code(500).send({ error: 'internal_error' });
       }
     });
+
+    instance.get('/anime/:slug/status', async (req, reply) => {
+      const { slug } = req.params as { slug: string };
+      try {
+        await reply.code(200).send(ctx.services.requests.availability(slug));
+      } catch (err) {
+        if (err instanceof NotFoundError) {
+          await reply.code(404).send({ error: 'not_found', message: err.message });
+          return;
+        }
+        ctx.logger.error({ err }, 'Stato richiesta fallito');
+        await reply.code(500).send({ error: 'internal_error' });
+      }
+    });
   };
 }

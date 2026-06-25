@@ -3,7 +3,8 @@ import { dirname, join, relative, resolve, sep } from 'node:path';
 import type {
   Language,
   LibraryDeleteResult,
-  LibraryItem,
+  LibraryEntry,
+  LibraryGroup,
   LibraryScanResult,
   LibraryStats,
 } from '@animeunion/shared';
@@ -19,7 +20,7 @@ import type { SeriesResolver } from './series-resolver';
 
 export interface LibraryService {
   scan(): Promise<LibraryScanResult>;
-  list(): LibraryItem[];
+  list(): LibraryGroup[];
   stats(): LibraryStats;
   /** Elimina il file di un singolo episodio (episodio+lingua). */
   deleteEpisodeFile(episodeFileId: string): Promise<LibraryDeleteResult>;
@@ -424,40 +425,88 @@ export function createLibraryService(deps: LibraryServiceDeps): LibraryService {
       const animeIds = [...new Set(rows.map((r) => r.animeId))];
       const genresByAnime = loadGenresByAnimeIds(db, animeIds);
 
-      const buckets = new Map<string, LibraryItem>();
+      // AnimeSummary del rappresentativo: costruito una volta per animeId.
+      const summaryByAnime = new Map<string, ReturnType<typeof toAnimeSummary>>();
+      function summaryOf(row: (typeof rows)[number]) {
+        const cached = summaryByAnime.get(row.animeId);
+        if (cached) {
+          return cached;
+        }
+        const animeRow = {
+          id: row.animeId,
+          slug: row.animeSlug,
+          title: row.animeTitle,
+          titleIta: row.animeTitleIta,
+          coverImage: row.animeCoverImage,
+          type: row.animeType,
+          status: row.animeStatus,
+          season: row.animeSeason,
+          seasonYear: row.animeSeasonYear,
+          score: row.animeScore,
+          episodeCount: row.animeEpisodeCount,
+          languages: row.animeLanguages,
+          seriesId: null as string | null,
+          seasonNumber: null as number | null,
+        };
+        const summary = toAnimeSummary(
+          animeRow as typeof schema.anime.$inferSelect,
+          genresByAnime.get(row.animeId) ?? [],
+        );
+        summaryByAnime.set(row.animeId, summary);
+        return summary;
+      }
+
+      interface GroupAcc {
+        seriesId: string;
+        category: 'tv' | 'film';
+        entries: Map<string, LibraryEntry>;
+        languages: Set<Language>;
+        repAnimeId: string;
+        repSeason: number;
+      }
+
+      // Raggruppa per (categoria, serie): SUB+DUB e stagioni diverse confluiscono insieme.
+      const groups = new Map<string, GroupAcc>();
       for (const row of rows) {
         const language = row.language as Language;
         const series = resolver.resolve(row.animeId);
-        const key = `${row.animeId}:${series.seasonNumber}:${language}`;
-        let item = buckets.get(key);
-        if (!item) {
-          const animeRow = {
-            id: row.animeId,
-            slug: row.animeSlug,
-            title: row.animeTitle,
-            titleIta: row.animeTitleIta,
-            coverImage: row.animeCoverImage,
-            type: row.animeType,
-            status: row.animeStatus,
-            season: row.animeSeason,
-            seasonYear: row.animeSeasonYear,
-            score: row.animeScore,
-            episodeCount: row.animeEpisodeCount,
-            languages: row.animeLanguages,
-            seriesId: null as string | null,
-            seasonNumber: null as number | null,
+        const category: 'tv' | 'film' = row.animeType === 'MOVIE' ? 'film' : 'tv';
+        const groupKey = `${category}:${series.seriesId}`;
+        const entryKey = `${row.animeId}:${series.seasonNumber}:${language}`;
+
+        let group = groups.get(groupKey);
+        if (!group) {
+          group = {
+            seriesId: series.seriesId,
+            category,
+            entries: new Map(),
+            languages: new Set(),
+            repAnimeId: row.animeId,
+            repSeason: series.seasonNumber,
           };
-          // Recupera i generi necessari per AnimeSummary.
-          const genres = genresByAnime.get(row.animeId) ?? [];
-          item = {
-            anime: toAnimeSummary(animeRow as typeof schema.anime.$inferSelect, genres),
+          groups.set(groupKey, group);
+        }
+        group.languages.add(language);
+        // Rappresentativo = stagione base (seasonNumber minore; tie-break animeId minore).
+        if (
+          series.seasonNumber < group.repSeason ||
+          (series.seasonNumber === group.repSeason && row.animeId < group.repAnimeId)
+        ) {
+          group.repSeason = series.seasonNumber;
+          group.repAnimeId = row.animeId;
+        }
+
+        let entry = group.entries.get(entryKey);
+        if (!entry) {
+          entry = {
+            animeId: row.animeId,
             seasonNumber: series.seasonNumber,
             language,
             episodes: [],
           };
-          buckets.set(key, item);
+          group.entries.set(entryKey, entry);
         }
-        item.episodes.push({
+        entry.episodes.push({
           episodeFileId: row.episodeFileId,
           episodeId: row.episodeId,
           episodeNumber: row.episodeNumber,
@@ -467,21 +516,46 @@ export function createLibraryService(deps: LibraryServiceDeps): LibraryService {
           downloadedAt: row.downloadedAt ?? null,
           language,
         });
+        // Assicura che il summary del rappresentativo sia disponibile.
+        summaryOf(row);
       }
 
-      const result = [...buckets.values()];
-      for (const item of result) {
-        item.episodes.sort((a, b) => a.episodeNumber - b.episodeNumber);
-      }
-      return result.sort((a, b) => {
-        const titleCompare = (a.anime.titleIta ?? a.anime.title).localeCompare(
-          b.anime.titleIta ?? b.anime.title,
-          'it',
+      const languageOrder: Language[] = ['SUB_ITA', 'DUB_ITA'];
+      const result: LibraryGroup[] = [];
+      for (const group of groups.values()) {
+        const entries = [...group.entries.values()];
+        for (const entry of entries) {
+          entry.episodes.sort((a, b) => a.episodeNumber - b.episodeNumber);
+        }
+        entries.sort(
+          (a, b) => a.seasonNumber - b.seasonNumber || a.language.localeCompare(b.language),
         );
-        if (titleCompare !== 0) return titleCompare;
-        if (a.seasonNumber !== b.seasonNumber) return a.seasonNumber - b.seasonNumber;
-        return a.language.localeCompare(b.language);
-      });
+        let totalEpisodes = 0;
+        let totalSizeBytes = 0;
+        for (const entry of entries) {
+          for (const ep of entry.episodes) {
+            totalEpisodes += 1;
+            totalSizeBytes += ep.fileSize ?? 0;
+          }
+        }
+        const rep = summaryByAnime.get(group.repAnimeId);
+        if (!rep) {
+          continue;
+        }
+        result.push({
+          seriesId: group.seriesId,
+          category: group.category,
+          anime: rep,
+          languages: languageOrder.filter((l) => group.languages.has(l)),
+          totalEpisodes,
+          totalSizeBytes,
+          entries,
+        });
+      }
+
+      return result.sort((a, b) =>
+        (a.anime.titleIta ?? a.anime.title).localeCompare(b.anime.titleIta ?? b.anime.title, 'it'),
+      );
     },
 
     stats() {

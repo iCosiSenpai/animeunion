@@ -14,13 +14,30 @@ export const libraryEpisodeSchema = z.object({
 });
 export type LibraryEpisode = z.infer<typeof libraryEpisodeSchema>;
 
-export const libraryItemSchema = z.object({
-  anime: animeSummarySchema,
+// Entry = un (anime, stagione, lingua) con i suoi episodi. Building block leggero del gruppo
+// (niente AnimeSummary qui: il rappresentativo sta sul gruppo).
+export const libraryEntrySchema = z.object({
+  animeId: z.string(),
   seasonNumber: z.number().int(),
   language: languageSchema,
   episodes: z.array(libraryEpisodeSchema),
 });
-export type LibraryItem = z.infer<typeof libraryItemSchema>;
+export type LibraryEntry = z.infer<typeof libraryEntrySchema>;
+
+// Gruppo = una card della libreria: una serie/franchise (categoria + seriesId) con lingue e
+// stagioni unite. SUB+DUB e stagioni diverse confluiscono nello stesso gruppo.
+export const libraryGroupSchema = z.object({
+  seriesId: z.string(),
+  category: z.enum(['tv', 'film']),
+  /** Anime rappresentativo del gruppo: la stagione base (seasonNumber minore). */
+  anime: animeSummarySchema,
+  /** Lingue aggregate presenti nel gruppo (badge SUB/DUB). */
+  languages: z.array(languageSchema),
+  totalEpisodes: z.number().int(),
+  totalSizeBytes: z.number().int(),
+  entries: z.array(libraryEntrySchema),
+});
+export type LibraryGroup = z.infer<typeof libraryGroupSchema>;
 
 export const libraryMissingEntrySchema = z.object({
   animeId: z.string(),

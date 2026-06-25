@@ -3,7 +3,7 @@ import {
   libraryDeleteEpisodeInputSchema,
   libraryDeleteResultSchema,
   libraryDeleteSeriesInputSchema,
-  libraryItemSchema,
+  libraryGroupSchema,
   libraryScanResultSchema,
   libraryStatsSchema,
 } from '@animeunion/shared';
@@ -17,7 +17,7 @@ export const libraryRouter = router({
     .mutation(({ ctx }) => ctx.services.library.scan()),
 
   list: publicProcedure
-    .output(libraryItemSchema.array())
+    .output(libraryGroupSchema.array())
     .query(({ ctx }) => ctx.services.library.list()),
 
   stats: publicProcedure

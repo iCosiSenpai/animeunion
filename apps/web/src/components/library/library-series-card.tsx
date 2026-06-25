@@ -21,28 +21,45 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { trpc } from '@/lib/trpc';
 import { formatBytes, formatDate, pad2 } from '@/lib/utils';
-import type { LibraryItem } from '@animeunion/shared';
-import { ChevronDown, ChevronUp, Eye, FileVideo, HardDrive, Trash2 } from 'lucide-react';
+import type { Language, LibraryEntry, LibraryGroup } from '@animeunion/shared';
+import { ChevronDown, ChevronUp, Eye, FileVideo, HardDrive, Layers, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
-const LANGUAGE_SHORT: Record<LibraryItem['language'], string> = {
+const LANGUAGE_SHORT: Record<Language, string> = {
   SUB_ITA: 'SUB ITA',
   DUB_ITA: 'DUB ITA',
 };
 
 type DeleteTarget =
   | { scope: 'episode'; episodeFileId: string; title: string; warning: string }
-  | { scope: 'entry'; title: string; warning: string }
+  | { scope: 'entry'; animeId: string; language: Language; title: string; warning: string }
   | { scope: 'series'; title: string; warning: string };
 
-export function LibrarySeriesCard({ item }: { item: LibraryItem }) {
+function seasonLabel(seasonNumber: number): string {
+  return seasonNumber === 0 ? 'Speciali' : `Stagione ${pad2(seasonNumber)}`;
+}
+
+function entrySize(entry: LibraryEntry): number {
+  return entry.episodes.reduce((sum, ep) => sum + (ep.fileSize ?? 0), 0);
+}
+
+export function LibrarySeriesCard({ group }: { group: LibraryGroup }) {
   const [expanded, setExpanded] = useState(false);
   const [target, setTarget] = useState<DeleteTarget | null>(null);
   const [deleteFolder, setDeleteFolder] = useState(false);
-  const title = item.anime.titleIta ?? item.anime.title;
-  const totalSize = item.episodes.reduce((sum, ep) => sum + (ep.fileSize ?? 0), 0);
+  const title = group.anime.titleIta ?? group.anime.title;
+
+  // Stagioni del gruppo, ciascuna con le sue lingue (le entries sono gia' ordinate dal backend).
+  const seasonsMap = new Map<number, LibraryEntry[]>();
+  for (const entry of group.entries) {
+    const list = seasonsMap.get(entry.seasonNumber) ?? [];
+    list.push(entry);
+    seasonsMap.set(entry.seasonNumber, list);
+  }
+  const seasons = [...seasonsMap.entries()].sort((a, b) => a[0] - b[0]);
+  const seasonCount = seasons.length;
 
   const utils = trpc.useUtils();
   const onSuccess = (res: { deletedFiles: number; freedBytes: number; failedFiles: number }) => {
@@ -56,7 +73,7 @@ export function LibrarySeriesCard({ item }: { item: LibraryItem }) {
     void utils.library.list.invalidate();
     void utils.library.stats.invalidate();
     void utils.download.queue.invalidate();
-    // Invalida tutto il catalogo: deleteSeries tocca piu' stagioni/sequel (slug diversi),
+    // Invalida tutto il catalogo: il delete tocca piu' stagioni/sequel (slug diversi),
     // cosi' i tag "Scaricato" delle schede anime si aggiornano ovunque al ritorno.
     void utils.catalog.invalidate();
     setTarget(null);
@@ -73,9 +90,9 @@ export function LibrarySeriesCard({ item }: { item: LibraryItem }) {
     if (target.scope === 'episode') {
       delEpisode.mutate({ episodeFileId: target.episodeFileId });
     } else if (target.scope === 'entry') {
-      delEntry.mutate({ animeId: item.anime.id, language: item.language, deleteFolder });
+      delEntry.mutate({ animeId: target.animeId, language: target.language, deleteFolder });
     } else {
-      delSeries.mutate({ animeId: item.anime.id, deleteFolder });
+      delSeries.mutate({ animeId: group.anime.id, deleteFolder });
     }
   }
 
@@ -85,9 +102,9 @@ export function LibrarySeriesCard({ item }: { item: LibraryItem }) {
         <div className="flex gap-4 p-4">
           <div className="relative shrink-0 overflow-hidden rounded-md bg-muted">
             <div className="aspect-[2/3] w-24 sm:w-32">
-              {item.anime.coverImage ? (
+              {group.anime.coverImage ? (
                 <img
-                  src={item.anime.coverImage}
+                  src={group.anime.coverImage}
                   alt={title}
                   className="h-full w-full object-cover"
                   loading="lazy"
@@ -103,21 +120,28 @@ export function LibrarySeriesCard({ item }: { item: LibraryItem }) {
           <div className="flex min-w-0 flex-1 flex-col justify-between">
             <div className="space-y-1">
               <Link
-                href={`/catalog/${item.anime.slug}`}
-                className="line-clamp-1 text-base font-semibold hover:text-primary sm:text-lg"
+                href={`/catalog/${group.anime.slug}`}
+                className="line-clamp-2 break-words text-base font-semibold hover:text-primary sm:text-lg"
               >
                 {title}
               </Link>
               <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                <Badge variant="secondary">Stagione {pad2(item.seasonNumber)}</Badge>
-                <LanguageBadge language={item.language} />
+                {group.languages.map((language) => (
+                  <LanguageBadge key={language} language={language} />
+                ))}
+                {group.category === 'tv' && seasonCount > 1 ? (
+                  <Badge variant="secondary" className="gap-1">
+                    <Layers className="h-3 w-3" />
+                    {seasonCount} stagioni
+                  </Badge>
+                ) : null}
                 <span className="flex items-center gap-1">
                   <Eye className="h-3 w-3" />
-                  {item.episodes.length} episod{item.episodes.length === 1 ? 'io' : 'i'}
+                  {group.totalEpisodes} episod{group.totalEpisodes === 1 ? 'io' : 'i'}
                 </span>
                 <span className="flex items-center gap-1">
                   <HardDrive className="h-3 w-3" />
-                  {formatBytes(totalSize)}
+                  {formatBytes(group.totalSizeBytes)}
                 </span>
               </div>
             </div>
@@ -145,27 +169,19 @@ export function LibrarySeriesCard({ item }: { item: LibraryItem }) {
                     className="text-destructive focus:text-destructive"
                     onClick={() =>
                       setTarget({
-                        scope: 'entry',
-                        title: `Eliminare questa stagione (${LANGUAGE_SHORT[item.language]})?`,
-                        warning: `Verranno cancellati i ${item.episodes.length} file di "${title}" — Stagione ${pad2(
-                          item.seasonNumber,
-                        )} (${LANGUAGE_SHORT[item.language]}), liberando ${formatBytes(totalSize)}.`,
-                      })
-                    }
-                  >
-                    Elimina questa stagione ({LANGUAGE_SHORT[item.language]})
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    className="text-destructive focus:text-destructive"
-                    onClick={() =>
-                      setTarget({
                         scope: 'series',
-                        title: 'Eliminare l’intera serie?',
-                        warning: `Verranno cancellati TUTTI i file scaricati dell'intera serie di "${title}" (tutte le stagioni e le lingue collegate).`,
+                        title:
+                          group.category === 'film'
+                            ? 'Eliminare il film?'
+                            : 'Eliminare l’intera serie?',
+                        warning:
+                          group.category === 'film'
+                            ? `Verranno cancellati TUTTI i file scaricati di "${title}" (tutte le lingue).`
+                            : `Verranno cancellati TUTTI i file scaricati dell'intera serie di "${title}" (tutte le stagioni e le lingue collegate).`,
                       })
                     }
                   >
-                    Elimina intera serie
+                    {group.category === 'film' ? 'Elimina il film' : 'Elimina intera serie'}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -174,61 +190,109 @@ export function LibrarySeriesCard({ item }: { item: LibraryItem }) {
         </div>
 
         {expanded ? (
-          <div className="border-t bg-muted/30 px-4 py-3">
-            <ul className="space-y-2">
-              {item.episodes.map((ep) => (
-                <li
-                  key={ep.episodeId}
-                  className="flex items-center justify-between gap-3 rounded-md border bg-background p-2 text-sm"
-                >
-                  <div className="flex min-w-0 items-center gap-2">
-                    <span className="shrink-0 font-mono text-xs text-muted-foreground">
-                      S{pad2(item.seasonNumber)}E{pad2(ep.episodeNumber)}
-                    </span>
-                    <span className="truncate">
-                      {ep.episodeTitle ?? `Episodio ${ep.episodeNumber}`}
-                    </span>
+          <div className="space-y-4 border-t bg-muted/30 px-4 py-3">
+            {seasons.map(([seasonNumber, entries]) => (
+              <div key={seasonNumber} className="space-y-2">
+                {group.category === 'tv' ? (
+                  <h4 className="text-sm font-semibold text-muted-foreground">
+                    {seasonLabel(seasonNumber)}
+                  </h4>
+                ) : null}
+                {entries.map((entry) => (
+                  <div key={`${entry.animeId}-${entry.language}`} className="space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                        <LanguageBadge language={entry.language} />
+                        <span>
+                          {entry.episodes.length} episod{entry.episodes.length === 1 ? 'io' : 'i'}
+                        </span>
+                        <span>{formatBytes(entrySize(entry))}</span>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 gap-1 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                        disabled={pending}
+                        onClick={() =>
+                          setTarget({
+                            scope: 'entry',
+                            animeId: entry.animeId,
+                            language: entry.language,
+                            title: `Eliminare ${
+                              group.category === 'film' ? 'il film' : seasonLabel(seasonNumber)
+                            } (${LANGUAGE_SHORT[entry.language]})?`,
+                            warning: `Verranno cancellati i ${entry.episodes.length} file di "${title}"${
+                              group.category === 'film' ? '' : ` — ${seasonLabel(seasonNumber)}`
+                            } (${LANGUAGE_SHORT[entry.language]}), liberando ${formatBytes(
+                              entrySize(entry),
+                            )}.`,
+                          })
+                        }
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Elimina
+                      </Button>
+                    </div>
+                    <ul className="space-y-2">
+                      {entry.episodes.map((ep) => (
+                        <li
+                          key={ep.episodeFileId}
+                          className="flex items-center justify-between gap-3 rounded-md border bg-background p-2 text-sm"
+                        >
+                          <div className="flex min-w-0 items-center gap-2">
+                            <span className="shrink-0 font-mono text-xs text-muted-foreground">
+                              S{pad2(seasonNumber)}E{pad2(ep.episodeNumber)}
+                            </span>
+                            <span className="truncate">
+                              {ep.episodeTitle ?? `Episodio ${ep.episodeNumber}`}
+                            </span>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-3 text-xs text-muted-foreground">
+                            {ep.fileSize != null ? <span>{formatBytes(ep.fileSize)}</span> : null}
+                            {ep.downloadedAt ? <span>{formatDate(ep.downloadedAt)}</span> : null}
+                            {ep.localPath ? (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <FileVideo className="h-4 w-4" />
+                                  </TooltipTrigger>
+                                  <TooltipContent side="left" className="max-w-md break-all">
+                                    <p>{ep.localPath}</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            ) : null}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                              aria-label="Elimina episodio"
+                              disabled={pending}
+                              onClick={() =>
+                                setTarget({
+                                  scope: 'episode',
+                                  episodeFileId: ep.episodeFileId,
+                                  title: 'Eliminare questo episodio?',
+                                  warning: `Verra' cancellato il file S${pad2(seasonNumber)}E${pad2(
+                                    ep.episodeNumber,
+                                  )} (${LANGUAGE_SHORT[entry.language]})${
+                                    ep.fileSize != null
+                                      ? `, liberando ${formatBytes(ep.fileSize)}`
+                                      : ''
+                                  }.`,
+                                })
+                              }
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
                   </div>
-                  <div className="flex shrink-0 items-center gap-3 text-xs text-muted-foreground">
-                    {ep.fileSize != null ? <span>{formatBytes(ep.fileSize)}</span> : null}
-                    {ep.downloadedAt ? <span>{formatDate(ep.downloadedAt)}</span> : null}
-                    {ep.localPath ? (
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <FileVideo className="h-4 w-4" />
-                          </TooltipTrigger>
-                          <TooltipContent side="left" className="max-w-md break-all">
-                            <p>{ep.localPath}</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    ) : null}
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                      aria-label="Elimina episodio"
-                      disabled={pending}
-                      onClick={() =>
-                        setTarget({
-                          scope: 'episode',
-                          episodeFileId: ep.episodeFileId,
-                          title: 'Eliminare questo episodio?',
-                          warning: `Verra' cancellato il file S${pad2(item.seasonNumber)}E${pad2(
-                            ep.episodeNumber,
-                          )} (${LANGUAGE_SHORT[item.language]})${
-                            ep.fileSize != null ? `, liberando ${formatBytes(ep.fileSize)}` : ''
-                          }.`,
-                        })
-                      }
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </li>
-              ))}
-            </ul>
+                ))}
+              </div>
+            ))}
           </div>
         ) : null}
       </CardContent>

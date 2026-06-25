@@ -24,9 +24,10 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { trpc } from '@/lib/trpc';
 import { formatBytes } from '@/lib/utils';
-import type { LibraryItem, LibraryScanResult } from '@animeunion/shared';
+import type { LibraryGroup, LibraryScanResult } from '@animeunion/shared';
 import {
   ArrowDownUp,
+  Film,
   FolderOpen,
   FolderTree,
   HardDrive,
@@ -52,15 +53,15 @@ const SORT_LABELS: Record<SortKey, string> = {
   episodes: 'N. episodi',
 };
 
-function lastAddedOf(item: LibraryItem): number {
-  return item.episodes.reduce((max, e) => {
-    const t = e.downloadedAt ? Date.parse(e.downloadedAt) : 0;
-    return Number.isFinite(t) && t > max ? t : max;
-  }, 0);
-}
-
-function sizeOf(item: LibraryItem): number {
-  return item.episodes.reduce((s, e) => s + (e.fileSize ?? 0), 0);
+function lastAddedOf(group: LibraryGroup): number {
+  let max = 0;
+  for (const entry of group.entries) {
+    for (const ep of entry.episodes) {
+      const t = ep.downloadedAt ? Date.parse(ep.downloadedAt) : 0;
+      if (Number.isFinite(t) && t > max) max = t;
+    }
+  }
+  return max;
 }
 
 function ScanSummary({
@@ -190,7 +191,7 @@ export function LibraryView() {
   const displayed = useMemo(() => {
     const q = search.trim().toLowerCase();
     const filtered = q
-      ? items.filter((it) => (it.anime.titleIta ?? it.anime.title).toLowerCase().includes(q))
+      ? items.filter((g) => (g.anime.titleIta ?? g.anime.title).toLowerCase().includes(q))
       : items;
     const sorted = [...filtered].sort((a, b) => {
       let cmp = 0;
@@ -202,14 +203,17 @@ export function LibraryView() {
       } else if (sortKey === 'recent') {
         cmp = lastAddedOf(a) - lastAddedOf(b);
       } else if (sortKey === 'size') {
-        cmp = sizeOf(a) - sizeOf(b);
+        cmp = a.totalSizeBytes - b.totalSizeBytes;
       } else {
-        cmp = a.episodes.length - b.episodes.length;
+        cmp = a.totalEpisodes - b.totalEpisodes;
       }
       return sortDir === 'asc' ? cmp : -cmp;
     });
     return sorted;
   }, [items, search, sortKey, sortDir]);
+
+  const tvGroups = displayed.filter((g) => g.category === 'tv');
+  const filmGroups = displayed.filter((g) => g.category === 'film');
 
   return (
     <div className="space-y-6">
@@ -366,13 +370,33 @@ export function LibraryView() {
           description={`Nessuna serie corrisponde a "${search}".`}
         />
       ) : (
-        <div className="grid gap-4">
-          {displayed.map((item) => (
-            <LibrarySeriesCard
-              key={`${item.anime.id}-${item.seasonNumber}-${item.language}`}
-              item={item}
-            />
-          ))}
+        <div className="space-y-8">
+          {tvGroups.length > 0 ? (
+            <section className="space-y-4">
+              <h3 className="flex items-center gap-2 font-semibold text-muted-foreground text-sm">
+                <Tv className="h-4 w-4" />
+                Serie TV ({tvGroups.length})
+              </h3>
+              <div className="grid gap-4">
+                {tvGroups.map((group) => (
+                  <LibrarySeriesCard key={`tv-${group.seriesId}`} group={group} />
+                ))}
+              </div>
+            </section>
+          ) : null}
+          {filmGroups.length > 0 ? (
+            <section className="space-y-4">
+              <h3 className="flex items-center gap-2 font-semibold text-muted-foreground text-sm">
+                <Film className="h-4 w-4" />
+                Film ({filmGroups.length})
+              </h3>
+              <div className="grid gap-4">
+                {filmGroups.map((group) => (
+                  <LibrarySeriesCard key={`film-${group.seriesId}`} group={group} />
+                ))}
+              </div>
+            </section>
+          ) : null}
         </div>
       )}
     </div>

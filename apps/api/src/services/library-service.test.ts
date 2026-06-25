@@ -318,4 +318,66 @@ describe('LibraryService', () => {
       .all();
     expect(downloaded).toHaveLength(0);
   });
+
+  it('list() unisce SUB e DUB dello stesso anime in un solo gruppo', async () => {
+    const db = createTestDb();
+    insertAnime(db, 'grp-a');
+    insertEpisode(db, 'ep-grp-a-1', 'grp-a', 1);
+    insertFile(db, 'file-grp-a-sub', 'ep-grp-a-1', 'SUB_ITA');
+    insertFile(db, 'file-grp-a-dub', 'ep-grp-a-1', 'DUB_ITA');
+    const { service, renamer } = makeService(db, tmpDir);
+    await placeEpisode(renamer, 'grp-a', 1, 'SUB_ITA');
+    await placeEpisode(renamer, 'grp-a', 1, 'DUB_ITA');
+    await service.scan();
+
+    const groups = service.list();
+    expect(groups).toHaveLength(1);
+    const g = groups[0];
+    expect(g?.category).toBe('tv');
+    expect(g?.languages).toEqual(['SUB_ITA', 'DUB_ITA']);
+    expect(g?.entries).toHaveLength(2);
+    expect(g?.totalEpisodes).toBe(2);
+    expect(g?.totalSizeBytes).toBe(20); // 2 file da 10 byte
+  });
+
+  it('list() unisce piu stagioni dello stesso seriesId (rappresentativo = stagione base)', async () => {
+    const db = createTestDb();
+    insertAnime(db, 'saga-s1', { seriesId: 'saga', seasonNumber: 1, title: 'Saga' });
+    insertAnime(db, 'saga-s2', { seriesId: 'saga', seasonNumber: 2, title: 'Saga 2' });
+    insertEpisode(db, 'ep-saga-s1', 'saga-s1', 1);
+    insertEpisode(db, 'ep-saga-s2', 'saga-s2', 1);
+    insertFile(db, 'file-saga-s1', 'ep-saga-s1', 'SUB_ITA');
+    insertFile(db, 'file-saga-s2', 'ep-saga-s2', 'SUB_ITA');
+    const { service, renamer } = makeService(db, tmpDir);
+    await placeEpisode(renamer, 'saga-s1', 1, 'SUB_ITA');
+    await placeEpisode(renamer, 'saga-s2', 1, 'SUB_ITA');
+    await service.scan();
+
+    const groups = service.list();
+    expect(groups).toHaveLength(1);
+    const g = groups[0];
+    expect(g?.seriesId).toBe('saga');
+    expect(g?.anime.id).toBe('saga-s1'); // rappresentativo = stagione minore
+    const seasons = [...new Set(g?.entries.map((e) => e.seasonNumber))].sort((a, b) => a - b);
+    expect(seasons).toEqual([1, 2]);
+  });
+
+  it('list() separa i film dalle serie TV in gruppi distinti', async () => {
+    const db = createTestDb();
+    insertAnime(db, 'movie-x', { type: 'MOVIE' });
+    insertAnime(db, 'tv-y', { type: 'TV' });
+    insertEpisode(db, 'ep-movie-x', 'movie-x', 1);
+    insertEpisode(db, 'ep-tv-y', 'tv-y', 1);
+    insertFile(db, 'file-movie-x', 'ep-movie-x', 'SUB_ITA');
+    insertFile(db, 'file-tv-y', 'ep-tv-y', 'SUB_ITA');
+    const { service, renamer } = makeService(db, tmpDir);
+    await placeEpisode(renamer, 'movie-x', 1, 'SUB_ITA');
+    await placeEpisode(renamer, 'tv-y', 1, 'SUB_ITA');
+    await service.scan();
+
+    const groups = service.list();
+    expect(groups).toHaveLength(2);
+    expect(groups.find((g) => g.category === 'film')?.anime.id).toBe('movie-x');
+    expect(groups.find((g) => g.category === 'tv')?.anime.id).toBe('tv-y');
+  });
 });

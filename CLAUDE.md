@@ -23,8 +23,8 @@ Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
 
 ## Stato attuale (2026-06-25)
 
-**Batch "Seerr per AnimeUnion" — API di richiesta in ingresso (branch `feat/seerr-request-api`, non
-ancora merge/release):** apre il nodo **#15** di [docs/JELLYFIN.md](docs/JELLYFIN.md). Insight: i due
+**Batch "Seerr per AnimeUnion" — API di richiesta in ingresso (branch `feat/seerr-request-api` →
+`main`, rilasciato **v0.9.0**):** apre il nodo **#15** di [docs/JELLYFIN.md](docs/JELLYFIN.md). Insight: i due
 "nodi aperti" (mapping id TMDB/TVDB, stagioni) esistevano **solo** perché Seerr ragiona in TMDB/TVDB;
 restando in **ontologia anime-native** (slug/MAL/AniList — ogni cour è già una entry) si sciolgono.
 Decisione con l'utente: niente plugin Jellyfin C# (rompe lo stack) né interop Jellyseerr ora — la web

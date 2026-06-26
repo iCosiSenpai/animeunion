@@ -1,7 +1,7 @@
 'use client';
 
 import { AnimeGrid } from '@/components/anime/anime-grid';
-import { AniListIcon, MalIcon } from '@/components/anime/brand-icons';
+import { AniListIcon, AnimeUnionIcon, MalIcon } from '@/components/anime/brand-icons';
 import { FollowButton } from '@/components/anime/follow-button';
 import { LanguageBadge } from '@/components/anime/language-badge';
 import { Badge } from '@/components/ui/badge';
@@ -292,32 +292,39 @@ function Hero({
           </div>
         ) : null}
 
-        {anime.malId != null || anime.anilistId != null ? (
-          <div className="flex flex-wrap gap-2">
-            {anime.malId != null ? (
-              <a
-                href={`https://myanimelist.net/anime/${anime.malId}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-              >
-                <MalIcon className="h-3.5 w-3.5 rounded-[2px]" />
-                MyAnimeList
-              </a>
-            ) : null}
-            {anime.anilistId != null ? (
-              <a
-                href={`https://anilist.co/anime/${anime.anilistId}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-              >
-                <AniListIcon className="h-3.5 w-3.5" />
-                AniList
-              </a>
-            ) : null}
-          </div>
-        ) : null}
+        <div className="flex flex-wrap gap-2">
+          <a
+            href={`https://animeunion.tv/anime/${anime.slug}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          >
+            <AnimeUnionIcon className="h-3.5 w-3.5 rounded-[2px]" />
+            Apri su AnimeUnion
+          </a>
+          {anime.malId != null ? (
+            <a
+              href={`https://myanimelist.net/anime/${anime.malId}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            >
+              <MalIcon className="h-3.5 w-3.5 rounded-[2px]" />
+              MyAnimeList
+            </a>
+          ) : null}
+          {anime.anilistId != null ? (
+            <a
+              href={`https://anilist.co/anime/${anime.anilistId}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            >
+              <AniListIcon className="h-3.5 w-3.5" />
+              AniList
+            </a>
+          ) : null}
+        </div>
 
         {synopsis ? (
           <div className="space-y-1">

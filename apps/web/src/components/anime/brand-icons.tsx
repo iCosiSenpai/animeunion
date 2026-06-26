@@ -1,6 +1,27 @@
 // Marchi ufficiali (colori brand) per i link esterni della scheda anime.
+// AnimeUnion: riquadro navy con "AU" (come la favicon/icona ufficiale del sito).
 // MyAnimeList: riquadro blu con "MAL" (come la favicon ufficiale).
 // AniList: logomark ufficiale (path simple-icons) in blu AniList.
+
+export function AnimeUnionIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} role="img" aria-label="AnimeUnion">
+      <rect width="24" height="24" rx="4" fill="#1c2333" />
+      <text
+        x="12"
+        y="16.5"
+        textAnchor="middle"
+        fontFamily="Arial, Helvetica, sans-serif"
+        fontStyle="italic"
+        fontWeight="800"
+        fontSize="11"
+        fill="#ffffff"
+      >
+        AU
+      </text>
+    </svg>
+  );
+}
 
 export function MalIcon({ className }: { className?: string }) {
   return (

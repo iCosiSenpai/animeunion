@@ -67,8 +67,14 @@ badge card robusti. Hero: il feed `/in-evidenza` espone solo `coverImage`, il ba
 (Fase 5); restavano 3 punti in [file-manager.tsx](apps/web/src/components/library/file-manager.tsx):
 righe episodio `RelinkDialog` (`<span>` `min-w-0 flex-1 truncate` + `<Badge>` `shrink-0` + button
 `gap-2`), blocco conferma `FolderActionsDialog` (`<span>` `min-w-0 break-words`), riquadro "anime
-scelto" (`break-words`). Solo CSS/markup, 261 test a contorno. **Prossimo: Step 6** (pulsante
-"AnimeUnion"/logo AU nel dettaglio). _Aggiornare qui a ogni step._
+scelto" (`break-words`). Solo CSS/markup, 261 test a contorno. **Step 6** (pulsante "AnimeUnion"/logo
+AU nel dettaglio): nuova icona brand `AnimeUnionIcon` (riquadro navy `#1c2333` + "AU" corsivo,
+coerente con `MalIcon`) in [brand-icons.tsx](apps/web/src/components/anime/brand-icons.tsx); la riga
+link esterni del `Hero` ([anime-detail.tsx](apps/web/src/components/catalog/anime-detail.tsx)) ora è
+sempre visibile e ha come primo chip "Apri su AnimeUnion" → `https://animeunion.tv/anime/<slug>` (path
+confermato dall'utente; `target=_blank rel=noopener`), MAL/AniList restano condizionali dopo. Solo
+frontend, 261 test a contorno. **Prossimo: Step 7** (notifiche: batching anti-rumore + test
+push/PWA). _Aggiornare qui a ogni step._
 
 ## Stato attuale (2026-06-26)
 
@@ -146,8 +152,20 @@ scelto"** — `<p className="font-medium">{picked.title}</p>` → `break-words` 
 del path sotto). Niente refactor di "Mancanti" (`missing-dialog.tsx` già a posto; la vista dedicata è
 lo Step 11, Regola #1). Solo CSS/markup, nessun test nuovo (261 verdi a contorno), lint/typecheck/build
 web verdi. Verifica manuale a runtime ancora da fare (titoli lunghi troncati/a capo, badge/pulsanti
-sempre visibili, niente scroll orizzontale anche a larghezza mobile). **Prossimo: Step 6** (pulsante
-"AnimeUnion"/logo AU nel dettaglio).
+sempre visibili, niente scroll orizzontale anche a larghezza mobile). **Step 6** pulsante "AnimeUnion"
+(logo AU) nel dettaglio. L'API non espone un URL web canonico (solo `slug`, già usato nel componente);
+il path pubblico `/anime/<slug>` era un'assunzione del piano → **confermato dall'utente** (il sito
+reale risponde 403 al fetcher, la ricerca era inconcludente). La favicon ufficiale
+([icon-192.png](apps/web/public/icon-192.png)) è "AU" navy `#1c2333` in stile pennellata/corsivo → nuova
+icona `AnimeUnionIcon` ([brand-icons.tsx](apps/web/src/components/anime/brand-icons.tsx)): SVG 24×24
+coerente con `MalIcon` (`<rect rx=4>` navy + testo "AU" bianco `italic`/`fontWeight 800`). La riga link
+esterni del `Hero` ([anime-detail.tsx](apps/web/src/components/catalog/anime-detail.tsx)) renderizzava
+solo se `malId|anilistId` esistevano → ora **sempre visibile**, primo chip "Apri su AnimeUnion" →
+`https://animeunion.tv/anime/<slug>` (`target=_blank rel=noopener noreferrer`, stesso stile dei chip
+MAL/AniList che restano condizionali dopo). Solo frontend, nessun test nuovo (261 verdi a contorno),
+lint/typecheck/build web verdi. Verifica manuale a runtime ancora da fare (chip visibile su ogni
+scheda, apre la scheda giusta sul sito). **Prossimo: Step 7** (notifiche: batching anti-rumore + test
+push/PWA).
 
 ## Stato precedente (2026-06-25)
 

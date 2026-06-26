@@ -90,8 +90,17 @@ Query A `GROUP BY anime.id,status` con `count()` + Query B solo gli **in volo** 
 limit/offset, 50/pagina) e **azioni di gruppo** server-side `download.cancelGroup`/`retryGroup` (una
 chiamata, niente iterazione su 999 queued). Pagina e widget passano a `download.summary` con interval
 adattivo; widget mostra in volo live + riga "N in coda • N completati". Contratti shared additivi,
-`getQueue` invariato. +6 test (273). **Prossimo: Step 9** (ricerca: velocità + pagina risultati +
-ricerca in-app). _Aggiornare qui a ogni step._
+`getQueue` invariato. +6 test (273). **Step 9** (ricerca: velocità + pagina risultati + ricerca
+in-app): **debounce** della palette ⌘K (nuovo hook `useDebouncedValue`, 220ms → input istantaneo ma
+la query tRPC non parte a ogni tasto; server `catalog.search` già local-first → niente refactor);
+**Enter → pagina risultati** via entry sintetica "Cerca «q» nel catalogo" sempre per prima →
+`go('/catalog?q=')` (riuso di `CatalogBrowser` già paginato+filtri, niente route `/search` ridondante;
+scelta Invio confermata dall'utente); **ricerca in-app** con nuovo `extraActions` (Gestore file,
+Informazioni, 9 sezioni Impostazioni via deep-link `/settings?section=`) cercabili ma non affollanti
+la vista di default; deep-link sezione in `settings-view.tsx` (`useSearchParams`+`isSectionId`, init
+lazy + effetto URL→stato) e `settings/page.tsx` avvolto in `Suspense` (`/settings` resta statica).
+Frontend-only, 273 test a contorno. **Prossimo: Step 10** (seguiti: potenziamento "gestisci" + elimina
+file). _Aggiornare qui a ogni step._
 
 ## Stato attuale (2026-06-26)
 
@@ -233,8 +242,32 @@ live + riga "N in coda • N completati" invece di elencare i completati (anti-r
 ([download-service.test.ts](apps/api/src/services/download-service.test.ts): `getQueueSummary` conteggi/
 activeItems/ordinamento, `getQueueGroupItems` paginazione/ordine/filtro, `cancelGroup`/`retryGroup` scoping),
 lint/typecheck/build web verdi. Verifica manuale a runtime ancora da fare (serie lunga via `addAllBySlug`:
-UNA card con riassunto, espansione paginata, widget fluido, azioni di gruppo con una chiamata). **Prossimo:
-Step 9** (ricerca: velocità + pagina risultati + ricerca in-app).
+UNA card con riassunto, espansione paginata, widget fluido, azioni di gruppo con una chiamata). **Step 9**
+ricerca: velocità + pagina risultati + ricerca in-app. **Causa lentezza (verificata):** la palette ⌘K
+([command-palette.tsx](apps/web/src/components/layout/command-palette.tsx)) interrogava `catalog.search`
+a **ogni tasto** (nessun debounce); il server è già local-first (cache fresca → `searchDb`; stale →
+live + fallback DB), quindi il vero collo di bottiglia era il **flood di query per-keystroke**. Tre fix,
+solo frontend: (1) **debounce** — nuovo hook `useDebouncedValue<T>(value, delayMs)` in
+[use-debounced-value.ts](apps/web/src/lib/use-debounced-value.ts) (nessun debounce nel repo); l'input
+resta istantaneo, la query tRPC usa `debouncedQuery` (220ms) → `enabled`/`useQuery` su di esso, il
+filtro `actions` resta sul `query` live; server invariato. (2) **Enter → pagina risultati** — una pagina
+risultati completa esisteva già (`/catalog?q=`, [catalog-browser.tsx](apps/web/src/components/catalog/catalog-browser.tsx)
+paginata + tutti i filtri): quando `q.length>=2` la palette mostra come **prima entry** `Cerca "<q>" nel
+catalogo` → `go('/catalog?q='+encodeURIComponent)` → Invio apre i risultati completi (scelta confermata
+dall'utente); **niente route `/search` ridondante** (avrebbe duplicato `CatalogBrowser`, Regola #1). (3)
+**ricerca in-app** — nuovo `extraActions` (Gestore file → `/library/files`, Informazioni → `/about`, le
+**9 sezioni Impostazioni** → `/settings?section=<id>`, label es. "Impostazioni: Aspetto e tema" così
+"tema" matcha) cercabili via il filtro `[...actions, ...extraActions]` ma non mostrate di default (vista
+no-query = `actions`, non affollata). **Deep-link sezione** in
+[settings-view.tsx](apps/web/src/components/settings/settings-view.tsx): `useSearchParams` + helper
+`isSectionId` (whitelist da `SECTIONS`), init lazy di `active` da `?section=` + effetto URL→stato (sola
+direzione, niente loop col rail) per gestire anche la navigazione mentre si è già su /settings;
+[settings/page.tsx](apps/web/src/app/(app)/settings/page.tsx) avvolge `SettingsView` in `Suspense`
+(richiesto da `useSearchParams`; in build `/settings` resta prerenderizzata statica). Frontend-only,
+nessun test nuovo (273 verdi a contorno, coerente col pattern Step 2-6), lint/typecheck/build web verdi.
+Verifica manuale a runtime ancora da fare (palette senza lag/flood; Invio → /catalog?q= con
+filtri+paginazione; cercare "notifiche"/"tema"/"gestore file" porta alla sezione/pagina giusta).
+**Prossimo: Step 10** (seguiti: potenziamento "gestisci" + elimina file).
 
 ## Stato precedente (2026-06-25)
 

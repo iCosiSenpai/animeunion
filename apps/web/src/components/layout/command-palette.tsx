@@ -2,23 +2,34 @@
 
 import { useCommandPalette } from '@/lib/command-palette-store';
 import { trpc } from '@/lib/trpc';
+import { useDebouncedValue } from '@/lib/use-debounced-value';
 import { useShortcutLabel } from '@/lib/use-shortcut-label';
 import {
   BarChart3,
+  Bell,
   Calendar,
+  CalendarClock,
   Compass,
   Download,
   Film,
+  FolderCog,
+  FolderDown,
   HeartHandshake,
   Home,
+  Info,
+  Languages,
   LayoutGrid,
   Library,
+  Palette,
   Pause,
   Play,
   RefreshCw,
   Search,
   Settings,
+  Shield,
+  SlidersHorizontal,
   Stethoscope,
+  Webhook,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
@@ -44,8 +55,11 @@ export function CommandPalette() {
   const inputRef = useRef<HTMLInputElement>(null);
   const shortcut = useShortcutLabel('K');
 
-  const enabled = open && query.trim().length >= 2;
-  const search = trpc.catalog.search.useQuery({ query, page: 1 }, { enabled });
+  // Debounce della query verso il backend: l'input resta istantaneo, ma la ricerca anime parte
+  // solo dopo ~220ms di pausa (niente una richiesta per ogni tasto premuto).
+  const debouncedQuery = useDebouncedValue(query, 220);
+  const enabled = open && debouncedQuery.trim().length >= 2;
+  const search = trpc.catalog.search.useQuery({ query: debouncedQuery, page: 1 }, { enabled });
   const paused = trpc.download.isPaused.useQuery(undefined, { enabled: open });
 
   const sync = trpc.catalog.sync.useMutation({
@@ -168,7 +182,87 @@ export function CommandPalette() {
         },
   ];
 
+  // Destinazioni/azioni in-app cercabili (non mostrate di default per non affollare la palette):
+  // gestore file, about e le singole sezioni delle Impostazioni via deep-link `?section=`.
+  const extraActions: Entry[] = [
+    {
+      id: 'file-manager',
+      label: 'Gestore file',
+      icon: <FolderCog className="h-4 w-4" />,
+      onSelect: () => go('/library/files'),
+    },
+    {
+      id: 'about',
+      label: 'Informazioni',
+      icon: <Info className="h-4 w-4" />,
+      onSelect: () => go('/about'),
+    },
+    {
+      id: 'settings-download',
+      label: 'Impostazioni: Download',
+      icon: <FolderDown className="h-4 w-4" />,
+      onSelect: () => go('/settings?section=download'),
+    },
+    {
+      id: 'settings-pianificazione',
+      label: 'Impostazioni: Pianificazione',
+      icon: <CalendarClock className="h-4 w-4" />,
+      onSelect: () => go('/settings?section=pianificazione'),
+    },
+    {
+      id: 'settings-catalogo',
+      label: 'Impostazioni: Catalogo',
+      icon: <Compass className="h-4 w-4" />,
+      onSelect: () => go('/settings?section=catalogo'),
+    },
+    {
+      id: 'settings-lingua',
+      label: 'Impostazioni: Lingua',
+      icon: <Languages className="h-4 w-4" />,
+      onSelect: () => go('/settings?section=lingua'),
+    },
+    {
+      id: 'settings-notifiche',
+      label: 'Impostazioni: Notifiche',
+      icon: <Bell className="h-4 w-4" />,
+      onSelect: () => go('/settings?section=notifiche'),
+    },
+    {
+      id: 'settings-aspetto',
+      label: 'Impostazioni: Aspetto e tema',
+      icon: <Palette className="h-4 w-4" />,
+      onSelect: () => go('/settings?section=aspetto'),
+    },
+    {
+      id: 'settings-sicurezza',
+      label: 'Impostazioni: Sicurezza',
+      icon: <Shield className="h-4 w-4" />,
+      onSelect: () => go('/settings?section=sicurezza'),
+    },
+    {
+      id: 'settings-integrazioni',
+      label: 'Impostazioni: Integrazioni',
+      icon: <Webhook className="h-4 w-4" />,
+      onSelect: () => go('/settings?section=integrazioni'),
+    },
+    {
+      id: 'settings-avanzate',
+      label: 'Impostazioni: Avanzate',
+      icon: <SlidersHorizontal className="h-4 w-4" />,
+      onSelect: () => go('/settings?section=avanzate'),
+    },
+  ];
+
   const q = query.trim().toLowerCase();
+  const trimmedQuery = query.trim();
+  // Sempre per prima quando c'è una query: Invio apre la pagina risultati completa (riusa /catalog).
+  const searchAllEntry: Entry = {
+    id: '__search_all__',
+    label: `Cerca "${trimmedQuery}" nel catalogo`,
+    sublabel: 'Apri tutti i risultati con i filtri',
+    icon: <Search className="h-4 w-4" />,
+    onSelect: () => go(`/catalog?q=${encodeURIComponent(trimmedQuery)}`),
+  };
   const searchEntries: Entry[] =
     q.length >= 2
       ? (search.data?.data ?? []).slice(0, 6).map((a) => ({
@@ -182,7 +276,11 @@ export function CommandPalette() {
       : [];
   const entries: Entry[] =
     q.length >= 2
-      ? [...searchEntries, ...actions.filter((act) => act.label.toLowerCase().includes(q))]
+      ? [
+          searchAllEntry,
+          ...searchEntries,
+          ...[...actions, ...extraActions].filter((act) => act.label.toLowerCase().includes(q)),
+        ]
       : actions;
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: reset al cambio query/apertura

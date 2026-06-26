@@ -46,7 +46,7 @@ import {
   Webhook,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -138,6 +138,11 @@ const SECTIONS: { id: SectionId; label: string; icon: LucideIcon }[] = [
   { id: 'avanzate', label: 'Avanzate', icon: SlidersHorizontal },
 ];
 
+const SECTION_IDS = new Set<string>(SECTIONS.map((s) => s.id));
+function isSectionId(value: string | null): value is SectionId {
+  return value != null && SECTION_IDS.has(value);
+}
+
 function SectionNavButton({
   section,
   active,
@@ -173,14 +178,27 @@ function SectionNavButton({
 export function SettingsView() {
   const utils = trpc.useUtils();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const configQuery = trpc.config.getAll.useQuery();
   const setMutation = trpc.config.set.useMutation();
   const syncMutation = trpc.catalog.sync.useMutation();
   const testTelegramMutation = trpc.notifications.testTelegram.useMutation();
   const { theme, setTheme } = useTheme();
 
+  // Sezione iniziale da deep-link (`/settings?section=notifiche`, usato dalla palette).
+  const sectionParam = searchParams.get('section');
   const [draft, setDraft] = useState<AppConfig | null>(null);
-  const [active, setActive] = useState<SectionId>('download');
+  const [active, setActive] = useState<SectionId>(() =>
+    isSectionId(sectionParam) ? sectionParam : 'download',
+  );
+
+  // Aggiorna la sezione anche quando il deep-link cambia mentre siamo già su /settings
+  // (sola direzione URL → stato: il click sul rail non riscrive l'URL, niente loop).
+  useEffect(() => {
+    if (isSectionId(sectionParam)) {
+      setActive(sectionParam);
+    }
+  }, [sectionParam]);
   const [saving, setSaving] = useState(false);
   const [showLeaveDialog, setShowLeaveDialog] = useState(false);
   const [pendingHref, setPendingHref] = useState<string | null>(null);

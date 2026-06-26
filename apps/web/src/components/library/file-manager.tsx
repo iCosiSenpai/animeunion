@@ -320,7 +320,26 @@ function FolderActionsDialog({
 export function FileManager() {
   const utils = trpc.useUtils();
   const [path, setPath] = useState('');
-  const list = trpc.files.list.useQuery({ path: path || undefined });
+
+  // Relink dinamico: mentre ci sono download in volo i file compaiono su disco poco a poco.
+  // Pollo il riassunto coda (aggregato, leggero - Step 8) e tengo "viva" la lista del gestore
+  // finche' qualcosa scende, cosi' cartelle/orfani passano a managed/collegato senza refresh manuale.
+  const summary = trpc.download.summary.useQuery(undefined, {
+    refetchInterval: (query) => {
+      const c = query.state.data?.counts;
+      const active = c ? c.queued + c.downloading + c.processing : 0;
+      return active > 0 ? 4000 : false;
+    },
+  });
+  const counts = summary.data?.counts;
+  const downloadsActive = counts
+    ? counts.queued + counts.downloading + counts.processing > 0
+    : false;
+
+  const list = trpc.files.list.useQuery(
+    { path: path || undefined },
+    { refetchInterval: downloadsActive ? 5000 : false },
+  );
 
   const [draggedPath, setDraggedPath] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);
@@ -340,7 +359,9 @@ export function FileManager() {
     // coda e schede anime (tag "Scaricato"/"Collegato").
     void utils.library.list.invalidate();
     void utils.library.stats.invalidate();
-    void utils.download.queue.invalidate();
+    // Dallo Step 8 pagina e widget pollano download.summary (non piu' download.queue): invalido
+    // l'intero router cosi' "Ri-scarica" aggiorna anche il riassunto/badge della navbar.
+    void utils.download.invalidate();
     void utils.catalog.invalidate();
   };
 
@@ -642,10 +663,22 @@ export function FileManager() {
       <Dialog open={!!renameTarget} onOpenChange={(o) => (o ? null : setRenameTarget(null))}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Rinomina</DialogTitle>
-            <DialogDescription>Nuovo nome per “{renameTarget?.name}”.</DialogDescription>
+            <DialogTitle>
+              {renameTarget?.type === 'dir' && renameTarget.managed
+                ? 'Rinomina la serie'
+                : 'Rinomina'}
+            </DialogTitle>
+            <DialogDescription className="break-words">
+              Nuovo nome per “{renameTarget?.name}”.
+            </DialogDescription>
           </DialogHeader>
           <Input value={renameName} onChange={(e) => setRenameName(e.target.value)} />
+          {renameTarget?.type === 'dir' && renameTarget.managed ? (
+            <p className="rounded-md border border-primary/30 bg-primary/5 p-2.5 text-xs text-muted-foreground">
+              I collegamenti agli episodi di questa serie verranno aggiornati automaticamente: i
+              file restano scaricati e nella libreria.
+            </p>
+          ) : null}
           <DialogFooter>
             <Button
               variant="ghost"

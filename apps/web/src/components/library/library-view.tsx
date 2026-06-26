@@ -42,7 +42,6 @@ import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { LibrarySeriesCard } from './library-series-card';
 import { LibrarySkeleton } from './library-skeleton';
-import { MissingDialog } from './missing-dialog';
 
 type SortKey = 'title' | 'recent' | 'size' | 'episodes';
 
@@ -64,13 +63,7 @@ function lastAddedOf(group: LibraryGroup): number {
   return max;
 }
 
-function ScanSummary({
-  result,
-  onShowMissing,
-}: {
-  result: LibraryScanResult;
-  onShowMissing: () => void;
-}) {
+function ScanSummary({ result }: { result: LibraryScanResult }) {
   if (result.found === 0 && result.orphans === 0 && result.missing === 0) {
     return (
       <p className="text-sm text-muted-foreground">Nessuna novità: libreria già sincronizzata.</p>
@@ -90,14 +83,14 @@ function ScanSummary({
         </Badge>
       ) : null}
       {result.missing > 0 ? (
-        <button type="button" onClick={onShowMissing} title="Gestisci gli episodi mancanti">
+        <Link href="/library/missing" title="Gestisci gli episodi mancanti">
           <Badge
             variant="destructive"
             className="cursor-pointer gap-1 transition-opacity hover:opacity-80"
           >
             Mancanti: {result.missing} →
           </Badge>
-        </button>
+        </Link>
       ) : null}
       {result.orphans > 0 ? (
         <Badge variant="outline" className="gap-1">
@@ -157,7 +150,6 @@ export function LibraryView() {
 
   const [lastScan, setLastScan] = useState<LibraryScanResult | null>(null);
   const [confirmOrphans, setConfirmOrphans] = useState(false);
-  const [missingOpen, setMissingOpen] = useState(false);
 
   const deleteOrphans = trpc.library.deleteOrphans.useMutation({
     onSuccess: (res) => {
@@ -251,7 +243,7 @@ export function LibraryView() {
             {scanMutation.isPending ? (
               <Skeleton className="h-5 w-48" />
             ) : lastScan ? (
-              <ScanSummary result={lastScan} onShowMissing={() => setMissingOpen(true)} />
+              <ScanSummary result={lastScan} />
             ) : null}
             {lastScan && lastScan.orphanPaths.length > 0 ? (
               <Button
@@ -300,16 +292,6 @@ export function LibraryView() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <MissingDialog
-        open={missingOpen}
-        entries={lastScan?.missingEntries ?? []}
-        onOpenChange={setMissingOpen}
-        onChanged={() => {
-          void utils.download.queue.invalidate();
-          void utils.library.list.invalidate();
-        }}
-      />
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="text-lg font-semibold tracking-tight">Serie scaricate</h2>

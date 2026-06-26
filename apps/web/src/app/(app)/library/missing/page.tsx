@@ -1,22 +1,22 @@
-import { FileManager } from '@/components/library/file-manager';
+import { MissingView } from '@/components/library/missing-view';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
-import { ChevronLeft, ListChecks } from 'lucide-react';
+import { ChevronLeft, FolderTree } from 'lucide-react';
 import Link from 'next/link';
 
-export default function LibraryFilesPage() {
+export default function LibraryMissingPage() {
   return (
-    <div className="space-y-2">
+    <div className="space-y-4">
       <PageHeader
         eyebrow="Libreria"
-        title="Gestore file"
-        description="Sfoglia, rinomina, sposta (trascina) ed elimina i file scaricati, o collega un file orfano a un episodio."
+        title="Episodi mancanti"
+        description="Serie per serie, gli episodi segnati come scaricati ma non più presenti su disco. Correggi la classificazione se serve, poi ri-scaricali."
         actions={
           <>
             <Button asChild variant="outline" className="gap-1.5">
-              <Link href="/library/missing">
-                <ListChecks className="h-4 w-4" />
-                Episodi mancanti
+              <Link href="/library/files">
+                <FolderTree className="h-4 w-4" />
+                Gestore file
               </Link>
             </Button>
             <Button asChild variant="outline" className="gap-1.5">
@@ -28,7 +28,7 @@ export default function LibraryFilesPage() {
           </>
         }
       />
-      <FileManager />
+      <MissingView />
     </div>
   );
 }

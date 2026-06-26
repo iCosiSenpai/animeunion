@@ -106,8 +106,19 @@ warning franchise-wide + checkbox `deleteFolder`, **riusa** `trpc.library.delete
 invalida `library`/`download`/`catalog`/`follow.list`; l'anime resta tra i seguiti. Menu rifinito
 ("Rimuovi"→"Smetti di seguire", voci distruttive raggruppate; `addAll` ora invalida l'intero router
 `download` così il widget summary dello Step 8 si aggiorna subito). Frontend-only, 273 test a contorno.
-**Prossimo: Step 11** (gestore file: relink dinamico + rinomina serie + vista "Mancanti"). _Aggiornare
-qui a ogni step._
+**Step 11** (gestore file: relink dinamico + rinomina serie + vista "Mancanti"): **relink dinamico** —
+il gestore file polla `download.summary` (Step 8) con `refetchInterval` adattivo e tiene "viva" la
+lista (`files.list` con `refetchInterval` 5s mentre ci sono download attivi) così cartelle/orfani
+passano a managed/collegato senza refresh manuale; `refresh()` invalida l'intero router `download`.
+**Rinomina serie** — il dialog Rinomina, per le cartelle managed, titola "Rinomina la serie" e mostra
+la nota che i collegamenti agli episodi si aggiornano da soli (backend `files.rename`→`syncMovedPaths`
+già preservante, invariato). **Vista "Mancanti"** — il dialog che sforava è sostituito da una pagina
+dedicata `/library/missing` (`missing-view.tsx`): "Controlla la libreria" (riusa `library.scan`),
+mancanti per serie a tutta larghezza con chip dei numeri, "N presenti · M mancanti" (incrocio
+`library.list`), Classifica + Ri-scarica/Ri-scarica tutti (`download.addMissing`); il badge "Mancanti"
+della Libreria è ora un link, `missing-dialog.tsx` rimosso. Frontend-only, 273 test a contorno.
+**Prossimo: Step 12** (gestore file: multi-season alla riscarica → correlazioni). _Aggiornare qui a
+ogni step._
 
 ## Stato attuale (2026-06-26)
 
@@ -294,7 +305,35 @@ il widget summary riflette subito gli episodi accodati. Frontend-only, nessun te
 contorno), lint/typecheck/build web verdi. Verifica manuale a runtime ancora da fare (su un seguito
 completato/droppato → "Elimina file scaricati" cancella i file con/senza cartella, l'anime resta nei
 seguiti, libreria/widget aggiornati; per gli stati attivi la voce non compare; "Smetti di seguire" non
-tocca i file). **Prossimo: Step 11** (gestore file: relink dinamico + rinomina serie + vista "Mancanti").
+tocca i file). **Step 11** gestore file: relink dinamico + rinomina serie + vista "Mancanti".
+**Cause (verificate):** (1) dopo "Ri-scarica" del `FolderActionsDialog` (`remove`+`download.addAllBySlug`)
+gli episodi sono **accodati** → i file scendono async; `refresh()` invalida `files.list` subito ma la
+lista **non si aggiornava più da sola** (cartella "Non importato"/orfani "non collegato" fino a refresh
+manuale); (2) la rinomina **già preserva i link** (`files.rename`→`syncMovedPaths` riscrive i `localPath`
+figli in transazione, [file-manager-service.ts](apps/api/src/services/file-manager-service.ts)) ma la UI
+generica non rassicurava; (3) "Mancanti" era solo un badge nel riepilogo scansione Libreria che apriva
+`missing-dialog.tsx`, stretto per serie lunghe. **Fix frontend-only (riuso, coerente con Step 5/6/9/10):**
+**(A) relink dinamico** — [file-manager.tsx](apps/web/src/components/library/file-manager.tsx) polla
+`download.summary` (aggregato leggero, Step 8) con `refetchInterval` adattivo (4s se in volo, altrimenti
+`false`) e dà a `files.list` un `refetchInterval` 5s guidato dallo stesso conteggio (`downloadsActive`) →
+la lista passa a managed/collegato **senza refresh manuale**; `refresh()` invalida l'intero router
+`download` (prima `download.queue`, non più pollato). **(B) rinomina serie** — nel dialog Rinomina, per
+le cartelle `managed` (`type==='dir'`), titolo "Rinomina la serie" + nota «I collegamenti agli episodi di
+questa serie verranno aggiornati automaticamente: i file restano scaricati e nella libreria»; backend
+invariato e già testato. **(C) vista "Mancanti" dedicata** — nuova pagina
+[library/missing/page.tsx](apps/web/src/app/(app)/library/missing/page.tsx) + nuovo
+[missing-view.tsx](apps/web/src/components/library/missing-view.tsx): azione "Controlla la libreria"
+(riusa `library.scan`, risultato in `scan.data`, niente auto-mutation a ogni visita → sicuro su librerie
+giganti), mancanti per serie **a tutta larghezza** (riuso `groupByAnime`+`ClassifyButton` estratti dal
+vecchio dialog) con chip dei numeri (cap 40 + "+N altri"), annotazione "N presenti · M mancanti"
+(incrocio `library.list`), `download.addMissing` per serie + "Ri-scarica tutti", stati vuoti (CTA prima
+del controllo, "tutto a posto" dopo). [library-view.tsx](apps/web/src/components/library/library-view.tsx):
+badge "Mancanti" → `Link` a `/library/missing` (rimossi `MissingDialog`/stato), `missing-dialog.tsx`
+**cancellato**; accesso "Episodi mancanti" aggiunto nell'header del gestore file. Frontend-only, nessun
+test nuovo (273 verdi a contorno), lint/typecheck/build web verdi (`/library/missing` prerenderizzata
+statica). Verifica manuale a runtime ancora da fare (gestore file che si aggiorna da solo durante i
+download; rinomina serie che mantiene i link; `/library/missing` a tutta larghezza con Classifica/
+Ri-scarica). **Prossimo: Step 12** (gestore file: multi-season alla riscarica → correlazioni).
 
 ## Stato precedente (2026-06-25)
 

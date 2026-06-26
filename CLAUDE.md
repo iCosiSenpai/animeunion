@@ -47,11 +47,13 @@ Batch di bug-fix + potenziamenti raccolti dall'uso reale. **Ordine (bug prima, s
 - **Fase F — Personalizzazione** (Step 14-16): home mostra/nascondi+riordina; calendario; wallpaper.
 - **Fase G — Hardening + extra** (Step 17).
 
-**Stato batch:** Step 0-1 fatti (branch `feat/potenziamenti-diffusi`). **Step 1** (bug dettaglio
+**Stato batch:** Step 0-2 fatti (branch `feat/potenziamenti-diffusi`). **Step 1** (bug dettaglio
 anime): conteggio episodi reale (`Math.max(dichiarato, distinti)` in `assembleDetailFromDb`, l'API
 dichiara 0 per gli ONGOING), freschezza ONGOING (TTL detail capato a 1h in `isRowFresh`), poster
-robusto (`onError` + `aspect-[2/3]`), guardia "0 episodi". +2 test (257). **Prossimo: Step 2** (tema
-light/dark). _Aggiornare qui a ogni step._
+robusto (`onError` + `aspect-[2/3]`), guardia "0 episodi". +2 test (257). **Step 2** (tema light/dark):
+palette light reale in `:root` + `color-scheme` dinamico (`.dark` invariato), `theme-color` PWA
+sensibile al tema, skeleton hero `bg-foreground/10`. **Prossimo: Step 3** (toast iPhone + animazioni
+invisibili). _Aggiornare qui a ogni step._
 
 ## Stato attuale (2026-06-26)
 
@@ -67,7 +69,14 @@ in `isRowFresh`) così la cache non nasconde l'ultimo episodio (default `catalog
 fallback al DB su source giù resta invariato; (3) **poster robusto** — `onError` + stato `coverFailed`
 e riquadro `aspect-[2/3] bg-muted` nel Hero ([anime-detail.tsx](apps/web/src/components/catalog/anime-detail.tsx)),
 più guardia che nasconde "0 episodi". **+2 test (257 verdi)**, lint/typecheck/build web verdi.
-Verifica manuale a runtime ancora da fare (annotata nel piano). **Prossimo: Step 2** (tema light/dark).
+**Step 2** tema light/dark (il selettore non cambiava nulla): in [globals.css](apps/web/src/app/globals.css)
+le palette `:root` e `.dark` erano identiche (entrambe scure) e `body { color-scheme }` fisso. Ora
+`:root` ha una **vera palette light** (grigi neutri, accent verde invariato perché `AppTheme` lo
+sovrascrive uguale nei due temi) + `color-scheme: light`, `.dark` resta la palette brand + `color-scheme:
+dark`; rimosso il `color-scheme` fisso dal body. Polish a tema: `themeColor` PWA come array media-query
+light/dark ([layout.tsx](apps/web/src/app/layout.tsx)) e skeleton hero `bg-white/10` → `bg-foreground/10`.
+Solo CSS/tema, nessun test automatico (257 verdi a contorno), lint/typecheck/build web verdi. Verifica
+manuale a runtime ancora da fare (toggle + wallpaper). **Prossimo: Step 3** (toast iPhone + animazioni).
 
 ## Stato precedente (2026-06-25)
 

@@ -168,8 +168,8 @@ function HeroCarousel({
       <div className="relative h-[26rem] overflow-hidden rounded-2xl bg-muted animate-pulse md:h-[32rem] lg:h-[36rem]">
         <div className="absolute inset-0 bg-gradient-to-r from-background via-background/80 to-background/40" />
         <div className="absolute bottom-10 left-6 md:bottom-12 md:left-10 lg:left-14">
-          <div className="h-8 w-48 rounded bg-white/10 md:h-10 md:w-80" />
-          <div className="mt-3 h-4 w-32 rounded bg-white/10 md:w-48" />
+          <div className="h-8 w-48 rounded bg-foreground/10 md:h-10 md:w-80" />
+          <div className="mt-3 h-4 w-32 rounded bg-foreground/10 md:w-48" />
         </div>
       </div>
     );

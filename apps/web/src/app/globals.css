@@ -4,30 +4,34 @@
 
 @layer base {
   :root {
-    /* Palette AnimeUnion: dark default (#242424 bg, #6EC567 accent). */
-    --background: 0 0% 14%;
-    --foreground: 0 0% 92%;
-    --card: 0 0% 11%;
-    --card-foreground: 0 0% 92%;
-    --popover: 0 0% 11%;
-    --popover-foreground: 0 0% 92%;
+    /* Palette AnimeUnion light. L'accent (#6EC567) resta identico al dark: AppTheme lo sovrascrive
+       a runtime con lo stesso valore in entrambi i temi. */
+    color-scheme: light;
+    --background: 0 0% 98%;
+    --foreground: 0 0% 9%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 9%;
     --primary: 110 45% 59%;
     --primary-foreground: 0 0% 7%;
-    --secondary: 0 0% 20%;
-    --secondary-foreground: 0 0% 92%;
-    --muted: 0 0% 18%;
-    --muted-foreground: 0 0% 60%;
-    --accent: 0 0% 20%;
-    --accent-foreground: 0 0% 92%;
-    --destructive: 0 60% 50%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 22%;
-    --input: 0 0% 22%;
+    --secondary: 0 0% 93%;
+    --secondary-foreground: 0 0% 12%;
+    --muted: 0 0% 95%;
+    --muted-foreground: 0 0% 38%;
+    --accent: 0 0% 93%;
+    --accent-foreground: 0 0% 12%;
+    --destructive: 0 72% 48%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 87%;
+    --input: 0 0% 87%;
     --ring: 110 45% 59%;
     --radius: 0.5rem;
   }
 
   .dark {
+    /* Palette AnimeUnion dark (default storico: #242424 bg, #6EC567 accent). */
+    color-scheme: dark;
     --background: 0 0% 14%;
     --foreground: 0 0% 92%;
     --card: 0 0% 11%;
@@ -61,7 +65,6 @@
   }
   body {
     @apply bg-background text-foreground;
-    color-scheme: dark;
   }
   /* Tema con sfondo wallpaper: body trasparente cosi' il backdrop fisso (AppTheme) traspare. */
   html.theme-has-bg body {

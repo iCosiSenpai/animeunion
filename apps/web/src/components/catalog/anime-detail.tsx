@@ -243,11 +243,17 @@ function Hero({
   onToggle: () => void;
 }) {
   const synopsis = anime.synopsis ?? anime.synopsisEng;
+  const [coverFailed, setCoverFailed] = useState(false);
   return (
     <div className="grid gap-6 md:grid-cols-[200px_1fr]">
-      <div className="overflow-hidden rounded-lg bg-muted">
-        {anime.coverImage ? (
-          <img src={anime.coverImage} alt={anime.title} className="w-full object-cover" />
+      <div className="aspect-[2/3] overflow-hidden rounded-lg bg-muted">
+        {anime.coverImage && !coverFailed ? (
+          <img
+            src={anime.coverImage}
+            alt={anime.title}
+            className="h-full w-full object-cover"
+            onError={() => setCoverFailed(true)}
+          />
         ) : null}
       </div>
       <div className="space-y-4">
@@ -264,7 +270,9 @@ function Hero({
           {anime.seasonYear ? (
             <span className="text-muted-foreground">{anime.seasonYear}</span>
           ) : null}
-          <span className="text-muted-foreground">{anime.episodeCount} episodi</span>
+          {anime.episodeCount > 0 ? (
+            <span className="text-muted-foreground">{anime.episodeCount} episodi</span>
+          ) : null}
           {anime.studio ? <span className="text-muted-foreground">{anime.studio}</span> : null}
           {anime.score != null ? (
             <span className="flex items-center gap-1 text-muted-foreground">

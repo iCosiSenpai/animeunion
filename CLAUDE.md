@@ -47,11 +47,29 @@ Batch di bug-fix + potenziamenti raccolti dall'uso reale. **Ordine (bug prima, s
 - **Fase F — Personalizzazione** (Step 14-16): home mostra/nascondi+riordina; calendario; wallpaper.
 - **Fase G — Hardening + extra** (Step 17).
 
-**Stato batch:** Step 0 fatto (branch `feat/potenziamenti-diffusi` da `main`; governance +
-continuità: `plan/` gitignored, Regola #15, puntatori CLAUDE.md). **Prossimo: Step 1** (bug
-dettaglio anime: "0 episodi"/poster rotto/episodio mancante). _Aggiornare qui a ogni step._
+**Stato batch:** Step 0-1 fatti (branch `feat/potenziamenti-diffusi`). **Step 1** (bug dettaglio
+anime): conteggio episodi reale (`Math.max(dichiarato, distinti)` in `assembleDetailFromDb`, l'API
+dichiara 0 per gli ONGOING), freschezza ONGOING (TTL detail capato a 1h in `isRowFresh`), poster
+robusto (`onError` + `aspect-[2/3]`), guardia "0 episodi". +2 test (257). **Prossimo: Step 2** (tema
+light/dark). _Aggiornare qui a ogni step._
 
-## Stato attuale (2026-06-25)
+## Stato attuale (2026-06-26)
+
+**Batch "Potenziamenti diffusi" verso v0.10.0 (branch `feat/potenziamenti-diffusi`, non ancora
+merge/release):** piano vivo in [plan/potenziamenti-diffusi.md](plan/potenziamenti-diffusi.md)
+(gitignored). **Step 0** branch + governance (Regola #15, `plan/` gitignored, puntatori CLAUDE.md).
+**Step 1** bug dettaglio anime (caso reale koori-no-jouheki: "0 episodi"/poster rotto/ep.13 mancante).
+Tre cause distinte, fix mirati: (1) **conteggio reale** — l'API dichiara `episodeCount=0` per gli
+ONGOING anche con episodi presenti, quindi `assembleDetailFromDb` ora ritorna
+`Math.max(row.episodeCount, episodi distinti per number)` ([catalog-service.ts](apps/api/src/services/catalog-service.ts));
+(2) **freschezza ONGOING** — il TTL del dettaglio per gli ONGOING è capato a 1h (`ONGOING_DETAIL_TTL_MS`
+in `isRowFresh`) così la cache non nasconde l'ultimo episodio (default `catalogSyncHours`=24h); il
+fallback al DB su source giù resta invariato; (3) **poster robusto** — `onError` + stato `coverFailed`
+e riquadro `aspect-[2/3] bg-muted` nel Hero ([anime-detail.tsx](apps/web/src/components/catalog/anime-detail.tsx)),
+più guardia che nasconde "0 episodi". **+2 test (257 verdi)**, lint/typecheck/build web verdi.
+Verifica manuale a runtime ancora da fare (annotata nel piano). **Prossimo: Step 2** (tema light/dark).
+
+## Stato precedente (2026-06-25)
 
 **Batch "Seerr per AnimeUnion" — API di richiesta in ingresso (branch `feat/seerr-request-api` →
 `main`, rilasciato **v0.9.0**):** apre il nodo **#15** di [docs/JELLYFIN.md](docs/JELLYFIN.md). Insight: i due

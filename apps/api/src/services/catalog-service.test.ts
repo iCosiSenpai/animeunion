@@ -1,4 +1,4 @@
-import type { AnimeDetail, AnimeSource } from '@animeunion/shared';
+import type { AnimeDetail, AnimeSource, EpisodeSummary, Language } from '@animeunion/shared';
 import { eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 import { schema } from '../db';
@@ -49,6 +49,53 @@ async function firstSlug(service: ReturnType<typeof makeService>['service']): Pr
   return first.slug;
 }
 
+function makeEpisode(animeId: string, number: number, language: Language): EpisodeSummary {
+  return {
+    id: `${animeId}_e${number}_${language}`,
+    animeId,
+    number,
+    title: `Ep ${number}`,
+    titleIta: null,
+    thumbnail: null,
+    duration: null,
+    airDate: null,
+    isFiller: false,
+    language,
+  };
+}
+
+function makeDetail(
+  partial: Pick<AnimeDetail, 'id' | 'slug' | 'status' | 'episodeCount' | 'episodes'> &
+    Partial<AnimeDetail>,
+): AnimeDetail {
+  return {
+    title: 'Test Anime',
+    titleIta: null,
+    coverImage: null,
+    type: 'TV',
+    season: null,
+    seasonYear: 2026,
+    score: null,
+    genres: [],
+    availableLanguages: ['SUB_ITA'],
+    seriesId: null,
+    seasonNumber: null,
+    titleEng: null,
+    titleJpn: null,
+    synopsis: null,
+    synopsisEng: null,
+    bannerImage: null,
+    trailerUrl: null,
+    studio: null,
+    episodeDuration: null,
+    malId: null,
+    anilistId: null,
+    relatedAnime: [],
+    recommendations: [],
+    ...partial,
+  };
+}
+
 describe('CatalogService', () => {
   it('getBySlug scarica dal source, salva anime, generi ed episodi', async () => {
     const { db, service } = makeService();
@@ -84,6 +131,77 @@ describe('CatalogService', () => {
   it('getBySlug inesistente lancia NotFoundError', async () => {
     const { service } = makeService();
     await expect(service.getBySlug('slug-inesistente')).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it('getBySlug calcola episodeCount dagli episodi reali quando l API dichiara 0', async () => {
+    const db = createTestDb();
+    const config = createConfigService({ db });
+    // ONGOING con episodeCount dichiarato 0 e 3 episodi distinti in SUB+DUB (6 righe per lingua).
+    const episodes = [1, 2, 3].flatMap((n) => [
+      makeEpisode('a1', n, 'SUB_ITA'),
+      makeEpisode('a1', n, 'DUB_ITA'),
+    ]);
+    const detail = makeDetail({
+      id: 'a1',
+      slug: 'anime-uno',
+      status: 'ONGOING',
+      episodeCount: 0,
+      episodes,
+      availableLanguages: ['SUB_ITA', 'DUB_ITA'],
+    });
+    const source = { getAnimeBySlug: async () => detail } as unknown as AnimeSource;
+    const service = createCatalogService({ db, source, config, logger: testLogger });
+
+    const result = await service.getBySlug('anime-uno');
+
+    expect(result.episodeCount).toBe(3); // numeri distinti, non 6 (righe per lingua)
+    expect(result.episodes).toHaveLength(6);
+  });
+
+  it('getBySlug rinfresca gli ONGOING dopo il TTL corto; i COMPLETED restano in cache 24h', async () => {
+    let currentNow = new Date('2026-06-10T12:00:00.000Z');
+    const db = createTestDb();
+    const config = createConfigService({ db });
+    let latest = 12;
+    let fetches = 0;
+    const source = {
+      getAnimeBySlug: async (slug: string) => {
+        fetches++;
+        const status = slug === 'ongoing-anime' ? 'ONGOING' : 'COMPLETED';
+        const episodes = Array.from({ length: latest }, (_, i) =>
+          makeEpisode(slug, i + 1, 'SUB_ITA'),
+        );
+        return makeDetail({ id: slug, slug, status, episodeCount: 0, episodes });
+      },
+    } as unknown as AnimeSource;
+    const service = createCatalogService({
+      db,
+      source,
+      config,
+      logger: testLogger,
+      now: () => currentNow,
+    });
+
+    const first = await service.getBySlug('ongoing-anime');
+    expect(first.episodes).toHaveLength(12);
+    const afterFirst = fetches;
+
+    // +2h: oltre il TTL ONGOING (1h) ma sotto le 24h di default -> rifa il fetch e prende l ep.13.
+    currentNow = new Date('2026-06-10T14:00:00.000Z');
+    latest = 13;
+    const second = await service.getBySlug('ongoing-anime');
+    expect(fetches).toBeGreaterThan(afterFirst);
+    expect(second.episodes).toHaveLength(13);
+
+    // Un COMPLETED nello stesso intervallo resta servito dalla cache (TTL 24h).
+    latest = 5;
+    await service.getBySlug('completed-anime');
+    const afterComp = fetches;
+    currentNow = new Date('2026-06-10T16:00:00.000Z');
+    latest = 6;
+    const compSecond = await service.getBySlug('completed-anime');
+    expect(fetches).toBe(afterComp);
+    expect(compSecond.episodes).toHaveLength(5);
   });
 
   it('getBySlug serve le relazioni anche dal percorso cache DB (fix "indietro")', async () => {

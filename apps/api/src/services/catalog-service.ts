@@ -28,6 +28,9 @@ import { type AnimeRow, loadGenresByAnimeIds, toAnimeSummary, toEpisodeSummary }
 const PER_PAGE = 24;
 const SYNC_TIMESTAMP_KEY = 'catalog_synced_at';
 const CALENDAR_TTL_MS = 30 * 60 * 1000;
+// Gli ONGOING ricevono episodi nuovi spesso: cap di freschezza piu' corto per il dettaglio, cosi'
+// la cache non nasconde l'ultimo episodio (gia' presente nel feed globale "ultimi episodi").
+const ONGOING_DETAIL_TTL_MS = 60 * 60 * 1000;
 
 type SourceEpisode = EpisodeSummary & { downloadUrl?: string; expiresAt?: string | null };
 
@@ -116,7 +119,8 @@ export function createCatalogService(options: CatalogServiceOptions): CatalogSer
   }
 
   function isRowFresh(row: AnimeRow): boolean {
-    return new Date(row.updatedAt).getTime() + ttlMs() > now().getTime();
+    const ttl = row.status === 'ONGOING' ? Math.min(ttlMs(), ONGOING_DETAIL_TTL_MS) : ttlMs();
+    return new Date(row.updatedAt).getTime() + ttl > now().getTime();
   }
 
   function hasEpisodes(animeId: string): boolean {
@@ -426,6 +430,10 @@ export function createCatalogService(options: CatalogServiceOptions): CatalogSer
       malId: genre.malId,
     }));
     const summary = toAnimeSummary(row, genres);
+    const episodes = listEpisodesFromDb(row.id);
+    // L'API dichiara episodeCount=0 per gli ONGOING anche con episodi presenti: usiamo il numero
+    // reale di episodi distinti (la lista ha 1 riga per lingua, quindi contiamo per `number`).
+    const realCount = new Set(episodes.map((episode) => episode.number)).size;
     return {
       ...summary,
       titleEng: row.titleEng,
@@ -435,7 +443,7 @@ export function createCatalogService(options: CatalogServiceOptions): CatalogSer
       bannerImage: row.bannerImage,
       trailerUrl: row.trailerUrl,
       studio: row.studio,
-      episodeCount: row.episodeCount,
+      episodeCount: Math.max(row.episodeCount, realCount),
       episodeDuration: row.episodeDuration,
       malId: row.malId,
       anilistId: row.anilistId,
@@ -443,7 +451,7 @@ export function createCatalogService(options: CatalogServiceOptions): CatalogSer
       genres,
       relatedAnime: loadRelationsFromDb(row.id),
       recommendations: parseRecommendations(row.recommendations),
-      episodes: listEpisodesFromDb(row.id),
+      episodes,
     };
   }
 

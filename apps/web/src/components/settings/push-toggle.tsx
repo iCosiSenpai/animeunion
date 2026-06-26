@@ -11,6 +11,7 @@ export function PushToggle() {
   const utils = trpc.useUtils();
   const subscribe = trpc.push.subscribe.useMutation();
   const unsubscribe = trpc.push.unsubscribe.useMutation();
+  const sendTest = trpc.push.test.useMutation();
   const [supported, setSupported] = useState<boolean | null>(null);
   const [subscribed, setSubscribed] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -68,6 +69,23 @@ export function PushToggle() {
     }
   }
 
+  async function test() {
+    try {
+      const res = await sendTest.mutateAsync();
+      if (!res.ok) {
+        toast.info('Nessun dispositivo iscritto: attiva prima le notifiche push.');
+        return;
+      }
+      toast.success(
+        res.sent === 1
+          ? 'Notifica di prova inviata a 1 dispositivo.'
+          : `Notifica di prova inviata a ${res.sent} dispositivi.`,
+      );
+    } catch {
+      toast.error('Invio di prova non riuscito.');
+    }
+  }
+
   if (supported === null) {
     return null;
   }
@@ -100,9 +118,14 @@ export function PushToggle() {
     );
   }
   return subscribed ? (
-    <Button variant="outline" onClick={disable} disabled={busy}>
-      Disattiva push
-    </Button>
+    <div className="flex flex-wrap gap-2">
+      <Button variant="outline" onClick={disable} disabled={busy}>
+        Disattiva push
+      </Button>
+      <Button variant="secondary" onClick={test} disabled={busy || sendTest.isPending}>
+        {sendTest.isPending ? 'Invio…' : 'Invia notifica di test'}
+      </Button>
+    </div>
   ) : (
     <Button onClick={enable} disabled={busy}>
       Attiva push

@@ -3,6 +3,7 @@ import {
   pushSubscriptionInputSchema,
   pushUnsubscribeInputSchema,
 } from '@animeunion/shared';
+import { z } from 'zod';
 import { publicProcedure, router } from '../trpc';
 
 /** Web Push del browser: chiave pubblica VAPID + gestione sottoscrizioni. */
@@ -20,4 +21,9 @@ export const pushRouter = router({
     ctx.services.push.unsubscribe(input.endpoint);
     return { ok: true };
   }),
+
+  // Invio di prova: spinge una notifica demo a tutte le sottoscrizioni di questo server.
+  test: publicProcedure
+    .output(z.object({ ok: z.boolean(), sent: z.number() }))
+    .mutation(({ ctx }) => ctx.services.push.test()),
 });

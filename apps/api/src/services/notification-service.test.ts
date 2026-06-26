@@ -62,4 +62,72 @@ describe('NotificationService', () => {
     expect(svc.markRead(withAnime.id)).toBe(1);
     expect(svc.unreadCount()).toBe(1);
   });
+
+  it('notifyDownloadComplete coalizza gli episodi ravvicinati dello stesso anime', () => {
+    const db = createTestDb();
+    const config = createConfigService({ db });
+    let nowMs = Date.parse('2026-01-01T00:00:00Z');
+    const svc = createNotificationService({ db, config, now: () => new Date(nowMs) });
+
+    svc.notifyDownloadComplete({ animeId: 'a1', title: 'One Piece', epNum: 1 });
+    nowMs += 30_000;
+    svc.notifyDownloadComplete({ animeId: 'a1', title: 'One Piece', epNum: 2 });
+    nowMs += 30_000;
+    svc.notifyDownloadComplete({ animeId: 'a1', title: 'One Piece', epNum: 3 });
+
+    const list = svc.list();
+    expect(list).toHaveLength(1);
+    expect(list[0]?.title).toBe('Scaricati 3 episodi di One Piece');
+    expect(list[0]?.body).toBe('Ultimo: episodio 3');
+    // Un solo elemento, non letto (il bump resetta read=0).
+    expect(svc.unreadCount()).toBe(1);
+  });
+
+  it('notifyDownloadComplete apre una nuova sessione oltre la finestra di coalescing', () => {
+    const db = createTestDb();
+    const config = createConfigService({ db });
+    let nowMs = Date.parse('2026-01-01T00:00:00Z');
+    const svc = createNotificationService({ db, config, now: () => new Date(nowMs) });
+
+    svc.notifyDownloadComplete({ animeId: 'a1', title: 'One Piece', epNum: 1 });
+    nowMs += 11 * 60_000; // oltre BATCH_WINDOW_MS (10 min)
+    svc.notifyDownloadComplete({ animeId: 'a1', title: 'One Piece', epNum: 2 });
+
+    expect(svc.list()).toHaveLength(2);
+  });
+
+  it('notifyDownloadComplete tiene separati anime diversi nella stessa finestra', () => {
+    const db = createTestDb();
+    const config = createConfigService({ db });
+    const svc = createNotificationService({ db, config });
+
+    svc.notifyDownloadComplete({ animeId: 'a1', title: 'One Piece', epNum: 1 });
+    svc.notifyDownloadComplete({ animeId: 'a2', title: 'Bleach', epNum: 1 });
+    svc.notifyDownloadComplete({ animeId: 'a1', title: 'One Piece', epNum: 2 });
+
+    const list = svc.list();
+    expect(list).toHaveLength(2);
+    expect(list.find((n) => n.title.includes('One Piece'))?.title).toBe(
+      'Scaricati 2 episodi di One Piece',
+    );
+    expect(list.find((n) => n.title.includes('Bleach'))?.title).toBe('Scaricato: Bleach');
+  });
+
+  it('notifyDownloadComplete crea una riga nuova se l’aggregato e’ stato eliminato', () => {
+    const db = createTestDb();
+    const config = createConfigService({ db });
+    const svc = createNotificationService({ db, config });
+
+    const first = svc.notifyDownloadComplete({ animeId: 'a1', title: 'One Piece', epNum: 1 });
+    // Simula lettura + pulizia della riga aggregata.
+    svc.markRead(first.id);
+    expect(svc.clear()).toBe(1);
+    expect(svc.list()).toHaveLength(0);
+
+    // Nuovo evento entro la finestra: la riga non esiste piu' → ne crea una fresca.
+    svc.notifyDownloadComplete({ animeId: 'a1', title: 'One Piece', epNum: 2 });
+    const list = svc.list();
+    expect(list).toHaveLength(1);
+    expect(list[0]?.title).toBe('Scaricato: One Piece');
+  });
 });

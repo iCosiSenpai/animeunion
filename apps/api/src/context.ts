@@ -139,11 +139,12 @@ export function createAppContext(options: { env?: Env; databasePath?: string } =
       return;
     }
     const d = describeEpisode(episodeFileId);
-    notifications.create({
-      type: 'download_complete',
-      title: `Scaricato: ${d.title}`,
-      body: d.epNum != null ? `Episodio ${d.epNum}` : null,
+    // Coalescing anti-rumore: episodi ravvicinati dello stesso anime → una sola notifica
+    // riassuntiva (es. coda One Piece) invece di una per episodio.
+    notifications.notifyDownloadComplete({
       animeId: d.animeId,
+      title: d.title,
+      epNum: d.epNum,
     });
   });
 

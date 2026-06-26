@@ -55,4 +55,21 @@ describe('PushService', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]?.endpoint).toBe('https://e/ok');
   });
+
+  it('test senza sottoscrizioni non invia nulla', async () => {
+    const db = createTestDb();
+    const push = createPushService({ db });
+    const res = await push.test();
+    expect(res).toEqual({ ok: false, sent: 0 });
+    expect(lib.sendNotification).not.toHaveBeenCalled();
+  });
+
+  it('test con una sottoscrizione invia la notifica demo', async () => {
+    const db = createTestDb();
+    const push = createPushService({ db });
+    push.subscribe({ endpoint: 'https://e/ok', keys: { p256dh: 'p', auth: 'a' } });
+    const res = await push.test();
+    expect(res).toEqual({ ok: true, sent: 1 });
+    expect(lib.sendNotification).toHaveBeenCalledTimes(1);
+  });
 });

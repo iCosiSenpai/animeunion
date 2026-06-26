@@ -73,8 +73,17 @@ coerente con `MalIcon`) in [brand-icons.tsx](apps/web/src/components/anime/brand
 link esterni del `Hero` ([anime-detail.tsx](apps/web/src/components/catalog/anime-detail.tsx)) ora è
 sempre visibile e ha come primo chip "Apri su AnimeUnion" → `https://animeunion.tv/anime/<slug>` (path
 confermato dall'utente; `target=_blank rel=noopener`), MAL/AniList restano condizionali dopo. Solo
-frontend, 261 test a contorno. **Prossimo: Step 7** (notifiche: batching anti-rumore + test
-push/PWA). _Aggiornare qui a ogni step._
+frontend, 261 test a contorno. **Step 7** (notifiche: batching anti-rumore + test push/PWA):
+**coalescing per-anime senza timer** — nuovo `notifyDownloadComplete` in `notification-service` con
+aggregato in memoria (chiave `animeId`), entro `BATCH_WINDOW_MS=10min` aggiorna UNA riga "Scaricati N
+episodi di X" (createdAt bumped, `read=0`, risale in cima) invece di N righe, e inoltra a Telegram/Push
+solo al primo episodio della sessione; `context.ts` `worker.on('complete')` usa il nuovo metodo (gate
+`notifyOnComplete` invariato), i `download_failed` restano singoli. **Test push/PWA**:
+`push-service.test()` (refactor invio in `sendToAll`, ritorna `{ok,sent}`) + router `push.test` +
+pulsante "Invia notifica di test" in `push-toggle.tsx` (solo se iscritto) + "Mostra toast di prova"
+nella card Notifiche di `settings-view.tsx` (verifica safe-area Step 3). +6 test (267).
+**Prossimo: Step 8** (download: pagina/pulsante + tenuta coda gigante One Piece). _Aggiornare qui a
+ogni step._
 
 ## Stato attuale (2026-06-26)
 
@@ -164,8 +173,34 @@ solo se `malId|anilistId` esistevano → ora **sempre visibile**, primo chip "Ap
 `https://animeunion.tv/anime/<slug>` (`target=_blank rel=noopener noreferrer`, stesso stile dei chip
 MAL/AniList che restano condizionali dopo). Solo frontend, nessun test nuovo (261 verdi a contorno),
 lint/typecheck/build web verdi. Verifica manuale a runtime ancora da fare (chip visibile su ogni
-scheda, apre la scheda giusta sul sito). **Prossimo: Step 7** (notifiche: batching anti-rumore + test
-push/PWA).
+scheda, apre la scheda giusta sul sito). **Step 7** notifiche: batching anti-rumore + test push/PWA.
+**Causa rumore:** ogni `complete` del worker chiamava `notifications.create`
+([context.ts](apps/api/src/context.ts)) → con MAX_CONCURRENT=1 e coda gigante (One Piece ~1000 ep)
+~1000 righe + ~1000 inoltri Telegram/Push. **Fix coalescing per-anime senza timer:** nuovo
+`notifyDownloadComplete({animeId,title,epNum})` in
+[notification-service.ts](apps/api/src/services/notification-service.ts) con mappa aggregati in
+memoria (chiave `animeId ?? '__none__'`, freschezza valutata lazy sull'evento successivo → niente
+`setTimeout`, deterministico e testabile con `now`); entro `BATCH_WINDOW_MS=10min` fa UPDATE della
+stessa riga `notification` ("Scaricati N episodi di X" / "Ultimo: episodio M", `read=0`, `createdAt`
+bumped → risale in cima alla lista `desc(createdAt)`) e **NON** re-inoltra a Telegram/Push (inoltro
+solo al primo episodio della sessione = anti-rumore); se l'UPDATE torna `changes===0` (riga
+cancellata via clear) fallback a riga nuova. `create` estratto in `createNotification` locale (no
+`this`). `context.ts` `worker.on('complete')` ora chiama il nuovo metodo (gate `notifyOnComplete`
+invariato); i `download_failed` permanenti restano singoli. **Test invio push (mancava, solo
+Telegram):** [push-service.ts](apps/api/src/services/push-service.ts) refactor invio in `sendToAll`
++ nuovo `test()` (`{ok,sent}`, `ok:false/sent:0` se nessuna sottoscrizione, altrimenti payload demo)
+→ router [push.ts](apps/api/src/routers/push.ts) `push.test` (output inline) → pulsante "Invia
+notifica di test" in [push-toggle.tsx](apps/web/src/components/settings/push-toggle.tsx) (solo se
+`subscribed`). **Prova toast in-app:** campo "Prova notifica in-app" nella card Notifiche di
+[settings-view.tsx](apps/web/src/components/settings/settings-view.tsx) (verifica posizionamento
+top-center/safe-area dello Step 3). Centro notifiche invariato: il riassunto è già una riga
+`download_complete` coperta da filtri/raggruppo. **+6 test (267 verdi)**
+([notification-service.test.ts](apps/api/src/services/notification-service.test.ts) coalescing/nuova
+sessione/anime separati/fallback + [push-service.test.ts](apps/api/src/services/push-service.test.ts)
+`test()` con/senza sub), lint/typecheck/build web verdi. Verifica manuale a runtime ancora da fare
+(una sola riga riassuntiva + un solo push per sessione; "Invia notifica di test" arriva; toast
+top-center sotto la status bar). **Prossimo: Step 8** (download: pagina/pulsante + tenuta coda gigante
+One Piece).
 
 ## Stato precedente (2026-06-25)
 

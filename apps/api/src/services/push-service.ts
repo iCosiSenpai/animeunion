@@ -27,6 +27,11 @@ export interface PushService {
   unsubscribe(endpoint: string): void;
   /** Invio best-effort a tutte le sottoscrizioni; rimuove quelle morte (404/410). */
   send(payload: PushPayload): Promise<void>;
+  /**
+   * Invio di prova (pulsante "Invia notifica di test"). Ritorna quante sottoscrizioni sono state
+   * raggiunte; `ok:false, sent:0` se nessun dispositivo e' iscritto.
+   */
+  test(): Promise<{ ok: boolean; sent: number }>;
 }
 
 export function createPushService(deps: {
@@ -74,6 +79,41 @@ export function createPushService(deps: {
     return keys;
   }
 
+  async function sendToAll(payload: PushPayload): Promise<number> {
+    const rows = db.select().from(schema.pushSubscription).all();
+    if (rows.length === 0) {
+      return 0;
+    }
+    const keys = ensureKeys();
+    webpush.setVapidDetails(SUBJECT, keys.publicKey, keys.privateKey);
+    const data = JSON.stringify({
+      title: payload.title,
+      body: payload.body ?? '',
+      url: payload.url ?? '/',
+    });
+
+    await Promise.all(
+      rows.map(async (r) => {
+        try {
+          await webpush.sendNotification(
+            { endpoint: r.endpoint, keys: { p256dh: r.p256dh, auth: r.auth } },
+            data,
+          );
+        } catch (error) {
+          const status = (error as { statusCode?: number }).statusCode;
+          if (status === 404 || status === 410) {
+            db.delete(schema.pushSubscription)
+              .where(eq(schema.pushSubscription.endpoint, r.endpoint))
+              .run();
+          } else {
+            logger?.debug({ err: error, endpoint: r.endpoint }, 'web-push: invio fallito');
+          }
+        }
+      }),
+    );
+    return rows.length;
+  }
+
   return {
     getPublicKey() {
       return ensureKeys().publicKey;
@@ -102,37 +142,16 @@ export function createPushService(deps: {
     },
 
     async send(payload) {
-      const rows = db.select().from(schema.pushSubscription).all();
-      if (rows.length === 0) {
-        return;
-      }
-      const keys = ensureKeys();
-      webpush.setVapidDetails(SUBJECT, keys.publicKey, keys.privateKey);
-      const data = JSON.stringify({
-        title: payload.title,
-        body: payload.body ?? '',
-        url: payload.url ?? '/',
-      });
+      await sendToAll(payload);
+    },
 
-      await Promise.all(
-        rows.map(async (r) => {
-          try {
-            await webpush.sendNotification(
-              { endpoint: r.endpoint, keys: { p256dh: r.p256dh, auth: r.auth } },
-              data,
-            );
-          } catch (error) {
-            const status = (error as { statusCode?: number }).statusCode;
-            if (status === 404 || status === 410) {
-              db.delete(schema.pushSubscription)
-                .where(eq(schema.pushSubscription.endpoint, r.endpoint))
-                .run();
-            } else {
-              logger?.debug({ err: error, endpoint: r.endpoint }, 'web-push: invio fallito');
-            }
-          }
-        }),
-      );
+    async test() {
+      const sent = await sendToAll({
+        title: 'AnimeUnion Docker',
+        body: 'Notifica di prova: le notifiche push funzionano! 🎉',
+        url: '/',
+      });
+      return { ok: sent > 0, sent };
     },
   };
 }

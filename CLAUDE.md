@@ -47,13 +47,16 @@ Batch di bug-fix + potenziamenti raccolti dall'uso reale. **Ordine (bug prima, s
 - **Fase F — Personalizzazione** (Step 14-16): home mostra/nascondi+riordina; calendario; wallpaper.
 - **Fase G — Hardening + extra** (Step 17).
 
-**Stato batch:** Step 0-2 fatti (branch `feat/potenziamenti-diffusi`). **Step 1** (bug dettaglio
+**Stato batch:** Step 0-3 fatti (branch `feat/potenziamenti-diffusi`). **Step 1** (bug dettaglio
 anime): conteggio episodi reale (`Math.max(dichiarato, distinti)` in `assembleDetailFromDb`, l'API
 dichiara 0 per gli ONGOING), freschezza ONGOING (TTL detail capato a 1h in `isRowFresh`), poster
 robusto (`onError` + `aspect-[2/3]`), guardia "0 episodi". +2 test (257). **Step 2** (tema light/dark):
 palette light reale in `:root` + `color-scheme` dinamico (`.dark` invariato), `theme-color` PWA
-sensibile al tema, skeleton hero `bg-foreground/10`. **Prossimo: Step 3** (toast iPhone + animazioni
-invisibili). _Aggiornare qui a ogni step._
+sensibile al tema, skeleton hero `bg-foreground/10`. **Step 3** (toast iPhone + animazioni invisibili):
+toast `top-center` + `offset` safe-area; interruttore Animazioni autorevole (`reducedMotion`
+`never`/`always`); transizione di pagina più decisa/affidabile (`motion.div` keyed, niente
+`AnimatePresence mode="wait"`); micro-interazioni hover/tap card gated; nota costo in Impostazioni.
+**Prossimo: Step 4** (home: card overlap + hero bassa qualità). _Aggiornare qui a ogni step._
 
 ## Stato attuale (2026-06-26)
 
@@ -76,7 +79,28 @@ sovrascrive uguale nei due temi) + `color-scheme: light`, `.dark` resta la palet
 dark`; rimosso il `color-scheme` fisso dal body. Polish a tema: `themeColor` PWA come array media-query
 light/dark ([layout.tsx](apps/web/src/app/layout.tsx)) e skeleton hero `bg-white/10` → `bg-foreground/10`.
 Solo CSS/tema, nessun test automatico (257 verdi a contorno), lint/typecheck/build web verdi. Verifica
-manuale a runtime ancora da fare (toggle + wallpaper). **Prossimo: Step 3** (toast iPhone + animazioni).
+manuale a runtime ancora da fare (toggle + wallpaper). **Step 3** toast iPhone + animazioni "invisibili".
+Causa riverificata: l'utente ha provato a togliere iOS "Riduci movimento" e le animazioni restano
+invisibili → non è il reduced-motion. L'unica animazione era la transizione di pagina (fade+slide 8px
+in 0.2s, impercettibile) e dentro le pagine non si muove nulla. Quattro fix: (1) **toast a livello
+banner** — `position` `top-right` → `top-center` + `offset={{ top: 'calc(env(safe-area-inset-top) +
+16px)' }}` (sotto la status bar/Island su iPhone; desktop `env()`=0 → 16px) in
+[providers.tsx](apps/web/src/components/providers.tsx); (2) **interruttore = fonte di verità** —
+`reducedMotion={enabled ? 'never' : 'always'}` (da ON framer non sopprime mai, le animazioni si vedono
+anche con Riduci movimento iOS; da OFF riduce + i componenti gated rendono statico) + `staleTime` 60s→10s
+in [animation-provider.tsx](apps/web/src/components/layout/animation-provider.tsx) (l'`invalidate` della
+config al salvataggio era già presente); (3) **transizione più decisa/affidabile** — rimosso
+`AnimatePresence mode="wait"` (in App Router l'exit è inaffidabile), `motion.div` keyed su `pathname`
+(rimonta a ogni navigazione), `y:12→0`, `0.28s ease-out` in
+[page-transition.tsx](apps/web/src/components/layout/page-transition.tsx); (4) **micro-interazioni card**
+— `<Card>` (dentro il `<Link>`, sizing `[&>*]` intatto) avvolta in `motion.div` con `whileHover y:-4` +
+`whileTap scale:0.97`, gated da `useAnimationsOn()` in
+[anime-card.tsx](apps/web/src/components/anime/anime-card.tsx); più nota costo GPU/CPU nell'hint del
+campo Animazioni in Impostazioni. Decisione utente: l'interruttore in-app è autorevole. Niente
+entrata/stagger per-card (rischio contenuto invisibile in SSR + Regola #1). Solo frontend, nessun test
+nuovo (257 verdi a contorno), lint/typecheck/build web verdi. Verifica manuale a runtime ancora da fare
+(toast iPhone sotto la status bar; ON/OFF animazioni evidente). **Prossimo: Step 4** (home: card
+overlap + hero bassa qualità).
 
 ## Stato precedente (2026-06-25)
 

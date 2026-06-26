@@ -46,7 +46,11 @@ export function Providers({ children }: { children: ReactNode }) {
           <AppTheme />
           <PwaRegister />
           <AnimationProvider>{children}</AnimationProvider>
-          <Toaster richColors position="top-right" />
+          <Toaster
+            richColors
+            position="top-center"
+            offset={{ top: 'calc(env(safe-area-inset-top) + 16px)' }}
+          />
         </QueryClientProvider>
       </trpc.Provider>
     </ThemeProvider>

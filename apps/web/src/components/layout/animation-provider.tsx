@@ -13,14 +13,15 @@ export function useAnimationsOn(): boolean {
 }
 
 export function AnimationProvider({ children }: { children: ReactNode }) {
-  const config = trpc.config.getAll.useQuery(undefined, { staleTime: 60_000 });
+  const config = trpc.config.getAll.useQuery(undefined, { staleTime: 10_000 });
   const enabled = config.data?.animationsEnabled ?? true;
 
   return (
     <AnimationsContext.Provider value={enabled}>
-      {/* reducedMotion 'always' = framer riduce il movimento; combinato col gate dei componenti
-          (useAnimationsOn) disattiva del tutto. 'user' rispetta l'impostazione del sistema. */}
-      <MotionConfig reducedMotion={enabled ? 'user' : 'always'}>{children}</MotionConfig>
+      {/* L'interruttore in-app e' la fonte di verita': ON => 'never' (framer non riduce mai, le
+          animazioni si vedono anche con "Riduci movimento" di iOS attivo); OFF => 'always' (framer
+          riduce e i componenti gated via useAnimationsOn rendono la versione statica: doppio spegnimento). */}
+      <MotionConfig reducedMotion={enabled ? 'never' : 'always'}>{children}</MotionConfig>
     </AnimationsContext.Provider>
   );
 }

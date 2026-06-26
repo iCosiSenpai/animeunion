@@ -753,7 +753,10 @@ export function SettingsView() {
                 onChange={(url) => update('themeBackgroundUrl', url)}
               />
             </Field>
-            <Field label="Animazioni" hint="Transizioni e micro-interazioni dell'interfaccia.">
+            <Field
+              label="Animazioni"
+              hint="Transizioni di pagina e micro-interazioni dell'interfaccia. Consumano un po' di GPU/CPU: su dispositivi lenti conviene disattivarle."
+            >
               <Select
                 value={draft.animationsEnabled ? 'on' : 'off'}
                 onValueChange={(v) => update('animationsEnabled', v === 'on')}

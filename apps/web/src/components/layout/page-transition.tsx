@@ -1,11 +1,13 @@
 'use client';
 
 import { useAnimationsOn } from '@/components/layout/animation-provider';
-import { AnimatePresence, motion } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
 
-// Transizione morbida (fade + slide) sul cambio di route. Off ⇒ passthrough.
+// Entrata (fade + slide) sul cambio di route. Off ⇒ passthrough.
+// In App Router l'exit di AnimatePresence e' inaffidabile e puo' ritardare il contenuto: usiamo un
+// singolo motion.div keyed su pathname, che rimonta a ogni navigazione e fa ripartire l'entrata.
 export function PageTransition({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const on = useAnimationsOn();
@@ -15,16 +17,13 @@ export function PageTransition({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AnimatePresence mode="wait">
-      <motion.div
-        key={pathname}
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -8 }}
-        transition={{ duration: 0.2, ease: 'easeOut' }}
-      >
-        {children}
-      </motion.div>
-    </AnimatePresence>
+    <motion.div
+      key={pathname}
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.28, ease: 'easeOut' }}
+    >
+      {children}
+    </motion.div>
   );
 }

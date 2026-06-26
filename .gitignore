@@ -51,3 +51,6 @@ Thumbs.db
 
 # Script di debug e verifica live (es. token catturati, body di test)
 .scratch/
+
+# Piani di lavoro durevoli (working docs locali per Claude, non parte del codice)
+/plan/

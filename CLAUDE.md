@@ -6,6 +6,12 @@
 > API col sito in [docs/API_ANIMEUNION.md](docs/API_ANIMEUNION.md).
 >
 > **Regola**: a fine di ogni step, aggiorna la sezione "Stato" e "Roadmap" qui sotto.
+>
+> **Processo (vincolante):** il piano vivo del batch corrente sta in **`plan/`** nel progetto
+> (gitignored, durevole). I file in `~/.claude/plans/` sono **temporanei/effimeri**: la fonte è
+> `plan/`. La sezione **"Roadmap verso vX"** qui sotto rimanda sempre al piano attivo in `plan/`.
+> **Per ogni step si entra prima in plan mode** (approfondire → implementare a checkbox, Regola
+> #14/#15). Quando "Roadmap verso vX" esiste, c'è lavoro da fare: leggila e apri il piano in `plan/`.
 
 ## Visione
 
@@ -20,6 +26,30 @@ Frontend: Next.js 15 App Router + shadcn/ui + Tailwind + TanStack Query + zustan
 Shared: `packages/shared` (zod + interfaccia `AnimeSource`). Video: ffmpeg-static (HLS→MP4).
 Scheduler: setInterval (node-cron non usato). Lint: Biome. Test: Vitest (+ Playwright in futuro).
 Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
+
+## Roadmap verso v0.10.0 (batch attivo) — "Potenziamenti diffusi"
+
+> **C'è lavoro da fare.** Piano vivo (durevole): **[plan/potenziamenti-diffusi.md](plan/potenziamenti-diffusi.md)**
+> (gitignored). Branch: `feat/potenziamenti-diffusi` da `main`. Avanzamento e dettaglio tecnico
+> per ogni step sono nel piano. **Per riprendere:** "continua lo step N" → leggi questa sezione →
+> apri il piano → entra in plan mode per lo step. Aggiorna l'AVANZAMENTO nel piano + questa
+> sezione + "Stato attuale" a fine di ogni step.
+
+Batch di bug-fix + potenziamenti raccolti dall'uso reale. **Ordine (bug prima, scelta utente):**
+- **Fase A — Bug** (Step 1-5): dettaglio anime "0 episodi"/poster rotto/episodio mancante; tema
+  light/dark morto; toast iPhone + animazioni invisibili; home card overlap + hero bassa qualità;
+  popup che sforano.
+- **Fase B — Quick win** (Step 6): pulsante "AnimeUnion" (logo AU) nel dettaglio.
+- **Fase C — Rumore** (Step 7-8): batching notifiche + test push/PWA; tenuta coda gigante (One Piece).
+- **Fase D — Ricerca + seguiti** (Step 9-10): ricerca veloce/pagina risultati/in-app; "gestisci" follow.
+- **Fase E — Gestore file** (Step 11-13): relink dinamico + rinomina serie + vista "Mancanti";
+  multi-season alla riscarica; collega-senza-scaricare (stato `external`).
+- **Fase F — Personalizzazione** (Step 14-16): home mostra/nascondi+riordina; calendario; wallpaper.
+- **Fase G — Hardening + extra** (Step 17).
+
+**Stato batch:** Step 0 fatto (branch `feat/potenziamenti-diffusi` da `main`; governance +
+continuità: `plan/` gitignored, Regola #15, puntatori CLAUDE.md). **Prossimo: Step 1** (bug
+dettaglio anime: "0 episodi"/poster rotto/episodio mancante). _Aggiornare qui a ogni step._
 
 ## Stato attuale (2026-06-25)
 
@@ -380,6 +410,11 @@ potrebbe bloccare l'accesso, da fare con una scelta UX esplicita.
     step nel file di piano con contesto tecnico verificato (file + righe, contratti, impatto sui
     test) e sotto-task a checkbox `- [ ]`; (2) implementare spuntando le checkbox; (3) chiudere con
     `lint`/`typecheck`/`test`/`build` verdi e un commit dedicato (Regola #9).
+15. **Piano durevole in `plan/`, plan mode per ogni step**: il piano vivo del batch sta in `plan/`
+    (gitignored, fonte canonica); `~/.claude/plans/` è solo temporaneo. CLAUDE.md "Roadmap verso vX"
+    rimanda sempre al piano in `plan/`. **Prima di implementare uno step si entra in plan mode**
+    (approfondimento Regola #14), poi si implementa. A fine step aggiorna AVANZAMENTO nel piano +
+    "Roadmap verso vX" + "Stato attuale" in CLAUDE.md.
 
 ## Convenzioni
 

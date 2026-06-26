@@ -99,8 +99,15 @@ scelta Invio confermata dall'utente); **ricerca in-app** con nuovo `extraActions
 Informazioni, 9 sezioni Impostazioni via deep-link `/settings?section=`) cercabili ma non affollanti
 la vista di default; deep-link sezione in `settings-view.tsx` (`useSearchParams`+`isSectionId`, init
 lazy + effetto URL→stato) e `settings/page.tsx` avvolto in `Suspense` (`/settings` resta statica).
-Frontend-only, 273 test a contorno. **Prossimo: Step 10** (seguiti: potenziamento "gestisci" + elimina
-file). _Aggiornare qui a ogni step._
+Frontend-only, 273 test a contorno. **Step 10** (seguiti: potenziamento "gestisci" + elimina file):
+nuova voce **rossa** "Elimina file scaricati" nel menu della `FollowCard`, visibile solo per i seguiti
+`completed`/`dropped` (`canDeleteFiles`) → Dialog di conferma (mirror di `library-series-card`) con
+warning franchise-wide + checkbox `deleteFolder`, **riusa** `trpc.library.deleteSeries` (già testata) e
+invalida `library`/`download`/`catalog`/`follow.list`; l'anime resta tra i seguiti. Menu rifinito
+("Rimuovi"→"Smetti di seguire", voci distruttive raggruppate; `addAll` ora invalida l'intero router
+`download` così il widget summary dello Step 8 si aggiorna subito). Frontend-only, 273 test a contorno.
+**Prossimo: Step 11** (gestore file: relink dinamico + rinomina serie + vista "Mancanti"). _Aggiornare
+qui a ogni step._
 
 ## Stato attuale (2026-06-26)
 
@@ -267,7 +274,27 @@ direzione, niente loop col rail) per gestire anche la navigazione mentre si è g
 nessun test nuovo (273 verdi a contorno, coerente col pattern Step 2-6), lint/typecheck/build web verdi.
 Verifica manuale a runtime ancora da fare (palette senza lag/flood; Invio → /catalog?q= con
 filtri+paginazione; cercare "notifiche"/"tema"/"gestore file" porta alla sezione/pagina giusta).
-**Prossimo: Step 10** (seguiti: potenziamento "gestisci" + elimina file).
+**Step 10** seguiti: potenziamento "gestisci" + elimina file. **Causa (verificata):**
+[follow-card.tsx](apps/web/src/components/follows/follow-card.tsx) aveva cambia-stato, "Scarica episodi
+mancanti", toggle auto e "Rimuovi", ma **mancava** l'eliminazione dei file scaricati (esisteva solo in
+[library-series-card.tsx](apps/web/src/components/library/library-series-card.tsx), che usa
+`library.deleteSeries`/`deleteEntry` + `deleteFolder` con un Dialog di conferma). **Fix frontend-only
+(riuso, coerente col pattern Step 2/3/5/6/9):** nuova voce **rossa** "Elimina file scaricati" nel menu,
+visibile solo per i seguiti `completed`/`dropped` (`canDeleteFiles` — per gli stati attivi si continua a
+scaricare) → apre un Dialog di conferma (mirror di `library-series-card`) con warning esplicito
+"tutti i file della serie (tutte le stagioni/lingue collegate)" — `deleteSeries` è franchise-wide come la
+"Elimina intera serie" della libreria — checkbox `deleteFolder` (anche cartella + file extra) e bottone
+"Elimina definitivamente". `trpc.library.deleteSeries.useMutation` (servizio **già testato**, nessun
+backend toccato): toast contestuale (warning se `failedFiles`, info se 0 file, success con byte liberati)
+e invalida `library.list`/`library.stats`/`download` (intero router)/`catalog`/`follow.list`; **l'anime
+resta tra i seguiti**. **Rifinitura menu:** "Rimuovi" → "Smetti di seguire" (disambigua dalla nuova
+elimina-file), voci distruttive raggruppate sotto il separatore, e `addAll` ("Scarica episodi mancanti")
+ora invalida l'intero router `download` (prima solo `download.queue`, non più pollato dallo Step 8) così
+il widget summary riflette subito gli episodi accodati. Frontend-only, nessun test nuovo (273 verdi a
+contorno), lint/typecheck/build web verdi. Verifica manuale a runtime ancora da fare (su un seguito
+completato/droppato → "Elimina file scaricati" cancella i file con/senza cartella, l'anime resta nei
+seguiti, libreria/widget aggiornati; per gli stati attivi la voce non compare; "Smetti di seguire" non
+tocca i file). **Prossimo: Step 11** (gestore file: relink dinamico + rinomina serie + vista "Mancanti").
 
 ## Stato precedente (2026-06-25)
 

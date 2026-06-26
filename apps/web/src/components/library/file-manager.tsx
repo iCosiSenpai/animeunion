@@ -136,15 +136,17 @@ function RelinkDialog({
                   <li key={ep.id}>
                     <button
                       type="button"
-                      className="flex w-full items-center justify-between p-2 text-left hover:bg-muted focus-visible:bg-muted focus-visible:outline-none disabled:opacity-50"
+                      className="flex w-full items-center justify-between gap-2 p-2 text-left hover:bg-muted focus-visible:bg-muted focus-visible:outline-none disabled:opacity-50"
                       disabled={relink.isPending}
                       onClick={() => relink.mutate({ path: file.path, episodeFileId: ep.id })}
                     >
-                      <span>
+                      <span className="min-w-0 flex-1 truncate">
                         Episodio {ep.number}
                         {(ep.titleIta ?? ep.title) ? ` — ${ep.titleIta ?? ep.title}` : ''}
                       </span>
-                      <Badge variant="secondary">{ep.language === 'DUB_ITA' ? 'DUB' : 'SUB'}</Badge>
+                      <Badge variant="secondary" className="shrink-0">
+                        {ep.language === 'DUB_ITA' ? 'DUB' : 'SUB'}
+                      </Badge>
                     </button>
                   </li>
                 ))}
@@ -263,7 +265,7 @@ function FolderActionsDialog({
           <div className="space-y-3">
             <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-              <span>
+              <span className="min-w-0 break-words">
                 La cartella <strong>{folder.name}</strong> verrà eliminata e gli episodi di{' '}
                 <strong>{picked.title}</strong> rimessi in coda di download. Operazione non
                 annullabile.
@@ -282,7 +284,7 @@ function FolderActionsDialog({
         ) : (
           <div className="space-y-3">
             <div className="rounded-md border p-3 text-sm">
-              <p className="font-medium">{picked.title}</p>
+              <p className="break-words font-medium">{picked.title}</p>
               <p className="break-all text-xs text-muted-foreground">{folder.path}</p>
             </div>
             <div className="flex flex-col gap-2">

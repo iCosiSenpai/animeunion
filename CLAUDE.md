@@ -62,7 +62,13 @@ onda oggi"/"Stagione in corso") renderizzavano il carosello a `lg:grid-cols-6` s
 badge card robusti. Hero: il feed `/in-evidenza` espone solo `coverImage`, il banner sta su detail/DB
 → nuovo tipo shared `FeaturedAnime`, `catalog.bannersBySlugs` arricchisce in `home-service`
 (`bannerLookup`), rendering banner full-bleed o backdrop poster sfocato + poster nitido. +4 test (261).
-**Prossimo: Step 5** (popup overflow: relink/cartelle, titoli lunghi). _Aggiornare qui a ogni step._
+**Step 5** (popup overflow gestore file): la cornice dialog era già sicura (`DialogContent`
+`overflow-x-hidden`, `DialogTitle`/`Description` `break-words`) e i risultati ricerca già troncati
+(Fase 5); restavano 3 punti in [file-manager.tsx](apps/web/src/components/library/file-manager.tsx):
+righe episodio `RelinkDialog` (`<span>` `min-w-0 flex-1 truncate` + `<Badge>` `shrink-0` + button
+`gap-2`), blocco conferma `FolderActionsDialog` (`<span>` `min-w-0 break-words`), riquadro "anime
+scelto" (`break-words`). Solo CSS/markup, 261 test a contorno. **Prossimo: Step 6** (pulsante
+"AnimeUnion"/logo AU nel dettaglio). _Aggiornare qui a ogni step._
 
 ## Stato attuale (2026-06-26)
 
@@ -125,7 +131,23 @@ via `bannerLookup` in [context.ts](apps/api/src/context.ts); router `home.featur
 poster sfocato (`scale-110 blur-2xl brightness-[0.55]`, mai upscaling) + poster nitido a destra su
 lg+, testo `lg:max-w-[58%]`. **+4 test (261 verdi)** (`bannersBySlugs` + `home-service.test.ts`),
 lint/typecheck/build web verdi. Verifica manuale a runtime ancora da fare (card non accavallate; hero
-nitida con/senza banner in DB). **Prossimo: Step 5** (popup overflow: relink/cartelle, titoli lunghi).
+nitida con/senza banner in DB). **Step 5** popup che sforano nel gestore file (titoli lunghi). La
+cornice del dialog era già robusta (`DialogContent` `max-h-[85dvh] overflow-y-auto overflow-x-hidden
+w-[calc(100%-2rem)] max-w-lg`, [dialog.tsx](apps/web/src/components/ui/dialog.tsx); `DialogTitle`
+`break-words pr-6`, `DialogDescription` `break-words`) e la Fase 5 aveva già troncato i risultati di
+ricerca dei dialog e il titolo gruppo di "Mancanti". Restavano 3 punti che sforavano davvero, tutti in
+[file-manager.tsx](apps/web/src/components/library/file-manager.tsx): (1) **righe episodio del
+`RelinkDialog`** — il `<button>` `justify-between` aveva uno `<span>` (numero + titolo episodio) senza
+`min-w-0`/`truncate` e un `<Badge>` senza `shrink-0`, così un titolo lungo spingeva fuori il badge →
+ora span `min-w-0 flex-1 truncate`, badge `shrink-0`, button `gap-2`; (2) **blocco conferma riscarica
+del `FolderActionsDialog`** — `<span>` con `<strong>{folder.name}</strong>` flex child senza `min-w-0`
+→ ora `min-w-0 break-words` (nome cartella lungo va a capo nel riquadro rosso); (3) **riquadro "anime
+scelto"** — `<p className="font-medium">{picked.title}</p>` → `break-words` (coerente col `break-all`
+del path sotto). Niente refactor di "Mancanti" (`missing-dialog.tsx` già a posto; la vista dedicata è
+lo Step 11, Regola #1). Solo CSS/markup, nessun test nuovo (261 verdi a contorno), lint/typecheck/build
+web verdi. Verifica manuale a runtime ancora da fare (titoli lunghi troncati/a capo, badge/pulsanti
+sempre visibili, niente scroll orizzontale anche a larghezza mobile). **Prossimo: Step 6** (pulsante
+"AnimeUnion"/logo AU nel dettaglio).
 
 ## Stato precedente (2026-06-25)
 

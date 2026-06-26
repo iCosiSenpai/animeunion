@@ -74,3 +74,63 @@ export const downloadEnqueueResultSchema = z.object({
   enqueued: z.number().int(),
 });
 export type DownloadEnqueueResult = z.infer<typeof downloadEnqueueResultSchema>;
+
+// --- Coda gigante: aggregazione server-side + paginazione on-demand (Step 8) ---
+
+// Conteggi globali per stato: evitano di spedire tutte le righe per i badge filtro/widget.
+export const downloadCountsSchema = z.object({
+  all: z.number().int(),
+  queued: z.number().int(),
+  downloading: z.number().int(),
+  processing: z.number().int(),
+  completed: z.number().int(),
+  failed: z.number().int(),
+  cancelled: z.number().int(),
+});
+export type DownloadCounts = z.infer<typeof downloadCountsSchema>;
+
+// Riassunto di un gruppo (un anime): conteggi per stato + solo gli item attivi (per la barra/ETA
+// live). Le righe complete della coda si caricano on-demand via groupItems.
+export const downloadGroupSummarySchema = z.object({
+  animeId: z.string(),
+  animeTitle: z.string(),
+  animeSlug: z.string(),
+  animeCoverImage: z.string().nullable(),
+  total: z.number().int(),
+  queued: z.number().int(),
+  downloading: z.number().int(),
+  processing: z.number().int(),
+  completed: z.number().int(),
+  failed: z.number().int(),
+  cancelled: z.number().int(),
+  activeItems: z.array(downloadQueueItemSchema),
+});
+export type DownloadGroupSummary = z.infer<typeof downloadGroupSummarySchema>;
+
+export const downloadQueueSummarySchema = z.object({
+  groups: z.array(downloadGroupSummarySchema),
+  counts: downloadCountsSchema,
+});
+export type DownloadQueueSummary = z.infer<typeof downloadQueueSummarySchema>;
+
+export const downloadFilterSchema = z.enum(['all', 'active', 'completed', 'failed']);
+export type DownloadFilter = z.infer<typeof downloadFilterSchema>;
+
+export const downloadGroupItemsInputSchema = z.object({
+  animeId: z.string(),
+  filter: downloadFilterSchema.default('all'),
+  limit: z.number().int().min(1).max(200).default(50),
+  offset: z.number().int().min(0).default(0),
+});
+export type DownloadGroupItemsInput = z.infer<typeof downloadGroupItemsInputSchema>;
+
+export const downloadQueuePageSchema = z.object({
+  items: z.array(downloadQueueItemSchema),
+  total: z.number().int(),
+});
+export type DownloadQueuePage = z.infer<typeof downloadQueuePageSchema>;
+
+export const downloadGroupActionInputSchema = z.object({
+  animeId: z.string(),
+});
+export type DownloadGroupActionInput = z.infer<typeof downloadGroupActionInputSchema>;

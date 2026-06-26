@@ -82,8 +82,16 @@ solo al primo episodio della sessione; `context.ts` `worker.on('complete')` usa 
 `push-service.test()` (refactor invio in `sendToAll`, ritorna `{ok,sent}`) + router `push.test` +
 pulsante "Invia notifica di test" in `push-toggle.tsx` (solo se iscritto) + "Mostra toast di prova"
 nella card Notifiche di `settings-view.tsx` (verifica safe-area Step 3). +6 test (267).
-**Prossimo: Step 8** (download: pagina/pulsante + tenuta coda gigante One Piece). _Aggiornare qui a
-ogni step._
+**Step 8** (download: tenuta coda gigante One Piece): la coda intera (1000+ righe joinate) veniva
+spedita a ogni poll a pagina **e** widget navbar (quest'ultimo polla su ogni pagina). Nuovo
+**riassunto aggregato server-side**: `download.summary` → `{ groups, counts }` (`getQueueSummary`,
+Query A `GROUP BY anime.id,status` con `count()` + Query B solo gli **in volo** come `activeItems`)
+→ payload O(#anime + #attivi). Espansione card **paginata on-demand** (`download.groupItems`
+limit/offset, 50/pagina) e **azioni di gruppo** server-side `download.cancelGroup`/`retryGroup` (una
+chiamata, niente iterazione su 999 queued). Pagina e widget passano a `download.summary` con interval
+adattivo; widget mostra in volo live + riga "N in coda • N completati". Contratti shared additivi,
+`getQueue` invariato. +6 test (273). **Prossimo: Step 9** (ricerca: velocità + pagina risultati +
+ricerca in-app). _Aggiornare qui a ogni step._
 
 ## Stato attuale (2026-06-26)
 
@@ -199,8 +207,34 @@ top-center/safe-area dello Step 3). Centro notifiche invariato: il riassunto è 
 sessione/anime separati/fallback + [push-service.test.ts](apps/api/src/services/push-service.test.ts)
 `test()` con/senza sub), lint/typecheck/build web verdi. Verifica manuale a runtime ancora da fare
 (una sola riga riassuntiva + un solo push per sessione; "Invia notifica di test" arriva; toast
-top-center sotto la status bar). **Prossimo: Step 8** (download: pagina/pulsante + tenuta coda gigante
-One Piece).
+top-center sotto la status bar). **Step 8** download: tenuta coda gigante (One Piece).
+**Causa (verificata):** `download.queue` → `getQueue()` spediva **tutta** la coda joinata (1000+ righe ×
+~20 campi) a ogni poll, sia in pagina ([downloads-view.tsx](apps/web/src/components/downloads/downloads-view.tsx))
+sia nel widget navbar ([download-status.tsx](apps/web/src/components/downloads/download-status.tsx) — che
+polla su **ogni** pagina, prima a 1.5s fissi anche da idle); le azioni "Annulla/Riprova" di gruppo
+iteravano client-side su tutti gli item. **Fix — aggregazione server-side + paginazione on-demand:**
+nuovo `getQueueSummary()` in [download-service.ts](apps/api/src/services/download-service.ts) →
+`{ groups, counts }`: Query A `GROUP BY anime.id, status` (`count()`, niente righe) costruisce conteggi
+per-gruppo + globali; Query B seleziona solo gli **in volo** (`downloading`/`processing`, ≤ MAX_CONCURRENT)
+come `activeItems` per barra/velocità/ETA live → payload **O(#anime + #attivi)** invece di O(#coda). Gruppi
+ordinati downloading-first poi per titolo. Mapping riga→item estratto in `mapRow` + colonne condivise
+`queueSelectColumns` (riusate da `getQueue`, invariato per compat/test). Espansione card **paginata**
+`getQueueGroupItems({animeId,filter,limit,offset})` → `{items,total}` (50/pagina, ordine per
+`episode.number`); **azioni di gruppo** `cancelGroup`/`retryGroup` server-side (where su `episode.animeId`)
+= una sola chiamata anche con 999 queued. Router: `download.summary`, `download.groupItems`,
+`download.cancelGroup`, `download.retryGroup` (`download.queue` resta per compat, non più pollato).
+Contratti shared additivi (`downloadCountsSchema`, `downloadGroupSummarySchema`, `downloadQueueSummarySchema`,
+`downloadFilterSchema`, `downloadGroupItemsInputSchema`, `downloadQueuePageSchema`,
+`downloadGroupActionInputSchema`). Frontend: pagina e widget passano a `download.summary` con interval
+adattivo (1.5s in volo / 5s idle); card da `DownloadGroupSummary` con header dai conteggi (`completed/total`,
+"N in coda", "N falliti", velocità/ETA/overall da `activeItems`), espansione lazy paginata (← →, "X–Y di Z")
+con refetch solo se il gruppo è in volo, reset pagina al cambio filtro in render; widget mostra gli in volo
+live + riga "N in coda • N completati" invece di elencare i completati (anti-rumore). **+6 test (273 verdi)**
+([download-service.test.ts](apps/api/src/services/download-service.test.ts): `getQueueSummary` conteggi/
+activeItems/ordinamento, `getQueueGroupItems` paginazione/ordine/filtro, `cancelGroup`/`retryGroup` scoping),
+lint/typecheck/build web verdi. Verifica manuale a runtime ancora da fare (serie lunga via `addAllBySlug`:
+UNA card con riassunto, espansione paginata, widget fluido, azioni di gruppo con una chiamata). **Prossimo:
+Step 9** (ricerca: velocità + pagina risultati + ricerca in-app).
 
 ## Stato precedente (2026-06-25)
 

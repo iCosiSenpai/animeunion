@@ -5,19 +5,10 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { trpc } from '@/lib/trpc';
 import { cn, formatSpeed } from '@/lib/utils';
-import { CheckCircle2, Download, Loader2, Pause, Play, Trash2, XCircle } from 'lucide-react';
+import { CheckCircle2, Download, Loader2, Pause, Play, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { toast } from 'sonner';
-
-const STATUS_ICONS: Record<string, React.ReactNode> = {
-  queued: <Download className="h-4 w-4 text-muted-foreground" />,
-  downloading: <Loader2 className="h-4 w-4 animate-spin text-primary" />,
-  processing: <Loader2 className="h-4 w-4 animate-spin text-primary" />,
-  completed: <CheckCircle2 className="h-4 w-4 text-green-500" />,
-  failed: <XCircle className="h-4 w-4 text-destructive" />,
-  cancelled: <XCircle className="h-4 w-4 text-muted-foreground" />,
-};
 
 function ProgressBar({ progress }: { progress: number }) {
   return (
@@ -33,12 +24,19 @@ function ProgressBar({ progress }: { progress: number }) {
 export function DownloadStatus() {
   const utils = trpc.useUtils();
   const [open, setOpen] = useState(false);
-  const queue = trpc.download.queue.useQuery(undefined, {
-    refetchInterval: 1500,
+  const summary = trpc.download.summary.useQuery(undefined, {
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      if (!data) return 5000;
+      const active = data.counts.downloading + data.counts.processing > 0;
+      return active ? 1500 : 5000;
+    },
   });
   const pausedQuery = trpc.download.isPaused.useQuery(undefined, {
     refetchInterval: 5000,
   });
+
+  const invalidate = () => void utils.download.summary.invalidate();
 
   const pauseMutation = trpc.download.pauseQueue.useMutation({
     onSuccess: () => {
@@ -51,36 +49,26 @@ export function DownloadStatus() {
     onSuccess: () => {
       toast.success('Coda ripresa');
       void utils.download.isPaused.invalidate();
-      void utils.download.queue.invalidate();
+      invalidate();
     },
   });
 
   const clearMutation = trpc.download.clearCompleted.useMutation({
     onSuccess: (res) => {
       toast.success(`Rimossi ${res.removed} job dalla coda`);
-      void utils.download.queue.invalidate();
+      invalidate();
     },
   });
 
-  const items = queue.data ?? [];
-  const total = items.filter(
-    (item) =>
-      item.status === 'queued' ||
-      item.status === 'downloading' ||
-      item.status === 'processing' ||
-      item.status === 'failed',
-  ).length;
-  // Prima il file in corso (downloading/processing), poi i queued in ordine di richiesta.
-  const activeRank = (status: string): number =>
-    status === 'downloading' || status === 'processing' ? 0 : 1;
-  const active = items
-    .filter(
-      (item) =>
-        item.status === 'queued' || item.status === 'downloading' || item.status === 'processing',
-    )
-    .sort((a, b) => activeRank(a.status) - activeRank(b.status));
-  const completed = items.filter((item) => item.status === 'completed').slice(0, 5);
-  const hasError = items.some((item) => item.status === 'failed');
+  const counts = summary.data?.counts;
+  // Item in volo (downloading/processing) da tutti i gruppi: bastano per la barra live.
+  const inflight = (summary.data?.groups ?? []).flatMap((g) => g.activeItems);
+  const queuedCount = counts?.queued ?? 0;
+  const completedCount = counts?.completed ?? 0;
+  const failedCount = counts?.failed ?? 0;
+  const activeCount = counts ? counts.queued + counts.downloading + counts.processing : 0;
+  // Badge: lavori non terminali + falliti (esclude i cancellati, come prima).
+  const badge = activeCount + failedCount;
   const isPaused = pausedQuery.data?.paused ?? false;
 
   return (
@@ -96,13 +84,13 @@ export function DownloadStatus() {
           <Download
             className={cn(
               'h-5 w-5',
-              total > 0 && 'text-primary',
-              hasError && total === 0 && 'text-destructive',
+              badge > 0 && 'text-primary',
+              failedCount > 0 && activeCount === 0 && 'text-destructive',
             )}
           />
-          {total > 0 ? (
+          {badge > 0 ? (
             <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-medium text-primary-foreground">
-              {total > 99 ? '99+' : total}
+              {badge > 99 ? '99+' : badge}
             </span>
           ) : null}
         </Button>
@@ -118,24 +106,24 @@ export function DownloadStatus() {
               </span>
             ) : null}
           </div>
-          {queue.isFetching ? (
+          {summary.isFetching ? (
             <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
           ) : null}
         </div>
 
         <ScrollArea viewportClassName="max-h-80">
-          {active.length === 0 && completed.length === 0 ? (
+          {inflight.length === 0 && queuedCount === 0 && completedCount === 0 ? (
             <p className="px-4 py-6 text-center text-sm text-muted-foreground">
               Nessun download in coda.
             </p>
           ) : null}
 
-          {active.length > 0 ? (
+          {inflight.length > 0 ? (
             <div className="space-y-3 p-4">
-              {active.map((item) => (
+              {inflight.map((item) => (
                 <div key={item.id} className="space-y-1.5">
                   <div className="flex items-center gap-2">
-                    {STATUS_ICONS[item.status]}
+                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
                     <span className="line-clamp-1 flex-1 text-sm">
                       {item.animeTitle} · E{item.episodeNumber}
                     </span>
@@ -145,13 +133,7 @@ export function DownloadStatus() {
                   </div>
                   <ProgressBar progress={item.progress} />
                   <p className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span>
-                      {item.status === 'queued'
-                        ? 'In attesa'
-                        : item.status === 'downloading'
-                          ? 'In download'
-                          : 'In elaborazione'}
-                    </span>
+                    <span>{item.status === 'downloading' ? 'In download' : 'In elaborazione'}</span>
                     {item.status === 'downloading' && item.speedBps ? (
                       <span className="tabular-nums">{formatSpeed(item.speedBps)}</span>
                     ) : null}
@@ -161,19 +143,20 @@ export function DownloadStatus() {
             </div>
           ) : null}
 
-          {completed.length > 0 ? (
-            <div className="border-t px-4 py-3">
-              <p className="mb-2 text-xs font-medium text-muted-foreground">Completati</p>
-              <div className="space-y-2">
-                {completed.map((item) => (
-                  <div key={item.id} className="flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-green-500" />
-                    <span className="line-clamp-1 text-sm">
-                      {item.animeTitle} · E{item.episodeNumber}
-                    </span>
-                  </div>
-                ))}
-              </div>
+          {queuedCount > 0 || completedCount > 0 ? (
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t px-4 py-3 text-xs text-muted-foreground">
+              {queuedCount > 0 ? (
+                <span className="flex items-center gap-1">
+                  <Download className="h-3.5 w-3.5" />
+                  {queuedCount} in coda
+                </span>
+              ) : null}
+              {completedCount > 0 ? (
+                <span className="flex items-center gap-1">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+                  {completedCount} completati
+                </span>
+              ) : null}
             </div>
           ) : null}
         </ScrollArea>
@@ -197,7 +180,7 @@ export function DownloadStatus() {
                 size="sm"
                 className="col-span-1 gap-1"
                 onClick={() => pauseMutation.mutate()}
-                disabled={pauseMutation.isPending || active.length === 0}
+                disabled={pauseMutation.isPending || activeCount === 0}
               >
                 <Pause className="h-4 w-4" />
                 Pausa
@@ -208,7 +191,7 @@ export function DownloadStatus() {
               size="sm"
               className="col-span-1 gap-1"
               onClick={() => clearMutation.mutate()}
-              disabled={clearMutation.isPending || completed.length === 0}
+              disabled={clearMutation.isPending || completedCount === 0}
             >
               <Trash2 className="h-4 w-4" />
               Pulisci

@@ -4,6 +4,8 @@ import {
   downloadAddByRefInputSchema,
   downloadAddInputSchema,
   downloadAddMissingInputSchema,
+  downloadGroupActionInputSchema,
+  downloadGroupItemsInputSchema,
   downloadSetPriorityInputSchema,
 } from '@animeunion/shared';
 import { publicProcedure, router } from '../trpc';
@@ -35,8 +37,24 @@ export const downloadRouter = router({
 
   queue: publicProcedure.query(({ ctx }) => ctx.services.download.getQueue()),
 
+  // Riassunto aggregato per la coda gigante: gruppi (un anime) + conteggi globali, payload bounded.
+  summary: publicProcedure.query(({ ctx }) => ctx.services.download.getQueueSummary()),
+
+  // Righe di un singolo gruppo, paginate (espansione card on-demand).
+  groupItems: publicProcedure
+    .input(downloadGroupItemsInputSchema)
+    .query(({ ctx, input }) => ctx.services.download.getQueueGroupItems(input)),
+
   cancel: publicProcedure.input(downloadActionInputSchema).mutation(({ ctx, input }) => ({
     cancelled: ctx.services.download.cancel(input.queueId),
+  })),
+
+  cancelGroup: publicProcedure.input(downloadGroupActionInputSchema).mutation(({ ctx, input }) => ({
+    cancelled: ctx.services.download.cancelGroup(input.animeId),
+  })),
+
+  retryGroup: publicProcedure.input(downloadGroupActionInputSchema).mutation(({ ctx, input }) => ({
+    retried: ctx.services.download.retryGroup(input.animeId),
   })),
 
   retry: publicProcedure.input(downloadActionInputSchema).mutation(({ ctx, input }) => ({

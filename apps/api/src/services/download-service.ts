@@ -1,5 +1,14 @@
-import type { DownloadAddByRefInput, Language } from '@animeunion/shared';
-import { and, desc, eq, inArray, lt } from 'drizzle-orm';
+import type {
+  DownloadAddByRefInput,
+  DownloadCounts,
+  DownloadFilter,
+  DownloadGroupItemsInput,
+  DownloadGroupSummary,
+  DownloadQueuePage,
+  DownloadQueueSummary,
+  Language,
+} from '@animeunion/shared';
+import { and, asc, count, desc, eq, inArray, lt } from 'drizzle-orm';
 import type { Db } from '../db';
 import { schema } from '../db';
 import type { DownloadWorker } from '../lib/download-worker';
@@ -54,14 +63,26 @@ export interface DownloadService {
   addAllBySlug(input: { slug: string; language?: Language }): Promise<number>;
   /** Lista la coda joinata con episode/anime per la UI. */
   getQueue(): DownloadQueueItem[];
+  /**
+   * Riassunto della coda per la UI a coda gigante: un gruppo per anime con conteggi per stato e
+   * solo gli item attivi (downloading/processing) per la barra/ETA live, più i conteggi globali per
+   * i badge filtro. Payload O(#anime + #attivi) invece di O(#coda).
+   */
+  getQueueSummary(): DownloadQueueSummary;
+  /** Pagina di righe coda per un singolo anime (espansione card on-demand). */
+  getQueueGroupItems(input: DownloadGroupItemsInput): DownloadQueuePage;
   /** Cancella un job (queued: immediato; downloading: abort). */
   cancel(queueId: string): boolean;
   /** Annulla tutti i job in coda. */
   cancelAll(): number;
+  /** Annulla tutti i job non terminali di un singolo anime (azione di gruppo, una chiamata). */
+  cancelGroup(animeId: string): number;
   /** Rimette in coda un job in failed. */
   retry(queueId: string): boolean;
   /** Rimette in coda tutti i job falliti. */
   retryAllFailed(): number;
+  /** Rimette in coda tutti i job falliti di un singolo anime (azione di gruppo, una chiamata). */
+  retryGroup(animeId: string): number;
   /** Rimuove dalla tabella gli item terminali. */
   clearCompleted(): number;
   /** Cambia la priorità di un job (0..100); usato da "Scarica prima". */
@@ -99,8 +120,98 @@ const RETRY_MAX = 3;
 const NOT_CONFIGURED_MSG =
   'Configura le cartelle di download nelle Impostazioni prima di scaricare.';
 
+const ACTIVE_STATUSES = ['queued', 'downloading', 'processing'] as const;
+const INFLIGHT_STATUSES = ['downloading', 'processing'] as const;
+
 function isTerminal(status: string): boolean {
   return status === 'completed' || status === 'cancelled' || status === 'failed';
+}
+
+// Colonne denormalizzate (anime + episode) condivise da getQueue, getQueueGroupItems e dagli attivi
+// del riassunto: un'unica fonte per il mapping riga -> DownloadQueueItem.
+const queueSelectColumns = {
+  id: schema.downloadQueue.id,
+  episodeFileId: schema.downloadQueue.episodeFileId,
+  status: schema.downloadQueue.status,
+  progress: schema.downloadQueue.progress,
+  bytesDownloaded: schema.downloadQueue.bytesDownloaded,
+  totalBytes: schema.downloadQueue.totalBytes,
+  speedBps: schema.downloadQueue.speedBps,
+  startedAt: schema.downloadQueue.startedAt,
+  completedAt: schema.downloadQueue.completedAt,
+  error: schema.downloadQueue.error,
+  retryCount: schema.downloadQueue.retryCount,
+  retryMax: schema.downloadQueue.retryMax,
+  priority: schema.downloadQueue.priority,
+  createdAt: schema.downloadQueue.createdAt,
+  episodeId: schema.episodeFile.episodeId,
+  language: schema.episodeFile.language,
+  episodeNumber: schema.episode.number,
+  episodeTitle: schema.episode.title,
+  animeId: schema.anime.id,
+  animeTitle: schema.anime.title,
+  animeSlug: schema.anime.slug,
+  animeCoverImage: schema.anime.coverImage,
+} as const;
+
+interface QueueRow {
+  id: string;
+  episodeFileId: string;
+  status: string;
+  progress: number | null;
+  bytesDownloaded: number | null;
+  totalBytes: number | null;
+  speedBps: number | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  error: string | null;
+  retryCount: number | null;
+  retryMax: number | null;
+  priority: number | null;
+  createdAt: string;
+  episodeId: string;
+  language: string;
+  episodeNumber: number;
+  episodeTitle: string | null;
+  animeId: string;
+  animeTitle: string;
+  animeSlug: string;
+  animeCoverImage: string | null;
+}
+
+function mapRow(r: QueueRow): DownloadQueueItem {
+  return {
+    id: r.id,
+    episodeFileId: r.episodeFileId,
+    status: r.status as DownloadQueueItem['status'],
+    progress: r.progress ?? 0,
+    bytesDownloaded: r.bytesDownloaded ?? 0,
+    totalBytes: r.totalBytes ?? null,
+    speedBps: r.speedBps ?? null,
+    startedAt: r.startedAt,
+    completedAt: r.completedAt,
+    error: r.error,
+    retryCount: r.retryCount ?? 0,
+    retryMax: r.retryMax ?? RETRY_MAX,
+    priority: r.priority ?? 50,
+    createdAt: r.createdAt,
+    animeId: r.animeId,
+    animeTitle: r.animeTitle,
+    animeSlug: r.animeSlug,
+    animeCoverImage: r.animeCoverImage,
+    episodeId: r.episodeId,
+    episodeNumber: r.episodeNumber,
+    episodeTitle: r.episodeTitle,
+    language: r.language as Language,
+  };
+}
+
+// Traduce il filtro UI in lista di status DB.
+function statusesForFilter(filter: DownloadFilter): readonly string[] | null {
+  if (filter === 'active') return ACTIVE_STATUSES;
+  if (filter === 'completed') return ['completed'];
+  if (filter === 'failed') return ['failed', 'cancelled'];
+  return null;
 }
 
 export function createDownloadService(deps: DownloadServiceDeps): DownloadService {
@@ -211,30 +322,7 @@ export function createDownloadService(deps: DownloadServiceDeps): DownloadServic
 
     getQueue() {
       const rows = db
-        .select({
-          id: schema.downloadQueue.id,
-          episodeFileId: schema.downloadQueue.episodeFileId,
-          status: schema.downloadQueue.status,
-          progress: schema.downloadQueue.progress,
-          bytesDownloaded: schema.downloadQueue.bytesDownloaded,
-          totalBytes: schema.downloadQueue.totalBytes,
-          speedBps: schema.downloadQueue.speedBps,
-          startedAt: schema.downloadQueue.startedAt,
-          completedAt: schema.downloadQueue.completedAt,
-          error: schema.downloadQueue.error,
-          retryCount: schema.downloadQueue.retryCount,
-          retryMax: schema.downloadQueue.retryMax,
-          priority: schema.downloadQueue.priority,
-          createdAt: schema.downloadQueue.createdAt,
-          episodeId: schema.episodeFile.episodeId,
-          language: schema.episodeFile.language,
-          episodeNumber: schema.episode.number,
-          episodeTitle: schema.episode.title,
-          animeId: schema.anime.id,
-          animeTitle: schema.anime.title,
-          animeSlug: schema.anime.slug,
-          animeCoverImage: schema.anime.coverImage,
-        })
+        .select(queueSelectColumns)
         .from(schema.downloadQueue)
         .innerJoin(
           schema.episodeFile,
@@ -244,30 +332,124 @@ export function createDownloadService(deps: DownloadServiceDeps): DownloadServic
         .innerJoin(schema.anime, eq(schema.anime.id, schema.episode.animeId))
         .orderBy(desc(schema.downloadQueue.priority), desc(schema.downloadQueue.createdAt))
         .all();
-      return rows.map((r) => ({
-        id: r.id,
-        episodeFileId: r.episodeFileId,
-        status: r.status as DownloadQueueItem['status'],
-        progress: r.progress ?? 0,
-        bytesDownloaded: r.bytesDownloaded ?? 0,
-        totalBytes: r.totalBytes ?? null,
-        speedBps: r.speedBps ?? null,
-        startedAt: r.startedAt,
-        completedAt: r.completedAt,
-        error: r.error,
-        retryCount: r.retryCount ?? 0,
-        retryMax: r.retryMax ?? RETRY_MAX,
-        priority: r.priority ?? 50,
-        createdAt: r.createdAt,
-        animeId: r.animeId,
-        animeTitle: r.animeTitle,
-        animeSlug: r.animeSlug,
-        animeCoverImage: r.animeCoverImage,
-        episodeId: r.episodeId,
-        episodeNumber: r.episodeNumber,
-        episodeTitle: r.episodeTitle,
-        language: r.language as Language,
-      }));
+      return rows.map(mapRow);
+    },
+
+    getQueueSummary() {
+      // Query A: conteggi (anime x stato), nessuna riga della coda spedita.
+      const countRows = db
+        .select({
+          animeId: schema.anime.id,
+          animeTitle: schema.anime.title,
+          animeSlug: schema.anime.slug,
+          animeCoverImage: schema.anime.coverImage,
+          status: schema.downloadQueue.status,
+          n: count(),
+        })
+        .from(schema.downloadQueue)
+        .innerJoin(
+          schema.episodeFile,
+          eq(schema.episodeFile.id, schema.downloadQueue.episodeFileId),
+        )
+        .innerJoin(schema.episode, eq(schema.episode.id, schema.episodeFile.episodeId))
+        .innerJoin(schema.anime, eq(schema.anime.id, schema.episode.animeId))
+        .groupBy(schema.anime.id, schema.downloadQueue.status)
+        .all();
+
+      const counts: DownloadCounts = {
+        all: 0,
+        queued: 0,
+        downloading: 0,
+        processing: 0,
+        completed: 0,
+        failed: 0,
+        cancelled: 0,
+      };
+      const groups = new Map<string, DownloadGroupSummary>();
+      for (const row of countRows) {
+        let group = groups.get(row.animeId);
+        if (!group) {
+          group = {
+            animeId: row.animeId,
+            animeTitle: row.animeTitle,
+            animeSlug: row.animeSlug,
+            animeCoverImage: row.animeCoverImage,
+            total: 0,
+            queued: 0,
+            downloading: 0,
+            processing: 0,
+            completed: 0,
+            failed: 0,
+            cancelled: 0,
+            activeItems: [],
+          };
+          groups.set(row.animeId, group);
+        }
+        group.total += row.n;
+        counts.all += row.n;
+        if (row.status in counts) {
+          counts[row.status as keyof DownloadCounts] += row.n;
+          group[row.status as 'queued'] += row.n;
+        }
+      }
+
+      // Query B: solo gli item in volo (downloading/processing), per barra/velocità/ETA live.
+      const activeRows = db
+        .select(queueSelectColumns)
+        .from(schema.downloadQueue)
+        .innerJoin(
+          schema.episodeFile,
+          eq(schema.episodeFile.id, schema.downloadQueue.episodeFileId),
+        )
+        .innerJoin(schema.episode, eq(schema.episode.id, schema.episodeFile.episodeId))
+        .innerJoin(schema.anime, eq(schema.anime.id, schema.episode.animeId))
+        .where(inArray(schema.downloadQueue.status, [...INFLIGHT_STATUSES]))
+        .orderBy(desc(schema.downloadQueue.priority), desc(schema.downloadQueue.createdAt))
+        .all();
+      for (const r of activeRows) {
+        groups.get(r.animeId)?.activeItems.push(mapRow(r));
+      }
+
+      // Gruppi con download in corso in cima, poi per titolo (come l'attuale groupQueue lato UI).
+      const ordered = [...groups.values()].sort((a, b) => {
+        const aActive = a.downloading > 0 ? 0 : 1;
+        const bActive = b.downloading > 0 ? 0 : 1;
+        return aActive - bActive || a.animeTitle.localeCompare(b.animeTitle, 'it');
+      });
+      return { groups: ordered, counts };
+    },
+
+    getQueueGroupItems({ animeId, filter, limit, offset }) {
+      const statuses = statusesForFilter(filter);
+      const where = statuses
+        ? and(eq(schema.anime.id, animeId), inArray(schema.downloadQueue.status, [...statuses]))
+        : eq(schema.anime.id, animeId);
+      const rows = db
+        .select(queueSelectColumns)
+        .from(schema.downloadQueue)
+        .innerJoin(
+          schema.episodeFile,
+          eq(schema.episodeFile.id, schema.downloadQueue.episodeFileId),
+        )
+        .innerJoin(schema.episode, eq(schema.episode.id, schema.episodeFile.episodeId))
+        .innerJoin(schema.anime, eq(schema.anime.id, schema.episode.animeId))
+        .where(where)
+        .orderBy(asc(schema.episode.number), asc(schema.downloadQueue.createdAt))
+        .limit(limit)
+        .offset(offset)
+        .all();
+      const totalRow = db
+        .select({ n: count() })
+        .from(schema.downloadQueue)
+        .innerJoin(
+          schema.episodeFile,
+          eq(schema.episodeFile.id, schema.downloadQueue.episodeFileId),
+        )
+        .innerJoin(schema.episode, eq(schema.episode.id, schema.episodeFile.episodeId))
+        .innerJoin(schema.anime, eq(schema.anime.id, schema.episode.animeId))
+        .where(where)
+        .get();
+      return { items: rows.map(mapRow), total: totalRow?.n ?? 0 };
     },
 
     cancel(queueId) {
@@ -306,6 +488,34 @@ export function createDownloadService(deps: DownloadServiceDeps): DownloadServic
       return count;
     },
 
+    cancelGroup(animeId) {
+      const rows = db
+        .select({ id: schema.downloadQueue.id })
+        .from(schema.downloadQueue)
+        .innerJoin(
+          schema.episodeFile,
+          eq(schema.episodeFile.id, schema.downloadQueue.episodeFileId),
+        )
+        .innerJoin(schema.episode, eq(schema.episode.id, schema.episodeFile.episodeId))
+        .where(
+          and(
+            eq(schema.episode.animeId, animeId),
+            inArray(schema.downloadQueue.status, [...ACTIVE_STATUSES]),
+          ),
+        )
+        .all();
+      let count = 0;
+      for (const row of rows) {
+        if (worker.cancel(row.id)) {
+          count += 1;
+        }
+      }
+      if (count > 0) {
+        logger.info({ count, animeId }, 'Download del gruppo annullati');
+      }
+      return count;
+    },
+
     retryAllFailed() {
       const rows = db
         .select({ id: schema.downloadQueue.id })
@@ -320,6 +530,29 @@ export function createDownloadService(deps: DownloadServiceDeps): DownloadServic
       }
       if (count > 0) {
         logger.info({ count }, 'Tutti i download falliti rimetterti in coda');
+      }
+      return count;
+    },
+
+    retryGroup(animeId) {
+      const rows = db
+        .select({ id: schema.downloadQueue.id })
+        .from(schema.downloadQueue)
+        .innerJoin(
+          schema.episodeFile,
+          eq(schema.episodeFile.id, schema.downloadQueue.episodeFileId),
+        )
+        .innerJoin(schema.episode, eq(schema.episode.id, schema.episodeFile.episodeId))
+        .where(and(eq(schema.episode.animeId, animeId), eq(schema.downloadQueue.status, 'failed')))
+        .all();
+      let count = 0;
+      for (const row of rows) {
+        if (worker.retry(row.id)) {
+          count += 1;
+        }
+      }
+      if (count > 0) {
+        logger.info({ count, animeId }, 'Download falliti del gruppo rimessi in coda');
       }
       return count;
     },

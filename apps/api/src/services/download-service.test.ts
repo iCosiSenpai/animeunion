@@ -81,6 +81,24 @@ function insertFile(
     .run();
 }
 
+function insertQueue(
+  db: ReturnType<typeof import('../test/helpers').createTestDb>,
+  id: string,
+  episodeFileId: string,
+  status: 'queued' | 'downloading' | 'processing' | 'completed' | 'failed' | 'cancelled',
+) {
+  db.insert(schema.downloadQueue)
+    .values({
+      id,
+      episodeFileId,
+      status,
+      priority: 50,
+      progress: 0,
+      createdAt: new Date().toISOString(),
+    })
+    .run();
+}
+
 describe('DownloadService', () => {
   let db: ReturnType<typeof import('../test/helpers').createTestDb>;
   let animePath: string;
@@ -622,6 +640,149 @@ describe('DownloadService', () => {
     expect(catalog.getBySlug).toHaveBeenCalledWith('naruto');
     expect(n).toBe(1);
     expect(enqueueSpy).toHaveBeenCalledWith('ef-2');
+  });
+
+  it('getQueueSummary aggrega i conteggi e mette solo gli in volo in activeItems', () => {
+    const { service } = makeService();
+    insertAnime(db, 'a-1');
+    for (let i = 1; i <= 7; i += 1) {
+      insertEpisode(db, `e-${i}`, 'a-1', i);
+      insertFile(db, `ef-${i}`, `e-${i}`, 'SUB_ITA');
+    }
+    insertQueue(db, 'q-1', 'ef-1', 'downloading');
+    insertQueue(db, 'q-2', 'ef-2', 'queued');
+    insertQueue(db, 'q-3', 'ef-3', 'queued');
+    insertQueue(db, 'q-4', 'ef-4', 'queued');
+    insertQueue(db, 'q-5', 'ef-5', 'completed');
+    insertQueue(db, 'q-6', 'ef-6', 'completed');
+    insertQueue(db, 'q-7', 'ef-7', 'failed');
+
+    const { groups, counts } = service.getQueueSummary();
+    expect(counts).toEqual({
+      all: 7,
+      queued: 3,
+      downloading: 1,
+      processing: 0,
+      completed: 2,
+      failed: 1,
+      cancelled: 0,
+    });
+    expect(groups).toHaveLength(1);
+    expect(groups[0]).toMatchObject({
+      animeId: 'a-1',
+      total: 7,
+      queued: 3,
+      downloading: 1,
+      completed: 2,
+      failed: 1,
+    });
+    expect(groups[0]?.activeItems).toHaveLength(1);
+    expect(groups[0]?.activeItems[0]?.status).toBe('downloading');
+  });
+
+  it('getQueueSummary ordina i gruppi con download in corso per primi', () => {
+    const { service } = makeService();
+    insertAnime(db, 'a-anime');
+    insertAnime(db, 'z-anime');
+    insertEpisode(db, 'e-a', 'a-anime', 1);
+    insertFile(db, 'ef-a', 'e-a', 'SUB_ITA');
+    insertEpisode(db, 'e-z', 'z-anime', 1);
+    insertFile(db, 'ef-z', 'e-z', 'SUB_ITA');
+    insertQueue(db, 'q-a', 'ef-a', 'queued');
+    insertQueue(db, 'q-z', 'ef-z', 'downloading');
+
+    const { groups } = service.getQueueSummary();
+    // z-anime ha un download in corso → precede a-anime nonostante l'ordine alfabetico.
+    expect(groups.map((g) => g.animeId)).toEqual(['z-anime', 'a-anime']);
+  });
+
+  it('getQueueGroupItems pagina e ordina per numero episodio', () => {
+    const { service } = makeService();
+    insertAnime(db, 'a-1');
+    // Inserisce in ordine sparso per verificare l'ordinamento per episode.number.
+    for (const n of [3, 1, 5, 2, 4]) {
+      insertEpisode(db, `e-${n}`, 'a-1', n);
+      insertFile(db, `ef-${n}`, `e-${n}`, 'SUB_ITA');
+      insertQueue(db, `q-${n}`, `ef-${n}`, 'queued');
+    }
+
+    const p0 = service.getQueueGroupItems({ animeId: 'a-1', filter: 'all', limit: 2, offset: 0 });
+    expect(p0.total).toBe(5);
+    expect(p0.items.map((i) => i.episodeNumber)).toEqual([1, 2]);
+    const p1 = service.getQueueGroupItems({ animeId: 'a-1', filter: 'all', limit: 2, offset: 2 });
+    expect(p1.items.map((i) => i.episodeNumber)).toEqual([3, 4]);
+    const p2 = service.getQueueGroupItems({ animeId: 'a-1', filter: 'all', limit: 2, offset: 4 });
+    expect(p2.items.map((i) => i.episodeNumber)).toEqual([5]);
+  });
+
+  it('getQueueGroupItems filtra per stato', () => {
+    const { service } = makeService();
+    insertAnime(db, 'a-1');
+    insertEpisode(db, 'e-1', 'a-1', 1);
+    insertEpisode(db, 'e-2', 'a-1', 2);
+    insertEpisode(db, 'e-3', 'a-1', 3);
+    insertFile(db, 'ef-1', 'e-1', 'SUB_ITA');
+    insertFile(db, 'ef-2', 'e-2', 'SUB_ITA');
+    insertFile(db, 'ef-3', 'e-3', 'SUB_ITA');
+    insertQueue(db, 'q-1', 'ef-1', 'completed');
+    insertQueue(db, 'q-2', 'ef-2', 'queued');
+    insertQueue(db, 'q-3', 'ef-3', 'failed');
+
+    const done = service.getQueueGroupItems({
+      animeId: 'a-1',
+      filter: 'completed',
+      limit: 50,
+      offset: 0,
+    });
+    expect(done.total).toBe(1);
+    expect(done.items[0]?.status).toBe('completed');
+    const active = service.getQueueGroupItems({
+      animeId: 'a-1',
+      filter: 'active',
+      limit: 50,
+      offset: 0,
+    });
+    expect(active.total).toBe(1);
+    expect(active.items[0]?.status).toBe('queued');
+  });
+
+  it('cancelGroup annulla solo i job del gruppo richiesto', () => {
+    const { service } = makeService();
+    insertAnime(db, 'a-1');
+    insertAnime(db, 'a-2');
+    insertEpisode(db, 'e-1', 'a-1', 1);
+    insertEpisode(db, 'e-2', 'a-1', 2);
+    insertEpisode(db, 'e-3', 'a-2', 1);
+    insertFile(db, 'ef-1', 'e-1', 'SUB_ITA');
+    insertFile(db, 'ef-2', 'e-2', 'SUB_ITA');
+    insertFile(db, 'ef-3', 'e-3', 'SUB_ITA');
+    insertQueue(db, 'q-1', 'ef-1', 'queued');
+    insertQueue(db, 'q-2', 'ef-2', 'queued');
+    insertQueue(db, 'q-3', 'ef-3', 'queued');
+
+    const n = service.cancelGroup('a-1');
+    expect(n).toBe(2);
+    const rows = db.select().from(schema.downloadQueue).all();
+    expect(rows.find((r) => r.id === 'q-3')?.status).toBe('queued');
+  });
+
+  it('retryGroup rimette in coda solo i falliti del gruppo richiesto', () => {
+    const { service } = makeService();
+    insertAnime(db, 'a-1');
+    insertAnime(db, 'a-2');
+    insertEpisode(db, 'e-1', 'a-1', 1);
+    insertEpisode(db, 'e-2', 'a-2', 1);
+    insertFile(db, 'ef-1', 'e-1', 'SUB_ITA');
+    insertFile(db, 'ef-2', 'e-2', 'SUB_ITA');
+    insertQueue(db, 'q-1', 'ef-1', 'failed');
+    insertQueue(db, 'q-2', 'ef-2', 'failed');
+
+    // Esattamente 1 job rimesso in coda (solo a-1); a-2 resta fallito (il worker.retry avvia il job
+    // ricodato, quindi non asseriamo lo stato finale di q-1: basta il conteggio + lo scoping).
+    const n = service.retryGroup('a-1');
+    expect(n).toBe(1);
+    const rows = db.select().from(schema.downloadQueue).all();
+    expect(rows.find((r) => r.id === 'q-2')?.status).toBe('failed');
   });
 
   it('addEpisodeByRef lancia NOT_FOUND se la lingua non esiste', async () => {

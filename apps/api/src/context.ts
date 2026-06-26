@@ -73,7 +73,11 @@ export function createAppContext(options: { env?: Env; databasePath?: string } =
   const follow = createFollowService({ db, source, logger });
   const favorites = createFavoritesService({ db, source, catalog, config, logger });
   const profile = createProfileService({ source, logger });
-  const home = createHomeService({ source, logger });
+  const home = createHomeService({
+    source,
+    logger,
+    bannerLookup: (slugs) => catalog.bannersBySlugs(slugs),
+  });
   const resolver = createSeriesResolver({ db });
   const renamer = createRenamerService({ db, config, seriesResolver: resolver });
   const library = createLibraryService({ db, config, renamer, resolver, logger });

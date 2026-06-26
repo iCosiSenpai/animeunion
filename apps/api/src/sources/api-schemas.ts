@@ -260,8 +260,14 @@ export const apiLatestEpisodesResponseSchema = z.object({
   data: z.array(apiLatestEpisodeSchema).default([]),
 });
 
+// `/in-evidenza` ritorna AnimeSummary (solo coverImage); estendiamo con bannerImage per catturarlo
+// se il live lo espone (null altrimenti → non-breaking). L'arricchimento dal DB avviene in home-service.
+const apiFeaturedItemSchema = apiAnimeSummarySchema.extend({
+  bannerImage: nullableString,
+});
+
 export const apiFeaturedResponseSchema = z.object({
-  data: z.array(apiAnimeSummarySchema).default([]),
+  data: z.array(apiFeaturedItemSchema).default([]),
 });
 
 export const apiNewsItemSchema = z.object({

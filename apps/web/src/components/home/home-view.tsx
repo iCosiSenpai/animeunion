@@ -4,7 +4,7 @@ import { AnimeCard } from '@/components/anime/anime-card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { trpc } from '@/lib/trpc';
-import type { AnimeSummary, Season } from '@animeunion/shared';
+import type { AnimeSummary, FeaturedAnime, Season } from '@animeunion/shared';
 import {
   Calendar,
   ChevronLeft,
@@ -95,12 +95,14 @@ function Section({
   items,
   isLoading,
   href,
+  carouselClassName,
 }: {
   title: string;
   icon: ElementType;
   items: AnimeSummary[];
   isLoading: boolean;
   href?: string;
+  carouselClassName?: string;
 }) {
   if (!isLoading && items.length === 0) {
     return null;
@@ -109,9 +111,9 @@ function Section({
     <section className="space-y-1">
       <SectionHeader icon={icon} title={title} href={href} />
       {isLoading ? (
-        <CardCarouselSkeleton count={6} />
+        <CardCarouselSkeleton count={6} className={carouselClassName} />
       ) : (
-        <CardCarousel>
+        <CardCarousel className={carouselClassName}>
           {items.slice(0, 12).map((item) => (
             <AnimeCard key={item.id} anime={item} />
           ))}
@@ -149,7 +151,7 @@ function HeroCarousel({
   anime,
   isLoading,
 }: {
-  anime: AnimeSummary[];
+  anime: FeaturedAnime[];
   isLoading: boolean;
 }) {
   const [index, setIndex] = useState(0);
@@ -204,25 +206,41 @@ function HeroCarousel({
       onMouseLeave={() => setPaused(false)}
     >
       <div className="absolute inset-0">
-        {current.coverImage ? (
+        {current.bannerImage ? (
+          // Banner 16:9 ad alta risoluzione: full-bleed nitido.
           <img
-            src={current.coverImage}
+            src={current.bannerImage}
             alt=""
-            className="h-full w-full object-cover object-center md:object-top"
+            className="h-full w-full object-cover object-center"
             loading="eager"
           />
-        ) : null}
-        <div
-          className={`absolute inset-0 ${
-            current.coverImage ? 'bg-black/30' : 'bg-gradient-to-br from-primary/30 to-background'
-          }`}
-        />
+        ) : current.coverImage ? (
+          // Niente banner: backdrop poster sfocato (mai upscaling) + poster nitido su lg+.
+          <>
+            <img
+              src={current.coverImage}
+              alt=""
+              aria-hidden
+              className="h-full w-full scale-110 object-cover blur-2xl brightness-[0.55]"
+              loading="eager"
+            />
+            <img
+              src={current.coverImage}
+              alt=""
+              className="absolute right-14 top-1/2 hidden h-[72%] -translate-y-1/2 rounded-xl object-contain shadow-2xl lg:block"
+              loading="eager"
+            />
+          </>
+        ) : (
+          <div className="absolute inset-0 bg-gradient-to-br from-primary/30 to-background" />
+        )}
+        <div className="absolute inset-0 bg-black/20" />
         <div className="absolute inset-0 bg-gradient-to-r from-background via-background/80 to-transparent" />
         <div className="absolute inset-0 bg-gradient-to-t from-background via-background/40 to-transparent" />
       </div>
 
       <div className="relative flex h-full items-end px-6 pb-10 md:px-10 md:pb-12 lg:px-14">
-        <div className="max-w-2xl space-y-3 md:space-y-4">
+        <div className="max-w-2xl space-y-3 md:space-y-4 lg:max-w-[58%]">
           <div className="flex flex-wrap items-center gap-2">
             <Badge
               variant="secondary"
@@ -367,6 +385,7 @@ export function HomeView() {
           items={todayAnime}
           isLoading={week.isLoading}
           href="/calendar"
+          carouselClassName="lg:grid-cols-3"
         />
         <Section
           title={`Stagione in corso · ${SEASON_LABELS[season]} ${year}`}
@@ -374,6 +393,7 @@ export function HomeView() {
           items={seasonal.data?.data ?? []}
           isLoading={seasonal.isLoading}
           href={`/catalog?season=${season}&year=${year}`}
+          carouselClassName="lg:grid-cols-3"
         />
       </div>
 

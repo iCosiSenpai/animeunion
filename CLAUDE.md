@@ -56,7 +56,13 @@ sensibile al tema, skeleton hero `bg-foreground/10`. **Step 3** (toast iPhone + 
 toast `top-center` + `offset` safe-area; interruttore Animazioni autorevole (`reducedMotion`
 `never`/`always`); transizione di pagina più decisa/affidabile (`motion.div` keyed, niente
 `AnimatePresence mode="wait"`); micro-interazioni hover/tap card gated; nota costo in Impostazioni.
-**Prossimo: Step 4** (home: card overlap + hero bassa qualità). _Aggiornare qui a ogni step._
+**Step 4** (home: card overlap + hero bassa qualità): le due sezioni in `grid lg:grid-cols-2` ("In
+onda oggi"/"Stagione in corso") renderizzavano il carosello a `lg:grid-cols-6` su mezza larghezza →
+6 card cramped; ora `Section` accetta `carouselClassName` e quelle due passano `lg:grid-cols-3` +
+badge card robusti. Hero: il feed `/in-evidenza` espone solo `coverImage`, il banner sta su detail/DB
+→ nuovo tipo shared `FeaturedAnime`, `catalog.bannersBySlugs` arricchisce in `home-service`
+(`bannerLookup`), rendering banner full-bleed o backdrop poster sfocato + poster nitido. +4 test (261).
+**Prossimo: Step 5** (popup overflow: relink/cartelle, titoli lunghi). _Aggiornare qui a ogni step._
 
 ## Stato attuale (2026-06-26)
 
@@ -99,8 +105,27 @@ config al salvataggio era già presente); (3) **transizione più decisa/affidabi
 campo Animazioni in Impostazioni. Decisione utente: l'interruttore in-app è autorevole. Niente
 entrata/stagger per-card (rischio contenuto invisibile in SSR + Regola #1). Solo frontend, nessun test
 nuovo (257 verdi a contorno), lint/typecheck/build web verdi. Verifica manuale a runtime ancora da fare
-(toast iPhone sotto la status bar; ON/OFF animazioni evidente). **Prossimo: Step 4** (home: card
-overlap + hero bassa qualità).
+(toast iPhone sotto la status bar; ON/OFF animazioni evidente). **Step 4** home: card overlap + hero
+bassa qualità. **Card overlap (causa reale):** non i badge in sé ma le due `Section` ("In onda oggi"/
+"Stagione in corso") dentro `grid lg:grid-cols-2` ([home-view.tsx](apps/web/src/components/home/home-view.tsx))
+che renderizzavano il carosello col default `lg:grid-cols-6` → 6 card spalmate su **mezza** larghezza
+→ strette, badge collisi, testo tagliato. Fix: `Section` ora accetta `carouselClassName` inoltrato a
+`CardCarousel`/`CardCarouselSkeleton` (twMerge → `lg:grid-cols-3` sovrascrive il default), le due
+sezioni passano `lg:grid-cols-3`; badge robusti in [anime-card.tsx](apps/web/src/components/anime/anime-card.tsx)
+(tipo `max-w-[60%] truncate`, footer `gap-2`, anno `shrink-0`, generi `min-w-0 truncate text-right`).
+**Hero hi-res (banner + blur fallback, scelta utente):** il feed `/in-evidenza` ritorna solo
+`coverImage` (poster 2:3, confermato in [docs/API_ANIMEUNION.md](docs/API_ANIMEUNION.md)); l'hero lo
+stirava su un'area larga → sgranato. Il banner sta solo su detail/DB (`anime.banner_image`). Nuovo
+tipo shared `featuredAnimeSchema`/`FeaturedAnime` (= summary + `bannerImage`,
+[anime.ts](packages/shared/src/contracts/anime.ts)); `getFeatured` ritorna `FeaturedAnime[]`;
+`apiFeaturedItemSchema` cattura il banner se il live lo espone; nuovo `catalog.bannersBySlugs(slugs)`
+(single query indicizzata su slug) arricchisce in `home-service.featured` (live → DB → null), cablato
+via `bannerLookup` in [context.ts](apps/api/src/context.ts); router `home.featured` output
+`featuredAnimeSchema`. Rendering hero: banner full-bleed nitido se presente, altrimenti backdrop
+poster sfocato (`scale-110 blur-2xl brightness-[0.55]`, mai upscaling) + poster nitido a destra su
+lg+, testo `lg:max-w-[58%]`. **+4 test (261 verdi)** (`bannersBySlugs` + `home-service.test.ts`),
+lint/typecheck/build web verdi. Verifica manuale a runtime ancora da fare (card non accavallate; hero
+nitida con/senza banner in DB). **Prossimo: Step 5** (popup overflow: relink/cartelle, titoli lunghi).
 
 ## Stato precedente (2026-06-25)
 

@@ -23,7 +23,7 @@ export function AnimeCard({ anime }: { anime: AnimeSummary }) {
             className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
           />
         ) : null}
-        <Badge variant="secondary" className="absolute left-2 top-2 shadow-sm">
+        <Badge variant="secondary" className="absolute left-2 top-2 max-w-[60%] truncate shadow-sm">
           {anime.type}
         </Badge>
         {followed ? (
@@ -54,10 +54,10 @@ export function AnimeCard({ anime }: { anime: AnimeSummary }) {
         <h3 className="line-clamp-2 text-sm font-medium transition-colors group-hover:text-primary">
           {title}
         </h3>
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>{anime.seasonYear ?? ''}</span>
+        <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+          <span className="shrink-0">{anime.seasonYear ?? ''}</span>
           {anime.genres.length > 0 ? (
-            <span className="max-w-[55%] truncate">
+            <span className="min-w-0 truncate text-right">
               {anime.genres
                 .slice(0, 2)
                 .map((genre) => genre.name)

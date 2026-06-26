@@ -4,6 +4,7 @@ import type {
   CalendarEntry,
   EpisodeDetail,
   Favorite,
+  FeaturedAnime,
   GenreDetail,
   HistoryItem,
   LatestEpisode,
@@ -55,6 +56,6 @@ export interface AnimeSource {
 
   // Home del sito.
   getLatestEpisodes?(limit?: number): Promise<LatestEpisode[]>;
-  getFeatured?(): Promise<AnimeSummary[]>;
+  getFeatured?(): Promise<FeaturedAnime[]>;
   getNews?(limit?: number): Promise<NewsItem[]>;
 }

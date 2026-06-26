@@ -70,6 +70,8 @@ export interface CatalogService {
   getEpisodeFile(episodeFileId: string): Promise<EpisodeDetail>;
   getCalendar(): Promise<CalendarWeek>;
   getCalendarDay(day: WeekDay): Promise<CalendarEntry>;
+  /** Banner ad alta risoluzione (`anime.banner_image`) per slug, dalla cache locale. */
+  bannersBySlugs(slugs: string[]): Map<string, string | null>;
 }
 
 export function createCatalogService(options: CatalogServiceOptions): CatalogService {
@@ -782,6 +784,18 @@ export function createCatalogService(options: CatalogServiceOptions): CatalogSer
         throw new NotFoundError(`Nessuna voce di calendario per ${day}`);
       }
       return entry;
+    },
+
+    bannersBySlugs(slugs): Map<string, string | null> {
+      if (slugs.length === 0) {
+        return new Map();
+      }
+      const rows = db
+        .select({ slug: schema.anime.slug, bannerImage: schema.anime.bannerImage })
+        .from(schema.anime)
+        .where(inArray(schema.anime.slug, slugs))
+        .all();
+      return new Map(rows.map((row) => [row.slug, row.bannerImage]));
     },
   };
 }

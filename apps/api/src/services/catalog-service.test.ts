@@ -509,4 +509,54 @@ describe('CatalogService', () => {
     expect(result.years.length).toBeGreaterThan(0);
     expect(result.years).toEqual([...result.years].sort((a, b) => b - a));
   });
+
+  it('bannersBySlugs ritorna il banner dal DB per slug, ignorando gli assenti', () => {
+    const db = createTestDb();
+    const config = createConfigService({ db });
+    const ts = new Date().toISOString();
+    db.insert(schema.anime)
+      .values([
+        {
+          id: 'b1',
+          slug: 'con-banner',
+          title: 'Con Banner',
+          titleIta: null,
+          type: 'TV',
+          status: 'ONGOING',
+          coverImage: 'https://cdn.test/c1.jpg',
+          bannerImage: 'https://cdn.test/banner1.jpg',
+          episodeCount: 0,
+          seasonYear: 2026,
+          createdAt: ts,
+          updatedAt: ts,
+        },
+        {
+          id: 'b2',
+          slug: 'senza-banner',
+          title: 'Senza Banner',
+          titleIta: null,
+          type: 'TV',
+          status: 'ONGOING',
+          coverImage: 'https://cdn.test/c2.jpg',
+          bannerImage: null,
+          episodeCount: 0,
+          seasonYear: 2026,
+          createdAt: ts,
+          updatedAt: ts,
+        },
+      ])
+      .run();
+    const service = createCatalogService({
+      db,
+      source: createMockSource(),
+      config,
+      logger: testLogger,
+    });
+
+    const map = service.bannersBySlugs(['con-banner', 'senza-banner', 'inesistente']);
+    expect(map.get('con-banner')).toBe('https://cdn.test/banner1.jpg');
+    expect(map.get('senza-banner')).toBeNull();
+    expect(map.has('inesistente')).toBe(false);
+    expect(service.bannersBySlugs([]).size).toBe(0);
+  });
 });

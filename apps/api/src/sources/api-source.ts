@@ -5,6 +5,7 @@ import type {
   CalendarEntry,
   EpisodeDetail,
   Favorite,
+  FeaturedAnime,
   GenreDetail,
   HistoryItem,
   LatestEpisode,
@@ -329,9 +330,11 @@ export function createApiSource(options: ApiSourceOptions): AnimeSource {
       return apiLatestEpisodesResponseSchema.parse(raw).data;
     },
 
-    async getFeatured(): Promise<AnimeSummary[]> {
+    async getFeatured(): Promise<FeaturedAnime[]> {
       const raw = await http.get<unknown>('/in-evidenza');
-      return apiFeaturedResponseSchema.parse(raw).data.map(toSummary);
+      return apiFeaturedResponseSchema
+        .parse(raw)
+        .data.map((item) => ({ ...toSummary(item), bannerImage: item.bannerImage ?? null }));
     },
 
     async getNews(limit = 5): Promise<NewsItem[]> {

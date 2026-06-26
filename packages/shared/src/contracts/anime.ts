@@ -33,6 +33,14 @@ export const animeSummarySchema = z.object({
 });
 export type AnimeSummary = z.infer<typeof animeSummarySchema>;
 
+// Hero "In evidenza": come AnimeSummary ma con il banner ad alta risoluzione (16:9). Il feed
+// `/in-evidenza` espone solo `coverImage`; il banner viene arricchito lato server dal DB
+// (`anime.banner_image`) quando disponibile, altrimenti null → fallback a coverImage lato web.
+export const featuredAnimeSchema = animeSummarySchema.extend({
+  bannerImage: z.string().nullable(),
+});
+export type FeaturedAnime = z.infer<typeof featuredAnimeSchema>;
+
 export const relatedAnimeSchema = z.object({
   id: z.string(),
   slug: z.string(),

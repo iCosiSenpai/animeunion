@@ -1,4 +1,4 @@
-import { animeSummarySchema, latestEpisodeSchema, newsItemSchema } from '@animeunion/shared';
+import { featuredAnimeSchema, latestEpisodeSchema, newsItemSchema } from '@animeunion/shared';
 import { z } from 'zod';
 import { publicProcedure, router } from '../trpc';
 
@@ -9,7 +9,7 @@ export const homeRouter = router({
     .query(({ ctx, input }) => ctx.services.home.latestEpisodes(input?.limit)),
 
   featured: publicProcedure
-    .output(z.array(animeSummarySchema))
+    .output(z.array(featuredAnimeSchema))
     .query(({ ctx }) => ctx.services.home.featured()),
 
   news: publicProcedure

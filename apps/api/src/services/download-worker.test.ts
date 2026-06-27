@@ -108,6 +108,90 @@ function seedEpisodeFiles(
   });
 }
 
+/** Catalog stub a due serie (a-1 con 3 file, a-2 con 1) per i test di fairness. */
+function twoSeriesCatalog(url: string): CatalogService {
+  const animeByFile: Record<string, string> = {
+    'a1-e1': 'a-1',
+    'a1-e2': 'a-1',
+    'a1-e3': 'a-1',
+    'a2-e1': 'a-2',
+  };
+  return {
+    getEpisodeFile: async (fileId: string) => ({
+      id: fileId,
+      animeId: animeByFile[fileId] ?? 'a-1',
+      number: 1,
+      title: 'P',
+      titleIta: null,
+      duration: null,
+      thumbnail: null,
+      airDate: null,
+      isFiller: false,
+      language: 'SUB_ITA',
+      downloadUrl: url,
+      expiresAt: null,
+    }),
+  } as unknown as CatalogService;
+}
+
+/**
+ * Seed di due serie con coda: a-1 (3 episodi, createdAt più vecchio) e a-2 (1 episodio, più recente).
+ * `priorities` permette di alzare la priorità di singoli job per i test "Scarica prima".
+ */
+function seedTwoSeriesQueue(
+  db: ReturnType<typeof import('../test/helpers').createTestDb>,
+  opts: { priorities?: Record<string, number> } = {},
+): void {
+  const t = '2026-01-01T00:00:00.000Z';
+  for (const [id, slug, count] of [
+    ['a-1', 'foo', 3],
+    ['a-2', 'bar', 1],
+  ] as const) {
+    db.insert(schema.anime)
+      .values({
+        id,
+        slug,
+        title: slug,
+        type: 'TV',
+        status: 'ONGOING',
+        episodeCount: count,
+        createdAt: t,
+        updatedAt: t,
+      })
+      .run();
+  }
+  const rows: Array<[string, string, string, number, string]> = [
+    ['a1-e1', 'e-a1-1', 'a-1', 1, '2026-01-01T00:00:01.000Z'],
+    ['a1-e2', 'e-a1-2', 'a-1', 2, '2026-01-01T00:00:02.000Z'],
+    ['a1-e3', 'e-a1-3', 'a-1', 3, '2026-01-01T00:00:03.000Z'],
+    ['a2-e1', 'e-a2-1', 'a-2', 1, '2026-01-01T00:00:04.000Z'],
+  ];
+  for (const [fid, eid, aid, num, cAt] of rows) {
+    db.insert(schema.episode)
+      .values({ id: eid, animeId: aid, number: num, createdAt: t, updatedAt: t })
+      .run();
+    db.insert(schema.episodeFile)
+      .values({
+        id: fid,
+        episodeId: eid,
+        language: 'SUB_ITA',
+        downloadStatus: 'not_downloaded',
+        createdAt: t,
+        updatedAt: t,
+      })
+      .run();
+    db.insert(schema.downloadQueue)
+      .values({
+        id: `q-${fid}`,
+        episodeFileId: fid,
+        status: 'queued',
+        priority: opts.priorities?.[fid] ?? 50,
+        createdAt: cAt,
+      })
+      .run();
+  }
+}
+
 describe('DownloadWorker (FSM)', () => {
   let db: ReturnType<typeof import('../test/helpers').createTestDb>;
   let animePath: string;
@@ -959,6 +1043,82 @@ describe('DownloadWorker (FSM)', () => {
       for (const s of sockets) {
         s.destroy();
       }
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+
+  it('round-robin: una seconda serie non resta dietro tutta la coda della prima', async () => {
+    const body = mp4('xy');
+    const server = createServer((_req, res) => {
+      res.writeHead(200, { 'content-type': 'video/mp4', 'content-length': String(body.length) });
+      res.end(body);
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const { port } = server.address() as AddressInfo;
+    const url = `http://127.0.0.1:${port}/ep.mp4`;
+
+    const config = createConfigService({ db });
+    config.set('seriesPathSub', animePath);
+    const worker = makeWorker(db, twoSeriesCatalog(url), config);
+    seedTwoSeriesQueue(db);
+
+    const completed: string[] = [];
+    worker.on('complete', ({ episodeFileId }) => completed.push(episodeFileId));
+
+    try {
+      worker.start();
+      await worker.tryStartNext();
+      const deadline = Date.now() + 6000;
+      while (completed.length < 4) {
+        if (Date.now() > deadline) {
+          throw new Error(`timeout: completati ${completed.length}/4`);
+        }
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      // Senza fairness l'ordine sarebbe a1-e1, a1-e2, a1-e3, a2-e1.
+      // Con il round-robin la serie B (a-2) viene servita al 2° giro, non dopo tutta la serie A.
+      expect(completed[0]).toBe('a1-e1');
+      expect(completed[1]).toBe('a2-e1');
+    } finally {
+      worker.stop();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+
+  it('la priorità (Scarica prima) batte la fairness', async () => {
+    const body = mp4('xy');
+    const server = createServer((_req, res) => {
+      res.writeHead(200, { 'content-type': 'video/mp4', 'content-length': String(body.length) });
+      res.end(body);
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const { port } = server.address() as AddressInfo;
+    const url = `http://127.0.0.1:${port}/ep.mp4`;
+
+    const config = createConfigService({ db });
+    config.set('seriesPathSub', animePath);
+    const worker = makeWorker(db, twoSeriesCatalog(url), config);
+    // a1-e3 ha priorità alta: deve essere servito per primo, scavalcando anche a1-e1 più vecchio.
+    seedTwoSeriesQueue(db, { priorities: { 'a1-e3': 100 } });
+
+    const completed: string[] = [];
+    worker.on('complete', ({ episodeFileId }) => completed.push(episodeFileId));
+
+    try {
+      worker.start();
+      await worker.tryStartNext();
+      const deadline = Date.now() + 6000;
+      while (completed.length < 4) {
+        if (Date.now() > deadline) {
+          throw new Error(`timeout: completati ${completed.length}/4`);
+        }
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      // Il job prioritario salta in cima; poi la fairness fa servire la serie B.
+      expect(completed[0]).toBe('a1-e3');
+      expect(completed[1]).toBe('a2-e1');
+    } finally {
+      worker.stop();
       await new Promise<void>((resolve) => server.close(() => resolve()));
     }
   });

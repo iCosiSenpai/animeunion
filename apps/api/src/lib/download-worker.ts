@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events';
 import { rm, stat } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import type { Language } from '@animeunion/shared';
-import { and, asc, desc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, max, min } from 'drizzle-orm';
 import type { Db } from '../db';
 import { schema } from '../db';
 import type { CatalogService } from '../services/catalog-service';
@@ -97,6 +97,12 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
   let timer: NodeJS.Timeout | null = null;
   let stopped = true;
   let paused = false;
+  // Fairness round-robin: numero di sequenza dell'ultima volta che ogni anime è stato servito (in
+  // memoria, resetta al riavvio). A parità di priorità il prossimo job è di un anime servito meno di
+  // recente, così un episodio appena uscito di un'altra serie non resta dietro un'intera coda gigante
+  // (One Piece) — pur mantenendo "un episodio alla volta" (Regola #13) e la priorità di "Scarica prima".
+  let serveSeq = 0;
+  const lastServedAnime = new Map<string, number>();
 
   function updateQueue(
     queueId: string,
@@ -114,16 +120,56 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
     return rows.length;
   }
 
-  function pickNext(): typeof schema.downloadQueue.$inferSelect | null {
-    return (
-      db
-        .select()
-        .from(schema.downloadQueue)
-        .where(eq(schema.downloadQueue.status, 'queued'))
-        .orderBy(desc(schema.downloadQueue.priority), asc(schema.downloadQueue.createdAt))
-        .limit(1)
-        .get() ?? null
-    );
+  function pickNext(): { id: string; animeId: string } | null {
+    // Riepilogo per anime dei job in coda (O(#anime), non O(#coda)): priorità massima e job più
+    // vecchio di ciascuno. Il join risale download_queue→episode_file→episode→anime (indice 17.1).
+    const candidates = db
+      .select({
+        animeId: schema.episode.animeId,
+        prio: max(schema.downloadQueue.priority),
+        oldest: min(schema.downloadQueue.createdAt),
+      })
+      .from(schema.downloadQueue)
+      .innerJoin(schema.episodeFile, eq(schema.episodeFile.id, schema.downloadQueue.episodeFileId))
+      .innerJoin(schema.episode, eq(schema.episode.id, schema.episodeFile.episodeId))
+      .where(eq(schema.downloadQueue.status, 'queued'))
+      .groupBy(schema.episode.animeId)
+      .all();
+    if (candidates.length === 0) {
+      return null;
+    }
+    // Priorità desc (Scarica prima vince sempre), poi anime servito meno di recente (mai servito =
+    // -1 → per primo), poi job più vecchio.
+    candidates.sort((a, b) => {
+      const pa = a.prio ?? 0;
+      const pb = b.prio ?? 0;
+      if (pb !== pa) {
+        return pb - pa;
+      }
+      const la = lastServedAnime.get(a.animeId) ?? -1;
+      const lb = lastServedAnime.get(b.animeId) ?? -1;
+      if (la !== lb) {
+        return la - lb;
+      }
+      return (a.oldest ?? '').localeCompare(b.oldest ?? '');
+    });
+    const chosenAnime = candidates[0]?.animeId;
+    if (!chosenAnime) {
+      return null;
+    }
+    // Il job più prioritario/vecchio dell'anime scelto.
+    const job = db
+      .select({ id: schema.downloadQueue.id })
+      .from(schema.downloadQueue)
+      .innerJoin(schema.episodeFile, eq(schema.episodeFile.id, schema.downloadQueue.episodeFileId))
+      .innerJoin(schema.episode, eq(schema.episode.id, schema.episodeFile.episodeId))
+      .where(
+        and(eq(schema.downloadQueue.status, 'queued'), eq(schema.episode.animeId, chosenAnime)),
+      )
+      .orderBy(desc(schema.downloadQueue.priority), asc(schema.downloadQueue.createdAt))
+      .limit(1)
+      .get();
+    return job ? { id: job.id, animeId: chosenAnime } : null;
   }
 
   async function runOne(queueId: string): Promise<void> {
@@ -391,6 +437,9 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
       if (result.changes === 0) {
         continue; // qualcun altro l'ha preso
       }
+      // Prenotazione riuscita: aggiorna il turno round-robin dell'anime servito.
+      serveSeq += 1;
+      lastServedAnime.set(next.animeId, serveSeq);
       void runOne(next.id);
     }
   }

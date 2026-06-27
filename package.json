@@ -24,12 +24,14 @@
     "version": "npm run format && git add .",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "vitest run --passWithNoTests",
+    "test:e2e": "playwright test",
     "seed": "npm run seed -w @animeunion/api",
     "db:migrate": "npm run db:migrate -w @animeunion/api",
     "db:generate": "npm run db:generate -w @animeunion/api"
   },
   "devDependencies": {
     "@biomejs/biome": "1.9.4",
+    "@playwright/test": "^1.49.0",
     "concurrently": "^9.1.2",
     "typescript": "^5.7.3",
     "vitest": "^3.0.5"

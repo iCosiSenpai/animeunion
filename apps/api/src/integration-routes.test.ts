@@ -2,7 +2,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import fastify from 'fastify';
 import { describe, expect, it, vi } from 'vitest';
-import { integrationRoutes } from './integration-routes';
+import { RATE_LIMIT_MAX, integrationRoutes } from './integration-routes';
 import { createCatalogService } from './services/catalog-service';
 import { createConfigService } from './services/config-service';
 import { createDownloadService } from './services/download-service';
@@ -185,6 +185,21 @@ describe('integration routes /api/integration/requests', () => {
       headers: { 'x-api-key': key },
     });
     expect(res.statusCode).toBe(404);
+    await app.close();
+  });
+
+  it('oltre il limite per IP risponde 429 (anche prima dell auth)', async () => {
+    const { app } = await makeApp();
+    // Richieste con chiave errata: senza rate-limit sarebbero tutte 401. Il limiter gira nell'hook
+    // onRequest (prima dell auth), quindi la (MAX+1)-esima diventa 429.
+    for (let i = 0; i < RATE_LIMIT_MAX; i += 1) {
+      const res = await post(app, { slug: 'jujutsu-kaisen' }, 'auk_sbagliata');
+      expect(res.statusCode).toBe(401);
+    }
+    const limited = await post(app, { slug: 'jujutsu-kaisen' }, 'auk_sbagliata');
+    expect(limited.statusCode).toBe(429);
+    expect(limited.json().error).toBe('rate_limited');
+    expect(limited.headers['retry-after']).toBeDefined();
     await app.close();
   });
 });

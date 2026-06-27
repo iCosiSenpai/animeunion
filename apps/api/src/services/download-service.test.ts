@@ -100,6 +100,45 @@ function insertQueue(
     .run();
 }
 
+function insertFailedQueue(
+  db: ReturnType<typeof import('../test/helpers').createTestDb>,
+  id: string,
+  episodeFileId: string,
+  completedAt: string,
+) {
+  db.insert(schema.downloadQueue)
+    .values({
+      id,
+      episodeFileId,
+      status: 'failed',
+      priority: 50,
+      progress: 0,
+      completedAt,
+      error: 'errore permanente',
+      createdAt: new Date().toISOString(),
+    })
+    .run();
+}
+
+function insertWatching(
+  db: ReturnType<typeof import('../test/helpers').createTestDb>,
+  id: string,
+  animeId: string,
+) {
+  const ts = new Date().toISOString();
+  db.insert(schema.follow)
+    .values({
+      id,
+      animeId,
+      status: 'watching',
+      addedAt: ts,
+      updatedAt: ts,
+      lastCheckAt: null,
+      notes: null,
+    })
+    .run();
+}
+
 describe('DownloadService', () => {
   let db: ReturnType<typeof import('../test/helpers').createTestDb>;
   let animePath: string;
@@ -140,6 +179,26 @@ describe('DownloadService', () => {
     });
     service.start();
     return { service, config };
+  }
+
+  // Servizio con worker mockato (enqueue + retry spy) e clock iniettato: per i test del cooldown
+  // sui falliti, senza far partire la macchina di download reale.
+  function makeServiceWithRetrySpy(nowDate: Date) {
+    const config = createConfigService({ db });
+    config.set('seriesPathSub', animePath);
+    config.set('autoDownload', true);
+    const retrySpy = vi.fn().mockReturnValue(true);
+    const worker = { enqueue: enqueueSpy, retry: retrySpy, start: vi.fn(), stop: vi.fn() };
+    const service = createDownloadService({
+      db,
+      worker: worker as never,
+      catalog: buildStubCatalog(),
+      config,
+      logger: testLogger,
+      now: () => nowDate,
+    });
+    service.start();
+    return { service, retrySpy };
   }
 
   it('addEpisode accoda e ritorna un id', () => {
@@ -568,6 +627,66 @@ describe('DownloadService', () => {
     expect(n).toBe(1);
     expect(getBySlug).toHaveBeenCalledWith('a-1', { forceRefresh: true });
     expect(enqueueSpy).toHaveBeenCalledWith('ef-1');
+  });
+
+  it('auto-enqueue salta un fallito ancora nel cooldown (niente ri-accodo)', async () => {
+    const nowDate = new Date('2026-06-27T12:00:00.000Z');
+    const { service, retrySpy } = makeServiceWithRetrySpy(nowDate);
+    insertAnime(db, 'a-1', 'ONGOING');
+    insertEpisode(db, 'e-1', 'a-1', 1);
+    insertFile(db, 'ef-1', 'e-1', 'SUB_ITA');
+    // Fallito 1 ora fa: dentro il cooldown di 6 ore.
+    insertFailedQueue(
+      db,
+      'q-1',
+      'ef-1',
+      new Date(nowDate.getTime() - 60 * 60 * 1000).toISOString(),
+    );
+    insertWatching(db, 'f-1', 'a-1');
+
+    const n = await service.enqueueForAutoFollows();
+    expect(n).toBe(0);
+    expect(retrySpy).not.toHaveBeenCalled();
+    expect(enqueueSpy).not.toHaveBeenCalled();
+  });
+
+  it('auto-enqueue ritenta un fallito oltre il cooldown', async () => {
+    const nowDate = new Date('2026-06-27T12:00:00.000Z');
+    const { service, retrySpy } = makeServiceWithRetrySpy(nowDate);
+    insertAnime(db, 'a-1', 'ONGOING');
+    insertEpisode(db, 'e-1', 'a-1', 1);
+    insertFile(db, 'ef-1', 'e-1', 'SUB_ITA');
+    // Fallito 7 ore fa: oltre il cooldown.
+    insertFailedQueue(
+      db,
+      'q-1',
+      'ef-1',
+      new Date(nowDate.getTime() - 7 * 60 * 60 * 1000).toISOString(),
+    );
+    insertWatching(db, 'f-1', 'a-1');
+
+    const n = await service.enqueueForAutoFollows();
+    expect(n).toBe(1);
+    expect(retrySpy).toHaveBeenCalledWith('q-1');
+  });
+
+  it('addMissing manuale ritenta subito un fallito (nessun cooldown)', () => {
+    const nowDate = new Date('2026-06-27T12:00:00.000Z');
+    const { service, retrySpy } = makeServiceWithRetrySpy(nowDate);
+    insertAnime(db, 'a-1', 'ONGOING');
+    insertEpisode(db, 'e-1', 'a-1', 1);
+    insertFile(db, 'ef-1', 'e-1', 'SUB_ITA');
+    // Fallito 1 ora fa (entro il cooldown), ma la chiamata è manuale → ritenta comunque.
+    insertFailedQueue(
+      db,
+      'q-1',
+      'ef-1',
+      new Date(nowDate.getTime() - 60 * 60 * 1000).toISOString(),
+    );
+
+    const n = service.addMissing({ animeId: 'a-1' });
+    expect(n).toBe(1);
+    expect(retrySpy).toHaveBeenCalledWith('q-1');
   });
 
   it('pauseQueue/resumeQueue controllano lo stato della coda', () => {

@@ -123,6 +123,11 @@ const NOT_CONFIGURED_MSG =
 const ACTIVE_STATUSES = ['queued', 'downloading', 'processing'] as const;
 const INFLIGHT_STATUSES = ['downloading', 'processing'] as const;
 
+// Cooldown prima che l'auto-download ritenti un episodio fallito. Senza, gli errori permanenti
+// (link scaduto/404/contenuto non video) verrebbero ri-tentati a ogni ciclo (~30 min) generando
+// rumore (notifiche "Nuovi episodi") senza mai riuscire. Il retry manuale resta immediato.
+const AUTO_RETRY_COOLDOWN_MS = 6 * 60 * 60 * 1000; // 6 ore
+
 function isTerminal(status: string): boolean {
   return status === 'completed' || status === 'cancelled' || status === 'failed';
 }
@@ -233,6 +238,69 @@ export function createDownloadService(deps: DownloadServiceDeps): DownloadServic
     return existing.id;
   }
 
+  // Accoda gli episodi mancanti di un anime. `auto` = chiamata dallo scheduler: applica il cooldown
+  // sui falliti per non ritentare gli errori permanenti a ogni ciclo. Conta solo ciò che accoda o
+  // ritenta davvero (un fallito ritentato via worker.retry, un nuovo via worker.enqueue), così il
+  // contatore — e la notifica "Nuovi episodi" che ne dipende — non viene gonfiato da no-op.
+  function addMissingImpl(animeId: string, language: Language | undefined, auto: boolean): number {
+    if (!config.isConfigured()) {
+      throw new PreconditionError(NOT_CONFIGURED_MSG);
+    }
+    const files = db
+      .select({
+        id: schema.episodeFile.id,
+        language: schema.episodeFile.language,
+        status: schema.episodeFile.downloadStatus,
+      })
+      .from(schema.episodeFile)
+      .innerJoin(schema.episode, eq(schema.episodeFile.episodeId, schema.episode.id))
+      .where(eq(schema.episode.animeId, animeId))
+      .all()
+      .filter((f) => (language ? f.language === language : true));
+    const nowMs = now().getTime();
+    let count = 0;
+    for (const file of files) {
+      // `external` = file dell'utente gia' presente (collegato senza scaricare): non si ri-scarica.
+      if (file.status === 'downloaded' || file.status === 'external') {
+        continue;
+      }
+      const existing = db
+        .select({
+          id: schema.downloadQueue.id,
+          status: schema.downloadQueue.status,
+          completedAt: schema.downloadQueue.completedAt,
+        })
+        .from(schema.downloadQueue)
+        .where(eq(schema.downloadQueue.episodeFileId, file.id))
+        .get();
+      if (!existing) {
+        worker.enqueue(file.id);
+        count += 1;
+        continue;
+      }
+      if (!isTerminal(existing.status)) {
+        continue; // gia' in coda o in corso
+      }
+      if (existing.status === 'failed') {
+        // Auto: salta i falliti ancora nel cooldown (niente ri-accodo/notifica su errori permanenti).
+        if (
+          auto &&
+          existing.completedAt &&
+          nowMs - Date.parse(existing.completedAt) < AUTO_RETRY_COOLDOWN_MS
+        ) {
+          continue;
+        }
+        // Retry reale: worker.enqueue è un no-op sulle righe esistenti, worker.retry resetta a queued.
+        if (worker.retry(existing.id)) {
+          count += 1;
+        }
+        // Restano `completed` (di fatto già scaricato, escluso sopra) e `cancelled` (annullato
+        // dall'utente): non si ri-accodano automaticamente né manualmente da qui.
+      }
+    }
+    return count;
+  }
+
   return {
     start(): void {
       worker.start();
@@ -279,37 +347,11 @@ export function createDownloadService(deps: DownloadServiceDeps): DownloadServic
     },
 
     addMissing({ animeId, language }) {
-      if (!config.isConfigured()) {
-        throw new PreconditionError(NOT_CONFIGURED_MSG);
-      }
-      const files = db
-        .select({
-          id: schema.episodeFile.id,
-          language: schema.episodeFile.language,
-          status: schema.episodeFile.downloadStatus,
-        })
-        .from(schema.episodeFile)
-        .innerJoin(schema.episode, eq(schema.episodeFile.episodeId, schema.episode.id))
-        .where(eq(schema.episode.animeId, animeId))
-        .all()
-        .filter((f) => (language ? f.language === language : true));
-      let count = 0;
-      for (const file of files) {
-        // `external` = file dell'utente gia' presente (collegato senza scaricare): non si ri-scarica.
-        if (file.status === 'downloaded' || file.status === 'external') {
-          continue;
-        }
-        if (alreadyInQueue(file.id)) {
-          continue;
-        }
-        worker.enqueue(file.id);
-        count += 1;
-      }
-      return count;
+      return addMissingImpl(animeId, language, false);
     },
 
     addAll({ animeId, language }) {
-      return this.addMissing({ animeId, language });
+      return addMissingImpl(animeId, language, false);
     },
 
     async addAllBySlug({ slug, language }) {
@@ -318,7 +360,7 @@ export function createDownloadService(deps: DownloadServiceDeps): DownloadServic
       }
       // Garantisce anime + episodi in cache, poi accoda i mancanti dell'entry.
       const detail = await catalog.getBySlug(slug);
-      return this.addMissing({ animeId: detail.id, language });
+      return addMissingImpl(detail.id, language, false);
     },
 
     getQueue() {
@@ -644,7 +686,7 @@ export function createDownloadService(deps: DownloadServiceDeps): DownloadServic
             );
           }
         }
-        const added = this.addMissing({ animeId: f.animeId });
+        const added = addMissingImpl(f.animeId, undefined, true);
         if (added > 0) {
           count += added;
           deps.onAutoEnqueued?.(f.animeId, added);

@@ -1,6 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { schema } from '../db';
 import { createDownloadWorker } from '../lib/download-worker';
@@ -797,6 +798,15 @@ describe('DownloadService', () => {
     expect(n).toBe(1);
     const rows = db.select().from(schema.downloadQueue).all();
     expect(rows.find((r) => r.id === 'q-2')?.status).toBe('failed');
+  });
+
+  it('la migrazione 0013 crea idx_download_episode_file (risalita per le azioni di gruppo)', () => {
+    const names = db
+      .all<{ name: string }>(
+        sql`SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'download_queue'`,
+      )
+      .map((r) => r.name);
+    expect(names).toContain('idx_download_episode_file');
   });
 
   it('addEpisodeByRef lancia NOT_FOUND se la lingua non esiste', async () => {

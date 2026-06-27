@@ -193,6 +193,10 @@ export const downloadQueue = sqliteTable(
   (table) => [
     index('idx_download_status').on(table.status),
     index('idx_download_priority').on(sql`${table.priority} DESC`),
+    // Risalita anime→episode→episode_file→download_queue per le azioni di gruppo dello Step 8
+    // (cancelGroup/retryGroup/getQueueGroupItems): senza questo indice la coda gigante (One Piece)
+    // viene scandita interamente per agire su un solo anime.
+    index('idx_download_episode_file').on(table.episodeFileId),
   ],
 );
 

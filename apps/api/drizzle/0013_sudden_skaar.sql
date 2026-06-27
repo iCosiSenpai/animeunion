@@ -1,0 +1,1 @@
+CREATE INDEX `idx_download_episode_file` ON `download_queue` (`episode_file_id`);

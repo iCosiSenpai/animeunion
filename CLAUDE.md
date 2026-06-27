@@ -180,8 +180,21 @@ giorno/Settimana + toggle seguiti (Button `aria-pressed`); helper `weekDates(now
 ([use-followed.ts](apps/web/src/lib/use-followed.ts), riuso del badge "Seguito" già su `AnimeCard`) con
 empty state adattivo; vista Per giorno = tab con pallino/accento + data su "oggi"; vista Settimana = 7
 sezioni impilate (`AnimeGrid` riusato) con la sezione di oggi evidenziata (`border-primary/40
-bg-primary/5`). Nessun backend/contratto/test nuovo, 289 verdi a contorno. **Prossimo: Step 16**
-(wallpaper/sfondo potenziato). _Aggiornare qui a ogni step._
+bg-primary/5`). Nessun backend/contratto/test nuovo, 289 verdi a contorno. **Step 16** (wallpaper/sfondo
+potenziato): [wallhaven.ts](apps/api/src/lib/wallhaven.ts) aveva `categories:'010'`+`purity:'100'`
+hardcoded e [wallpaper-picker.tsx](apps/web/src/components/settings/wallpaper-picker.tsx) nessuna
+anteprima/download/filtro. **Scelte utente:** tap=seleziona subito (invariato) + **lente** → anteprima;
+categoria locked Anime, solo toggle **"Sketchy"** (`purity 100`→`110`), NSFW escluso (serve API key).
+**Backend minimale:** nuovo `wallpaperSearchInputSchema {query?,sketchy?}` in
+[theme.ts](packages/shared/src/contracts/theme.ts) (semantico — i bit wallhaven restano in lib, Regola
+#6), `searchWallpapers(opts={query?,sketchy?}, logger?)` con `purity = sketchy?'110':'100'` (categorie
+sempre `'010'`), router `theme.searchWallpapers` input cablato. **Frontend** (picker riscritto): stato
+`sketchy` nella query (refetch al toggle), Popover filtro (`SlidersHorizontal` + pallino) col toggle
+"Sketchy (contenuti artistici)" `aria-pressed`; tile = contenitore `relative` con `<button>` selezione
+`absolute inset-0` + `<button>` lente `ZoomIn` (no button annidati); anteprima `Dialog max-w-3xl` con
+`fullUrl`/risoluzione + azioni Imposta-sfondo/Scarica (`<a download target=_blank>`)/Apri-su-wallhaven;
+nota "solo SFW" aggiornata. +2 test (291) (`sketchy`→`purity=110`, default→`100`). **Prossimo: Step 17**
+(hardening backend + idee extra). _Aggiornare qui a ogni step._
 
 ## Stato attuale (2026-06-27)
 
@@ -510,7 +523,34 @@ pallino `bg-primary` + accento `data-[state=inactive]:text-primary` e data reale
 evidenziazione oggi). Frontend-only, nessun test nuovo (289 verdi a contorno), lint/typecheck/build web
 verdi (`/calendar` prerenderizzata statica). Verifica manuale a runtime ancora da fare (tab di oggi
 marcato con data; vista Settimana con oggi evidenziato; "Solo i miei seguiti" filtra ogni giorno;
-nessuna regressione mobile). **Prossimo: Step 16** (wallpaper/sfondo potenziato).
+nessuna regressione mobile). **Step 16** wallpaper/sfondo potenziato. **Causa/limite (verificato):**
+[wallhaven.ts](apps/api/src/lib/wallhaven.ts) aveva `categories:'010'` e `purity:'100'` **hardcoded**
+(nessun filtro) e [wallpaper-picker.tsx](apps/web/src/components/settings/wallpaper-picker.tsx) era una
+griglia di thumbnail dove il click seleziona subito, **senza anteprima grande, download, né filtri**.
+**Scelte utente (plan mode):** (1) tap su una tile **seleziona subito** (comportamento attuale) + una
+**icona lente** in alto a destra apre l'**anteprima a schermo intero**; (2) categoria resta **solo
+Anime** (locked `'010'`), il filtro aggiunge **solo il toggle "Sketchy"** (`purity 100`→`110`), NSFW
+escluso (richiede API key wallhaven) → contratto minimale. **Backend (parametrizzazione, lib core →
+test):** nuovo `wallpaperSearchInputSchema = z.object({query?,sketchy?})` + type in
+[theme.ts](packages/shared/src/contracts/theme.ts) — **semantico**, la codifica purity/categorie resta
+confinata in `wallhaven.ts` (Regola #6); firma `searchWallpapers(opts={query?,sketchy?}, logger?)` con
+`purity = opts.sketchy ? '110' : '100'` e `categories` sempre `'010'`; router
+[theme.ts](apps/api/src/routers/theme.ts) `.input(wallpaperSearchInputSchema.optional())` passa
+`input ?? {}`. **Frontend** (picker riscritto): stato `sketchy` (default false) nella query
+`theme.searchWallpapers({query,sketchy})` → refetch al toggle; **Popover filtro** accanto a Cerca
+(icona `SlidersHorizontal`, pallino se attivo) con toggle "Sketchy (contenuti artistici)"
+(`aria-pressed`, pattern Step 15); ogni tile è ora un contenitore `relative` (niente `<button>`
+annidati) con un `<button>` selezione `absolute inset-0` (tap = `onChange`, overlay `Check` se attiva)
+e un `<button>` **lente** `ZoomIn` in alto a destra `z-10` → apre l'anteprima; **anteprima** `Dialog`
+`max-w-3xl` con `fullUrl`/risoluzione e azioni **Imposta come sfondo** (`onChange`+chiude) / **Scarica**
+(`<a href={fullUrl} download target=_blank rel=noopener>`, cross-origin → apre il full-res) / **Apri su
+wallhaven** (`pageUrl`); nota "solo SFW" → "SFW di default; abilita «Sketchy» nei filtri". **+2 test
+(291 verdi)** ([wallhaven.test.ts](apps/api/src/lib/wallhaven.test.ts): le 2 chiamate esistenti passano
+a `searchWallpapers({query})`; `sketchy:true` → URL con `purity=110`+`categories=010`; default →
+`purity=100`), lint/typecheck/build web verdi (`/settings` resta statica). Verifica manuale a runtime
+ancora da fare (toggle Sketchy cambia i risultati; tap applica lo sfondo; lente → anteprima; Scarica
+apre il full-res; nessuna regressione Setup wizard/mobile). **Prossimo: Step 17** (hardening backend +
+idee extra).
 
 ## Stato precedente (2026-06-25)
 

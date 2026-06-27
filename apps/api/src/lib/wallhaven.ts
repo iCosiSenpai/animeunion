@@ -10,15 +10,25 @@ interface WallhavenItem {
   thumbs?: { large?: string; small?: string; original?: string };
 }
 
+export interface WallpaperSearchOptions {
+  query?: string;
+  /** Aggiunge il purity "sketchy" (artistico) ai risultati SFW. NSFW non supportato (serve API key). */
+  sketchy?: boolean;
+}
+
 /**
- * Cerca anime wallpaper su wallhaven.cc (categoria Anime, SOLO SFW, niente API key).
+ * Cerca anime wallpaper su wallhaven.cc (categoria Anime, niente API key).
+ * Purity: SFW di default; con `sketchy` aggiunge i contenuti artistici (110 = SFW+Sketchy).
  * Best-effort: ritorna [] su errore. Query vuota = toplist (popolari).
  */
-export async function searchWallpapers(query?: string, logger?: Logger): Promise<Wallpaper[]> {
-  const q = query?.trim();
+export async function searchWallpapers(
+  opts: WallpaperSearchOptions = {},
+  logger?: Logger,
+): Promise<Wallpaper[]> {
+  const q = opts.query?.trim();
   const params = new URLSearchParams({
     categories: '010', // solo Anime
-    purity: '100', // solo SFW
+    purity: opts.sketchy ? '110' : '100', // SFW, oppure SFW + Sketchy (artistico)
     sorting: q ? 'relevance' : 'toplist',
     page: '1',
   });

@@ -22,3 +22,12 @@ export const wallpaperSchema = z.object({
   pageUrl: z.string(),
 });
 export type Wallpaper = z.infer<typeof wallpaperSchema>;
+
+// Input di ricerca wallpaper. Semantico: il FE non conosce la codifica wallhaven
+// (categorie/purity in bit), che resta confinata in lib/wallhaven.ts.
+// `sketchy` aggiunge il purity "sketchy" (artistico) alla ricerca SFW; categoria sempre Anime.
+export const wallpaperSearchInputSchema = z.object({
+  query: z.string().optional(),
+  sketchy: z.boolean().optional(),
+});
+export type WallpaperSearchInput = z.infer<typeof wallpaperSearchInputSchema>;

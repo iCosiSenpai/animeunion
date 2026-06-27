@@ -1,13 +1,32 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { trpc } from '@/lib/trpc';
 import { cn } from '@/lib/utils';
-import { Check, ImageOff, Loader2, Search } from 'lucide-react';
+import type { Wallpaper } from '@animeunion/shared';
+import {
+  Check,
+  Download,
+  ExternalLink,
+  ImageOff,
+  Loader2,
+  Search,
+  SlidersHorizontal,
+  ZoomIn,
+} from 'lucide-react';
 import { useState } from 'react';
 
 // Selettore wallpaper (sfondo del tema) via proxy wallhaven. Query vuota = popolari.
+// Categoria sempre Anime; il filtro "Sketchy" aggiunge i contenuti artistici (purity 110).
 export function WallpaperPicker({
   value,
   onChange,
@@ -17,8 +36,11 @@ export function WallpaperPicker({
 }) {
   const [query, setQuery] = useState('');
   const [submitted, setSubmitted] = useState('');
+  const [sketchy, setSketchy] = useState(false);
+  const [preview, setPreview] = useState<Wallpaper | null>(null);
+
   const results = trpc.theme.searchWallpapers.useQuery(
-    { query: submitted || undefined },
+    { query: submitted || undefined, sketchy },
     { staleTime: 5 * 60_000 },
   );
 
@@ -54,6 +76,44 @@ export function WallpaperPicker({
             className="pl-9"
           />
         </div>
+
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="relative"
+              aria-label="Filtri"
+            >
+              <SlidersHorizontal className="h-4 w-4" />
+              {sketchy ? (
+                <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-primary" />
+              ) : null}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="end" className="w-64 space-y-3">
+            <div className="space-y-1">
+              <p className="text-sm font-medium">Filtri</p>
+              <p className="text-xs text-muted-foreground">Categoria: Anime.</p>
+            </div>
+            <Button
+              type="button"
+              variant={sketchy ? 'default' : 'outline'}
+              size="sm"
+              aria-pressed={sketchy}
+              onClick={() => setSketchy((v) => !v)}
+              className="w-full justify-start gap-2"
+            >
+              <Check className={cn('h-4 w-4', sketchy ? 'opacity-100' : 'opacity-0')} />
+              Sketchy (contenuti artistici)
+            </Button>
+            <p className="text-[11px] text-muted-foreground">
+              Include sfondi più audaci ma non espliciti. Disattivo = solo SFW.
+            </p>
+          </PopoverContent>
+        </Popover>
+
         <Button type="submit" variant="outline">
           Cerca
         </Button>
@@ -69,28 +129,41 @@ export function WallpaperPicker({
           {results.data.map((w) => {
             const active = w.fullUrl === value;
             return (
-              <button
+              <div
                 key={w.id}
-                type="button"
-                onClick={() => onChange(w.fullUrl)}
-                title={w.resolution}
                 className={cn(
-                  'relative aspect-video overflow-hidden rounded-md border transition-opacity',
-                  active ? 'ring-2 ring-ring' : 'hover:opacity-80',
+                  'relative aspect-video overflow-hidden rounded-md border',
+                  active && 'ring-2 ring-ring',
                 )}
               >
-                <img
-                  src={w.thumbUrl}
-                  alt=""
-                  loading="lazy"
-                  className="h-full w-full object-cover"
-                />
-                {active ? (
-                  <span className="absolute inset-0 flex items-center justify-center bg-black/40">
-                    <Check className="h-5 w-5 text-white" />
-                  </span>
-                ) : null}
-              </button>
+                <button
+                  type="button"
+                  onClick={() => onChange(w.fullUrl)}
+                  title={w.resolution}
+                  className="absolute inset-0 transition-opacity hover:opacity-80"
+                >
+                  <img
+                    src={w.thumbUrl}
+                    alt=""
+                    loading="lazy"
+                    className="h-full w-full object-cover"
+                  />
+                  {active ? (
+                    <span className="absolute inset-0 flex items-center justify-center bg-black/40">
+                      <Check className="h-5 w-5 text-white" />
+                    </span>
+                  ) : null}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPreview(w)}
+                  aria-label="Anteprima a schermo intero"
+                  title="Anteprima"
+                  className="absolute right-1 top-1 z-10 rounded-md bg-black/60 p-1.5 text-white transition hover:bg-black/80"
+                >
+                  <ZoomIn className="h-4 w-4" />
+                </button>
+              </div>
             );
           })}
         </div>
@@ -99,8 +172,65 @@ export function WallpaperPicker({
       )}
 
       <p className="text-[11px] text-muted-foreground">
-        Sfondi forniti da wallhaven.cc (solo SFW).
+        Sfondi forniti da wallhaven.cc. SFW di default; abilita «Sketchy» nei filtri per contenuti
+        artistici.
       </p>
+
+      <Dialog
+        open={!!preview}
+        onOpenChange={(open) => {
+          if (!open) setPreview(null);
+        }}
+      >
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Anteprima sfondo</DialogTitle>
+          </DialogHeader>
+          {preview ? (
+            <div className="space-y-3">
+              <div className="overflow-hidden rounded-md border bg-muted">
+                <img src={preview.fullUrl} alt="" className="max-h-[60dvh] w-full object-contain" />
+              </div>
+              <p className="text-xs text-muted-foreground">{preview.resolution}</p>
+              <DialogFooter className="gap-2">
+                <Button variant="outline" asChild>
+                  <a
+                    href={preview.fullUrl}
+                    download
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="gap-2"
+                  >
+                    <Download className="h-4 w-4" />
+                    Scarica
+                  </a>
+                </Button>
+                <Button variant="outline" asChild>
+                  <a
+                    href={preview.pageUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="gap-2"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                    Apri su wallhaven
+                  </a>
+                </Button>
+                <Button
+                  className="gap-2"
+                  onClick={() => {
+                    onChange(preview.fullUrl);
+                    setPreview(null);
+                  }}
+                >
+                  <Check className="h-4 w-4" />
+                  Imposta come sfondo
+                </Button>
+              </DialogFooter>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

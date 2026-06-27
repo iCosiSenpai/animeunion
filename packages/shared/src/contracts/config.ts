@@ -61,6 +61,10 @@ export const appConfigSchema = z.object({
   animationsEnabled: z.boolean().default(true),
   // Scrive i sidecar NFO + artwork (poster/fanart) accanto ai video per Jellyfin/Plex/Kodi/Emby.
   writeNfo: z.boolean().default(false),
+  // Integrazione Jellyfin: URL del server + API key (segreta) + refresh automatico a fine download.
+  jellyfinServerUrl: z.string().default(''),
+  jellyfinApiKey: z.string().default(''),
+  jellyfinAutoRefresh: z.boolean().default(false),
   // Personalizzazione della home: ordine e visibilità delle sezioni (vuoto = ordine di default).
   homeLayout: homeLayoutSchema,
 });
@@ -74,7 +78,7 @@ export type ConfigKey = z.infer<typeof configKeySchema>;
 export const SECRET_MASK = '••••••••';
 
 // Chiavi di config che NON devono mai essere inviate in chiaro al frontend.
-export const SECRET_CONFIG_KEYS: ConfigKey[] = ['telegramBotToken'];
+export const SECRET_CONFIG_KEYS: ConfigKey[] = ['telegramBotToken', 'jellyfinApiKey'];
 
 export const configSetInputSchema = z.object({
   key: configKeySchema,

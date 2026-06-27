@@ -13,6 +13,7 @@ import type { FavoritesService } from './services/favorites-service';
 import type { FileManagerService } from './services/file-manager-service';
 import type { FollowService } from './services/follow-service';
 import type { HomeService } from './services/home-service';
+import type { JellyfinService } from './services/jellyfin-service';
 import type { LibraryService } from './services/library-service';
 import type { LockService } from './services/lock-service';
 import type { NotificationService } from './services/notification-service';
@@ -42,6 +43,7 @@ export interface Context {
     push: PushService;
     requestAuth: RequestAuthService;
     requests: RequestService;
+    jellyfin: JellyfinService;
   };
   /** Token di sessione del blocco web UI, dall'header x-app-session (per richiesta). */
   sessionToken?: string;

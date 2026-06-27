@@ -14,6 +14,7 @@ import { createFavoritesService } from './services/favorites-service';
 import { createFileManagerService } from './services/file-manager-service';
 import { createFollowService } from './services/follow-service';
 import { createHomeService } from './services/home-service';
+import { createJellyfinService } from './services/jellyfin-service';
 import { createLibraryService } from './services/library-service';
 import { createLockService } from './services/lock-service';
 import { createNfoService } from './services/nfo-service';
@@ -85,6 +86,7 @@ export function createAppContext(options: { env?: Env; databasePath?: string } =
   const files = createFileManagerService({ db, config, renamer, logger });
   const series = createSeriesService({ db, resolver, catalog, renamer, config });
   const nfo = createNfoService({ db, config, logger });
+  const jellyfin = createJellyfinService({ config, logger });
 
   function animeTitleOf(animeId: string): string {
     const row = db
@@ -139,6 +141,10 @@ export function createAppContext(options: { env?: Env; databasePath?: string } =
   worker.on('complete', ({ episodeFileId }) => {
     // Sidecar NFO + artwork per Jellyfin/Plex (best-effort, gated da config writeNfo).
     void nfo.writeForEpisodeFile(episodeFileId);
+    // Refresh Jellyfin a fine download (best-effort + debounce, gated da config jellyfinAutoRefresh).
+    if (config.get('jellyfinAutoRefresh')) {
+      void jellyfin.refresh();
+    }
     if (!config.get('notifyOnComplete')) {
       return;
     }
@@ -189,6 +195,7 @@ export function createAppContext(options: { env?: Env; databasePath?: string } =
       push,
       requestAuth,
       requests,
+      jellyfin,
     },
     logger,
   };

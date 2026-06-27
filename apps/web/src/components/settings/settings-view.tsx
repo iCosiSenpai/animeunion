@@ -43,6 +43,7 @@ import {
   type LucideIcon,
   Palette,
   Send,
+  Server,
   Shield,
   SlidersHorizontal,
   Webhook,
@@ -187,6 +188,7 @@ export function SettingsView() {
   const setMutation = trpc.config.set.useMutation();
   const syncMutation = trpc.catalog.sync.useMutation();
   const testTelegramMutation = trpc.notifications.testTelegram.useMutation();
+  const testJellyfinMutation = trpc.jellyfin.testConnection.useMutation();
   const { theme, setTheme } = useTheme();
 
   // Sezione iniziale da deep-link (`/settings?section=notifiche`, usato dalla palette).
@@ -413,6 +415,25 @@ export function SettingsView() {
       }
     } catch {
       toast.error('Invio del messaggio di test non riuscito.');
+    }
+  };
+
+  const onTestJellyfin = async () => {
+    try {
+      const res = await testJellyfinMutation.mutateAsync({
+        serverUrl: draft.jellyfinServerUrl,
+        // Mascherata e non modificata ⇒ undefined: il server usa la chiave salvata.
+        apiKey: draft.jellyfinApiKey === SECRET_MASK ? undefined : draft.jellyfinApiKey,
+      });
+      if (res.ok) {
+        toast.success(
+          `Connesso a ${res.serverName ?? 'Jellyfin'}${res.version ? ` (v${res.version})` : ''}.`,
+        );
+      } else {
+        toast.error(res.error ?? 'Connessione a Jellyfin non riuscita.');
+      }
+    } catch {
+      toast.error('Connessione a Jellyfin non riuscita.');
     }
   };
 
@@ -836,6 +857,98 @@ export function SettingsView() {
           <div className={cn(active !== 'sicurezza' && 'hidden')}>
             <SecuritySection />
           </div>
+
+          <Section id="integrazioni" hidden={active !== 'integrazioni'} title="Jellyfin / Plex">
+            <Field
+              label="Sidecar NFO + artwork"
+              hint="Scrive metadati .nfo e poster/fanart accanto ai video: i media server (Jellyfin/Plex/Kodi/Emby) mostrano i dati corretti. Funziona anche senza server configurato."
+            >
+              <Select
+                value={draft.writeNfo ? 'on' : 'off'}
+                onValueChange={(v) => update('writeNfo', v === 'on')}
+              >
+                <SelectTrigger className="w-40">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="on">Attivo</SelectItem>
+                  <SelectItem value="off">Disattivo</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field
+              label="URL del server Jellyfin"
+              hint="Es. http://192.168.1.10:8096 (o l'indirizzo Tailscale/HTTPS). Lascia vuoto per non usare il refresh automatico."
+            >
+              <Input
+                autoComplete="off"
+                placeholder="http://…:8096"
+                value={draft.jellyfinServerUrl}
+                onChange={(e) => update('jellyfinServerUrl', e.target.value)}
+              />
+            </Field>
+            <Field label="API key" hint="Jellyfin → Pannello di controllo → Avanzate → Chiavi API.">
+              <div className="space-y-1.5">
+                <Input
+                  type="password"
+                  autoComplete="off"
+                  placeholder={
+                    original?.jellyfinApiKey === SECRET_MASK
+                      ? 'Configurata — digita per sostituirla'
+                      : 'incolla la chiave'
+                  }
+                  value={draft.jellyfinApiKey === SECRET_MASK ? '' : draft.jellyfinApiKey}
+                  onChange={(e) => update('jellyfinApiKey', e.target.value)}
+                />
+                {original?.jellyfinApiKey === SECRET_MASK &&
+                draft.jellyfinApiKey === SECRET_MASK ? (
+                  <p className="text-xs text-muted-foreground">
+                    Chiave configurata (mascherata). Lascia vuoto per mantenerla, digita per
+                    sostituirla o{' '}
+                    <button
+                      type="button"
+                      className="text-primary underline-offset-4 hover:underline"
+                      onClick={() => update('jellyfinApiKey', '')}
+                    >
+                      rimuovila
+                    </button>
+                    .
+                  </p>
+                ) : null}
+              </div>
+            </Field>
+            <Field
+              label="Refresh automatico"
+              hint="A fine download chiede a Jellyfin di scansionare la libreria (best-effort, con debounce)."
+            >
+              <Select
+                value={draft.jellyfinAutoRefresh ? 'on' : 'off'}
+                onValueChange={(v) => update('jellyfinAutoRefresh', v === 'on')}
+              >
+                <SelectTrigger className="w-40">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="on">Attivo</SelectItem>
+                  <SelectItem value="off">Disattivo</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="Verifica" hint="Prova la connessione con i valori inseriti.">
+              <Button
+                variant="outline"
+                onClick={onTestJellyfin}
+                disabled={
+                  testJellyfinMutation.isPending ||
+                  !draft.jellyfinServerUrl ||
+                  !draft.jellyfinApiKey
+                }
+              >
+                <Server className="mr-2 h-4 w-4" />
+                {testJellyfinMutation.isPending ? 'Verifica…' : 'Prova connessione'}
+              </Button>
+            </Field>
+          </Section>
 
           <div className={cn(active !== 'integrazioni' && 'hidden')}>
             <RequestsSection />

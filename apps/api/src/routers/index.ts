@@ -9,6 +9,7 @@ import { filesRouter } from './files';
 import { followRouter } from './follow';
 import { healthRouter } from './health';
 import { homeRouter } from './home';
+import { jellyfinRouter } from './jellyfin';
 import { libraryRouter } from './library';
 import { lockRouter } from './lock';
 import { meRouter } from './me';
@@ -41,6 +42,7 @@ export const appRouter = router({
   push: pushRouter,
   requests: requestsRouter,
   stats: statsRouter,
+  jellyfin: jellyfinRouter,
 });
 
 export type AppRouter = typeof appRouter;

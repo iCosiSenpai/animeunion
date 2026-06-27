@@ -18,3 +18,4 @@ export * from './theme';
 export * from './lock';
 export * from './push';
 export * from './stats';
+export * from './jellyfin';

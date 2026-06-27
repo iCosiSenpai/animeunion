@@ -234,6 +234,12 @@ export function CommandPalette() {
       onSelect: () => go('/settings?section=aspetto'),
     },
     {
+      id: 'settings-home',
+      label: 'Impostazioni: Home (personalizza sezioni)',
+      icon: <LayoutGrid className="h-4 w-4" />,
+      onSelect: () => go('/settings?section=home'),
+    },
+    {
       id: 'settings-sicurezza',
       label: 'Impostazioni: Sicurezza',
       icon: <Shield className="h-4 w-4" />,

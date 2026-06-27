@@ -2,6 +2,31 @@ import { z } from 'zod';
 import { languageSchema } from './enums';
 import { themeAccentSchema } from './theme';
 
+// Sezioni della home, riordinabili e nascondibili dall'utente (Step 14). L'enum vincola gli id
+// salvati; label/icona/ordine di default vivono sul frontend (registro `HOME_SECTIONS`).
+export const homeSectionIdSchema = z.enum([
+  'hero',
+  'latestEpisodes',
+  'continueWatching',
+  'onAirToday',
+  'currentSeason',
+  'topRated',
+  'recentlyAdded',
+  'news',
+]);
+export type HomeSectionId = z.infer<typeof homeSectionIdSchema>;
+
+export const homeSectionPrefSchema = z.object({
+  id: homeSectionIdSchema,
+  visible: z.boolean(),
+});
+export type HomeSectionPref = z.infer<typeof homeSectionPrefSchema>;
+
+// Ordine + visibilità delle sezioni home. `[]` = "usa l'ordine di default" (il frontend fa il merge
+// col registro). `.catch([])`: un valore corrotto/legacy non deve far fallire l'intero parse di
+// getAll → ricade su `[]` (= default) restando un campo non critico.
+export const homeLayoutSchema = z.array(homeSectionPrefSchema).default([]).catch([]);
+
 export const appConfigSchema = z.object({
   // Cartelle di download (impostate nelle Impostazioni dell'app, NON nel .env).
   // Routing per (tipo × lingua); le DUB/film, se vuote, ricadono sulla serie SUB.
@@ -34,6 +59,8 @@ export const appConfigSchema = z.object({
   themeBackgroundUrl: z.string().default(''),
   // Animazioni e micro-interazioni dell'interfaccia (off = movimento ridotto).
   animationsEnabled: z.boolean().default(true),
+  // Personalizzazione della home: ordine e visibilità delle sezioni (vuoto = ordine di default).
+  homeLayout: homeLayoutSchema,
 });
 export type AppConfig = z.infer<typeof appConfigSchema>;
 

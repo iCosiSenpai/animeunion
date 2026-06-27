@@ -2,6 +2,7 @@
 
 import { AccentPicker } from '@/components/settings/accent-picker';
 import { FolderInput } from '@/components/settings/folder-picker';
+import { HomeLayoutSection } from '@/components/settings/home-layout-section';
 import { InstallButton } from '@/components/settings/install-button';
 import { PushToggle } from '@/components/settings/push-toggle';
 import { RequestsSection } from '@/components/settings/requests-section';
@@ -37,6 +38,7 @@ import {
   ExternalLink,
   FolderDown,
   Languages,
+  LayoutGrid,
   Lock,
   type LucideIcon,
   Palette,
@@ -122,6 +124,7 @@ type SectionId =
   | 'lingua'
   | 'notifiche'
   | 'aspetto'
+  | 'home'
   | 'sicurezza'
   | 'integrazioni'
   | 'avanzate';
@@ -133,6 +136,7 @@ const SECTIONS: { id: SectionId; label: string; icon: LucideIcon }[] = [
   { id: 'lingua', label: 'Lingua', icon: Languages },
   { id: 'notifiche', label: 'Notifiche', icon: Bell },
   { id: 'aspetto', label: 'Aspetto', icon: Palette },
+  { id: 'home', label: 'Home', icon: LayoutGrid },
   { id: 'sicurezza', label: 'Sicurezza', icon: Shield },
   { id: 'integrazioni', label: 'Integrazioni', icon: Webhook },
   { id: 'avanzate', label: 'Avanzate', icon: SlidersHorizontal },
@@ -216,8 +220,11 @@ export function SettingsView() {
   const original = configQuery.data ?? null;
   const dirtyKeys = useMemo(() => {
     if (!draft || !original) return [];
+    // homeLayout (array) è gestito dal pannello standalone HomeLayoutSection con un proprio
+    // salvataggio: escluso dal draft globale (il confronto qui è per riferimento, valido solo
+    // sui primitivi) per non far scattare la barra "Modifiche non salvate" né riscriverlo.
     return (Object.keys(draft) as (keyof AppConfig)[]).filter(
-      (key) => draft[key] !== original[key],
+      (key) => key !== 'homeLayout' && draft[key] !== original[key],
     );
   }, [draft, original]);
   const isDirty = dirtyKeys.length > 0;
@@ -821,6 +828,10 @@ export function SettingsView() {
               </Button>
             </Field>
           </Section>
+
+          <div className={cn(active !== 'home' && 'hidden')}>
+            <HomeLayoutSection />
+          </div>
 
           <div className={cn(active !== 'sicurezza' && 'hidden')}>
             <SecuritySection />

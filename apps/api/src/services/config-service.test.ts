@@ -133,6 +133,36 @@ describe('ConfigService', () => {
     expect(service.get('animationsEnabled')).toBe(false);
   });
 
+  it('homeLayout: default vuoto, set di un layout (array) e round-trip', () => {
+    const service = createConfigService({ db: createTestDb() });
+    expect(service.get('homeLayout')).toEqual([]);
+    const layout = [
+      { id: 'hero', visible: false },
+      { id: 'latestEpisodes', visible: true },
+    ];
+    service.set('homeLayout', layout);
+    expect(service.get('homeLayout')).toEqual(layout);
+    expect(service.getAll().homeLayout).toEqual(layout);
+  });
+
+  it('homeLayout: valore corrotto in DB ricade su [] senza far fallire getAll', () => {
+    const db = createTestDb();
+    const timestamp = new Date().toISOString();
+    // id non più nell'enum: l'array fallirebbe il parse → il .catch([]) lo neutralizza e l'intero
+    // getAll non deve lanciare (un layout corrotto non deve bloccare tutta la config).
+    db.insert(schema.config)
+      .values({
+        key: 'homeLayout',
+        value: '[{"id":"sezione-rimossa","visible":true}]',
+        updatedAt: timestamp,
+      })
+      .run();
+
+    const service = createConfigService({ db });
+    expect(() => service.getAll()).not.toThrow();
+    expect(service.getAll().homeLayout).toEqual([]);
+  });
+
   it('isConfigured riflette la presenza della cartella base', () => {
     const service = createConfigService({ db: createTestDb() });
     expect(service.isConfigured()).toBe(false);

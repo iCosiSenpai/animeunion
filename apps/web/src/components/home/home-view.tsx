@@ -4,7 +4,7 @@ import { AnimeCard } from '@/components/anime/anime-card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { trpc } from '@/lib/trpc';
-import type { AnimeSummary, FeaturedAnime, Season } from '@animeunion/shared';
+import type { AnimeSummary, FeaturedAnime, HomeSectionId, Season } from '@animeunion/shared';
 import {
   Calendar,
   ChevronLeft,
@@ -18,10 +18,11 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import type { ElementType, ReactNode } from 'react';
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { CardCarousel, CardCarouselSkeleton } from './card-carousel';
 import { ContinueWatchingGrid } from './continue-watching';
 import { EpisodeGrid } from './episode-card';
+import { resolveHomeOrder } from './home-sections';
 import { NewsCard } from './news-card';
 
 const SEASON_BY_MONTH: Season[] = [
@@ -353,13 +354,20 @@ export function HomeView() {
   const featured = trpc.home.featured.useQuery();
   const continueWatching = trpc.me.history.useQuery();
   const news = trpc.home.news.useQuery();
+  const config = trpc.config.getAll.useQuery();
 
   const todayAnime = week.data?.find((entry) => entry.day === todayWeekday)?.anime ?? [];
 
-  return (
-    <div className="space-y-14">
-      <HeroCarousel anime={featured.data ?? []} isLoading={featured.isLoading} />
+  // Ordine e visibilità delle sezioni dalla config (merge col registro per nuove sezioni).
+  const order = resolveHomeOrder(config.data?.homeLayout ?? []);
 
+  // Una sezione = un nodo. Section/SectionBlock ritornano già null se vuote/caricamento → nessun
+  // buco. "In onda oggi"/"Stagione in corso" sono full-width (non più nella griglia a 2 colonne):
+  // a piena larghezza il carosello default non si accavalla (lo Step 4 le riduceva solo perché a
+  // mezza larghezza).
+  const sectionNodes: Record<HomeSectionId, ReactNode> = {
+    hero: <HeroCarousel anime={featured.data ?? []} isLoading={featured.isLoading} />,
+    latestEpisodes: (
       <SectionBlock
         title="Ultimi episodi"
         icon={Play}
@@ -368,7 +376,8 @@ export function HomeView() {
       >
         <EpisodeGrid episodes={(latestEpisodes.data ?? []).slice(0, 10)} />
       </SectionBlock>
-
+    ),
+    continueWatching: (
       <SectionBlock
         title="Continua a guardare"
         icon={Clock}
@@ -377,40 +386,42 @@ export function HomeView() {
       >
         <ContinueWatchingGrid entries={(continueWatching.data ?? []).slice(0, 12)} />
       </SectionBlock>
-
-      <div className="grid gap-14 lg:grid-cols-2">
-        <Section
-          title="In onda oggi"
-          icon={Calendar}
-          items={todayAnime}
-          isLoading={week.isLoading}
-          href="/calendar"
-          carouselClassName="lg:grid-cols-3"
-        />
-        <Section
-          title={`Stagione in corso · ${SEASON_LABELS[season]} ${year}`}
-          icon={Calendar}
-          items={seasonal.data?.data ?? []}
-          isLoading={seasonal.isLoading}
-          href={`/catalog?season=${season}&year=${year}`}
-          carouselClassName="lg:grid-cols-3"
-        />
-      </div>
-
+    ),
+    onAirToday: (
+      <Section
+        title="In onda oggi"
+        icon={Calendar}
+        items={todayAnime}
+        isLoading={week.isLoading}
+        href="/calendar"
+      />
+    ),
+    currentSeason: (
+      <Section
+        title={`Stagione in corso · ${SEASON_LABELS[season]} ${year}`}
+        icon={Calendar}
+        items={seasonal.data?.data ?? []}
+        isLoading={seasonal.isLoading}
+        href={`/catalog?season=${season}&year=${year}`}
+      />
+    ),
+    topRated: (
       <Section
         title="Più votati"
         icon={TrendingUp}
         items={topRated.data?.data ?? []}
         isLoading={topRated.isLoading}
       />
-
+    ),
+    recentlyAdded: (
       <Section
         title="Ultimi aggiunti"
         icon={Clock}
         items={recent.data?.data ?? []}
         isLoading={recent.isLoading}
       />
-
+    ),
+    news: (
       <SectionBlock
         title="News"
         icon={Newspaper}
@@ -423,6 +434,16 @@ export function HomeView() {
           ))}
         </div>
       </SectionBlock>
+    ),
+  };
+
+  return (
+    <div className="space-y-14">
+      {order
+        .filter((entry) => entry.visible)
+        .map((entry) => (
+          <Fragment key={entry.id}>{sectionNodes[entry.id]}</Fragment>
+        ))}
     </div>
   );
 }

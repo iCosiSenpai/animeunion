@@ -150,7 +150,24 @@ azione "Collega senza scaricare (esterno)" (scelta anime → `episode.byAnime` c
 DUB → toast-report) + badge "Esterno" e delete per-episodio nascosto per gli external (mai cancellare i
 file dell'utente) in [library-series-card.tsx](apps/web/src/components/library/library-series-card.tsx).
 **+14 test (287)** (`parseEpisodeNumber`, `linkExternalFolder`, `addMissing` salta external, scan/list
-external). **Prossimo: Step 14** (home personalizzabile: mostra/nascondi + riordina). _Aggiornare qui a ogni step._
+external). **Step 14** (home personalizzabile: mostra/nascondi + riordina sezioni): nuovo campo config
+**array** `homeLayout` (`homeSectionIdSchema` enum 8 sezioni + `homeSectionPrefSchema {id,visible}` +
+`homeLayoutSchema = z.array(...).default([]).catch([])` in [config.ts](packages/shared/src/contracts/config.ts);
+primo campo config non-primitivo — il `.catch([])` evita che un layout corrotto faccia fallire l'intero
+`appConfigSchema.parse` di `getAll`, niente migrazione perché i valori sono già JSON-serializzati);
+registro frontend [home-sections.ts](apps/web/src/components/home/home-sections.ts) (`HOME_SECTIONS`
+id+label+icona + `resolveHomeOrder` merge forward-compat: voci salvate poi appende le nuove come
+visibili); [home-view.tsx](apps/web/src/components/home/home-view.tsx) costruisce
+`sectionNodes: Record<HomeSectionId,ReactNode>` e renderizza `order.filter(visible)` (la griglia
+`lg:grid-cols-2` di "In onda oggi"/"Stagione in corso" sparisce → sezioni full-width riordinabili, no
+regressione: lo Step 4 le restringeva solo a mezza larghezza); pannello **standalone**
+[home-layout-section.tsx](apps/web/src/components/settings/home-layout-section.tsx) "Personalizza la home"
+(pattern `RequestsSection`, toggle Eye/EyeOff + frecce su/giù, `config.set`+invalidate proprio) montato
+in [settings-view.tsx](apps/web/src/components/settings/settings-view.tsx) come nuova sezione "Home"
+(icona `LayoutGrid`) ed **escluso dal draft globale** (`dirtyKeys` salta `homeLayout`: il confronto per
+riferimento vale solo sui primitivi); voce palette `Impostazioni: Home`. **+2 test (289)** (round-trip
+`homeLayout` + resilienza `.catch` su valore corrotto). **Prossimo: Step 15** (calendario potenziato).
+_Aggiornare qui a ogni step._
 
 ## Stato attuale (2026-06-27)
 
@@ -421,7 +438,41 @@ niente "scollega" dedicato (undo = ri-collegare un altro anime o eliminare la ca
 unmatched, `addMissing` salta external, `library.scan`+`list` external), lint/typecheck/build web verdi.
 Verifica manuale a runtime ancora da fare (cartella "Season NN" esterna → "Collega senza scaricare" →
 episodi in libreria con badge "Esterno", file non spostati, niente download/auto-enqueue).
-**Prossimo: Step 14** (home personalizzabile: mostra/nascondi + riordina sezioni).
+**Step 14** home personalizzabile: mostra/nascondi + riordina sezioni. **Decisione utente:** frecce
+su/giù + toggle visibilità (no drag&drop). La preferenza vive in `config` (parità web/PWA/mobile).
+**Approccio (frontend + 1 campo config array + 2 test):** (1) **contratto** — `homeLayout` array in
+`appConfigSchema` ([config.ts](packages/shared/src/contracts/config.ts)) con `homeSectionIdSchema`
+(enum 8 sezioni), `homeSectionPrefSchema {id,visible}`, `homeLayoutSchema =
+z.array(...).default([]).catch([])`. È il **primo campo config non-primitivo**: nessuna migrazione
+(i valori config sono già `JSON.stringify`/`parse` in [config-service.ts](apps/api/src/services/config-service.ts)),
+e il `.catch([])` impedisce che un layout corrotto/legacy faccia fallire l'intero
+`appConfigSchema.parse(raw)` di `getAll` (ricade su `[]` = ordine di default). (2) **registro** —
+nuovo [home-sections.ts](apps/web/src/components/home/home-sections.ts): `HOME_SECTIONS`
+(id+label IT+icona, ordine default) + `resolveHomeOrder(saved)` forward-compat (prima le voci salvate
+ancora nel registro nell'ordine scelto, poi appende le sezioni nuove come `visible` → aggiungere
+sezioni in futuro non perde le preferenze). (3) **render** —
+[home-view.tsx](apps/web/src/components/home/home-view.tsx) legge `config.getAll`, costruisce
+`sectionNodes: Record<HomeSectionId,ReactNode>` (Hero + Section/SectionBlock invariate) e renderizza
+`order.filter(visible)` con `Fragment` keyed. **Conseguenza voluta (no regressione):** la griglia
+`lg:grid-cols-2` che accoppiava "In onda oggi"+"Stagione in corso" sparisce (sezioni ora indipendenti
+e riordinabili) → diventano `Section` full-width (carosello default); lo Step 4 le aveva ridotte a 3
+colonne **solo** perché a mezza larghezza, a piena larghezza il cramping non esiste (rimossi i
+`carouselClassName="lg:grid-cols-3"`). (4) **pannello standalone** — nuovo
+[home-layout-section.tsx](apps/web/src/components/settings/home-layout-section.tsx) "Personalizza la
+home" (pattern `SecuritySection`/`RequestsSection`: stato + `config.set`+invalidate propri, fuori dal
+draft globale), righe con toggle Eye/EyeOff + frecce su/giù (disabilitate agli estremi), dirty via
+`JSON.stringify`, `Salva`/`Annulla`/`Ripristina predefinito`. (5) **montaggio** —
+[settings-view.tsx](apps/web/src/components/settings/settings-view.tsx): nuova sezione `home` (icona
+`LayoutGrid`, entra in rail/pillole/whitelist deep-link) + **esclusione di `homeLayout` da `dirtyKeys`**
+(`&& key !== 'homeLayout'`): il confronto dirty è per riferimento e vale solo sui primitivi, così un
+array non fa scattare la barra "Modifiche non salvate" né viene riscritto dal Salva globale. (6)
+**palette** — voce `Impostazioni: Home` ([command-palette.tsx](apps/web/src/components/layout/command-palette.tsx)).
+**+2 test (289 verdi)** ([config-service.test.ts](apps/api/src/services/config-service.test.ts):
+round-trip `homeLayout`; valore corrotto → `getAll` non lancia, `[]`), lint/typecheck/build web verdi
+(`/settings` resta statica). Verifica manuale a runtime ancora da fare (Impostazioni → Home →
+nascondi/riordina → Salva riflesso in home; "Ripristina predefinito"; nessuna falsa barra "Modifiche
+non salvate"; deep-link/palette `home`; nessuna regressione mobile). **Prossimo: Step 15** (calendario
+potenziato).
 
 ## Stato precedente (2026-06-25)
 

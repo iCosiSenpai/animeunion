@@ -8,9 +8,50 @@ e il progetto aderisce al [Semantic Versioning](https://semver.org/lang/it/).
 ## [Unreleased]
 
 ### Da fare
-- Test E2E (Playwright).
 - Setup wizard migliorato (Step F, rimandato).
 - GitHub Pages (landing pubblica + spazio mascotte).
+- Esecuzione degli E2E Playwright in CI (scaffolding già presente).
+
+## [0.10.0] - 2026-06-27
+
+Batch "Potenziamenti diffusi": bug-fix e potenziamenti raccolti dall'uso reale (dettaglio anime,
+tema, toast/animazioni, home, popup, ricerca, seguiti, gestore file, calendario, wallpaper) più una
+fase finale di hardening, tenuta della coda gigante e integrazione con i media server.
+
+### Added
+- **Pulsante "Apri su AnimeUnion"** nel dettaglio anime (logo AU).
+- **Ricerca potenziata**: palette ⌘K con debounce, Invio → pagina risultati `/catalog?q=`, voci
+  in-app cercabili (Gestore file, Informazioni, sezioni Impostazioni via deep-link).
+- **Gestore file**: relink dinamico (la lista si aggiorna da sola durante i download), rinomina serie
+  che preserva i collegamenti, vista dedicata `/library/missing`, multi-stagione alla riscarica
+  instradata al flusso correlazioni.
+- **Collega senza scaricare** (stato `external`): registra file già su disco senza spostarli né
+  ri-scaricarli; **Scollega esterno** per dimenticarli senza toccarli.
+- **Home personalizzabile** (mostra/nascondi + riordina sezioni), **calendario** potenziato (oggi
+  evidenziato, filtro "Solo i miei seguiti", vista settimana) e **wallpaper** con anteprima, download
+  e filtro "Sketchy".
+- **Notifiche anti-rumore**: coalescing per-anime; pulsanti "Invia notifica di test" (push) e "Mostra
+  toast di prova".
+- **Tenuta coda gigante** (One Piece): riassunto aggregato server-side, paginazione on-demand, azioni
+  di gruppo, **fairness round-robin** tra serie nella scelta del prossimo download.
+- **Integrazione Jellyfin/Plex**: sidecar `.nfo` + poster/fanart accanto ai video (opzionale),
+  refresh automatico della libreria a fine download e "Prova connessione" in Impostazioni.
+- **Rate-limit** sull'API in ingresso (`/api/integration/requests`), **scaffolding E2E Playwright**
+  (job CI non bloccante).
+
+### Changed
+- **Tema chiaro/scuro** ora funzionante (palette light reale + `color-scheme`/`theme-color`
+  dinamici); **toast** `top-center` con safe-area iPhone; **animazioni** con interruttore autorevole
+  e transizioni/micro-interazioni visibili.
+- **Dettaglio anime**: conteggio episodi reale per gli ONGOING, freschezza cache capata a 1h, poster
+  robusto. **Home**: card non più accavallate e hero ad alta risoluzione (banner DB + fallback
+  sfocato). **Popup** del gestore file che non sforano più con titoli lunghi.
+- **Auto-download**: cooldown sui falliti permanenti (niente ri-accodi/notifiche ogni ciclo).
+- Redazione delle chiavi Web Push (`p256dh`/`auth`) nei log.
+
+### Database
+- Migrazione `0013`: indice `idx_download_episode_file` su `download_queue` (azioni di gruppo veloci
+  sulla coda gigante). Lo stato `external` non richiede migrazione (colonna `text` senza CHECK).
 
 ## [0.9.0] - 2026-06-25
 

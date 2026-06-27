@@ -59,6 +59,8 @@ export const appConfigSchema = z.object({
   themeBackgroundUrl: z.string().default(''),
   // Animazioni e micro-interazioni dell'interfaccia (off = movimento ridotto).
   animationsEnabled: z.boolean().default(true),
+  // Scrive i sidecar NFO + artwork (poster/fanart) accanto ai video per Jellyfin/Plex/Kodi/Emby.
+  writeNfo: z.boolean().default(false),
   // Personalizzazione della home: ordine e visibilità delle sezioni (vuoto = ordine di default).
   homeLayout: homeLayoutSchema,
 });

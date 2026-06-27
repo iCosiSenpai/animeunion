@@ -166,8 +166,22 @@ regressione: lo Step 4 le restringeva solo a mezza larghezza); pannello **standa
 in [settings-view.tsx](apps/web/src/components/settings/settings-view.tsx) come nuova sezione "Home"
 (icona `LayoutGrid`) ed **escluso dal draft globale** (`dirtyKeys` salta `homeLayout`: il confronto per
 riferimento vale solo sui primitivi); voce palette `Impostazioni: Home`. **+2 test (289)** (round-trip
-`homeLayout` + resilienza `.catch` su valore corrotto). **Prossimo: Step 15** (calendario potenziato).
-_Aggiornare qui a ogni step._
+`homeLayout` + resilienza `.catch` su valore corrotto). **Step 15** (calendario potenziato): il
+calendario era solo `Tabs` per giorno con "oggi" come semplice `defaultValue` (nessun marcatore/data),
+niente filtri, niente visione d'insieme. **Vincolo dati (verificato):** dal backend reale ogni
+`AnimeSummary` del calendario ha `availableLanguages: []`, `genres: []` e l'entry `date: ''`
+([api-source.ts:241-260](apps/api/src/sources/api-source.ts#L241-L260)) → niente filtro lingua/generi
+(inaffidabili), date dei giorni **calcolate client-side**; lo `status` è quasi sempre `ONGOING` →
+filtro stato inutile. **Scelte utente:** solo filtro **"Solo i miei seguiti"** (lingua/stato scartati)
++ **vista Settimana/Agenda**. **Frontend-only** (un file riscritto,
+[calendar-view.tsx](apps/web/src/components/calendar/calendar-view.tsx)): switcher segmentato Per
+giorno/Settimana + toggle seguiti (Button `aria-pressed`); helper `weekDates(now)` lunedì-based con
+`Intl.DateTimeFormat('it-IT',{day,month:'short'})`; filtro via `useFollowedIds()`
+([use-followed.ts](apps/web/src/lib/use-followed.ts), riuso del badge "Seguito" già su `AnimeCard`) con
+empty state adattivo; vista Per giorno = tab con pallino/accento + data su "oggi"; vista Settimana = 7
+sezioni impilate (`AnimeGrid` riusato) con la sezione di oggi evidenziata (`border-primary/40
+bg-primary/5`). Nessun backend/contratto/test nuovo, 289 verdi a contorno. **Prossimo: Step 16**
+(wallpaper/sfondo potenziato). _Aggiornare qui a ogni step._
 
 ## Stato attuale (2026-06-27)
 
@@ -471,8 +485,32 @@ array non fa scattare la barra "Modifiche non salvate" né viene riscritto dal S
 round-trip `homeLayout`; valore corrotto → `getAll` non lancia, `[]`), lint/typecheck/build web verdi
 (`/settings` resta statica). Verifica manuale a runtime ancora da fare (Impostazioni → Home →
 nascondi/riordina → Salva riflesso in home; "Ripristina predefinito"; nessuna falsa barra "Modifiche
-non salvate"; deep-link/palette `home`; nessuna regressione mobile). **Prossimo: Step 15** (calendario
-potenziato).
+non salvate"; deep-link/palette `home`; nessuna regressione mobile). **Step 15** calendario potenziato.
+**Causa/limite (verificato):** il calendario ([calendar-view.tsx](apps/web/src/components/calendar/calendar-view.tsx))
+era solo `Tabs` per giorno con "oggi" = semplice `defaultValue` (nessun marcatore visivo né data),
+nessun filtro, nessuna visione d'insieme (6 giorni su 7 nascosti). **Vincolo dati reale:** dal backend
+vivo ogni `AnimeSummary` del calendario ha `availableLanguages: []`, `genres: []` e l'entry `date: ''`
+([api-source.ts:241-260](apps/api/src/sources/api-source.ts#L241-L260)) → filtro lingua/generi
+impossibile (dati vuoti), date dei giorni da calcolare client-side; lo `status` è quasi sempre
+`ONGOING` → filtro stato inutile. **Scelte utente (plan mode):** solo filtro **"Solo i miei seguiti"**
+(lingua/stato scartati) + **vista Settimana/Agenda**. **Fix frontend-only (un file riscritto, coerente
+con Step 5/6/9/10/11/12):** `view: 'day'|'week'` + `onlyFollowed` (`useState`); barra controlli con
+switcher segmentato Per giorno/Settimana (`Button` `ghost`/`default` + `aria-pressed`, icone
+`CalendarDays`/`Rows3`) e toggle seguiti (`Button` `outline`/`default` + `aria-pressed`, `Check`);
+helper `weekDates(now)` lunedì-based (offset a lunedì poi `monday+i`) con
+`Intl.DateTimeFormat('it-IT',{day:'numeric',month:'short'})` per le date reali; `DAYS` esteso con
+etichetta lunga IT; `itemsForDay` filtra con `useFollowedIds()`
+([use-followed.ts](apps/web/src/lib/use-followed.ts), riuso del badge "Seguito" già su `AnimeCard`) e
+empty state adattivo. **Vista Per giorno:** `Tabs` con `TabsList h-auto flex-wrap`, tab di "oggi" con
+pallino `bg-primary` + accento `data-[state=inactive]:text-primary` e data reale sotto la sigla.
+**Vista Settimana:** 7 `section` impilate con header (nome lungo + data + badge "Oggi" + conteggio),
+`AnimeGrid` riusato per ogni giorno, sezione di oggi evidenziata (`border-primary/40 bg-primary/5`).
+**Deviazioni (Regola #1):** niente filtro lingua/stato; niente indicatore "in arrivo" legato a
+`new_episode`/`season_available` (servirebbe correlazione backend — coperto da badge "Seguito" +
+evidenziazione oggi). Frontend-only, nessun test nuovo (289 verdi a contorno), lint/typecheck/build web
+verdi (`/calendar` prerenderizzata statica). Verifica manuale a runtime ancora da fare (tab di oggi
+marcato con data; vista Settimana con oggi evidenziato; "Solo i miei seguiti" filtra ogni giorno;
+nessuna regressione mobile). **Prossimo: Step 16** (wallpaper/sfondo potenziato).
 
 ## Stato precedente (2026-06-25)
 

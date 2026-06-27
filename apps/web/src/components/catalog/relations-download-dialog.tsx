@@ -125,6 +125,7 @@ export function RelationsDownloadDialog({
   slug,
   open,
   onOpenChange,
+  autoDiscover = false,
 }: {
   related: RelatedAnime[];
   language?: Language;
@@ -132,6 +133,8 @@ export function RelationsDownloadDialog({
   slug: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Avvia subito la scoperta del franchise (es. dal gestore file per una serie multi-stagione). */
+  autoDiscover?: boolean;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [triggered, setTriggered] = useState(false);
@@ -144,13 +147,13 @@ export function RelationsDownloadDialog({
     { enabled: triggered, staleTime: 5 * 60_000 },
   );
 
-  // Reset a ogni apertura.
+  // Reset a ogni apertura. Con autoDiscover la scoperta parte da sola (niente click manuale).
   useEffect(() => {
     if (open) {
       setSelected(new Set());
-      setTriggered(false);
+      setTriggered(autoDiscover);
     }
-  }, [open]);
+  }, [open, autoDiscover]);
 
   // La lista mostrata: il franchise (se caricato) include gia' le relazioni dirette.
   const items = franchise.data ?? related;
@@ -180,7 +183,9 @@ export function RelationsDownloadDialog({
           // continua con gli altri
         }
       }
-      void utils.download.queue.invalidate();
+      // Dallo Step 8 pagina e widget pollano download.summary (non piu' download.queue):
+      // invalido l'intero router cosi' badge/riassunto si aggiornano subito.
+      void utils.download.invalidate();
       toast.success(
         total > 0
           ? `${total} episodi accodati dalle serie correlate`

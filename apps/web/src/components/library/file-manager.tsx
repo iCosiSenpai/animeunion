@@ -1,5 +1,6 @@
 'use client';
 
+import { RelationsDownloadDialog } from '@/components/catalog/relations-download-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -30,6 +31,7 @@ import {
   FolderPlus,
   FolderX,
   Globe,
+  Layers,
   Link2,
   Loader2,
   Pencil,
@@ -179,10 +181,13 @@ function FolderActionsDialog({
   folder,
   onClose,
   onChanged,
+  onMultiSeasonRedownload,
 }: {
   folder: FileEntry;
   onClose: () => void;
   onChanged: () => void;
+  /** La cartella ha piu' stagioni: dopo l'eliminazione si passa al flusso correlazioni. */
+  onMultiSeasonRedownload: (slug: string) => void;
 }) {
   const [search, setSearch] = useState('');
   const [picked, setPicked] = useState<{ slug: string; title: string } | null>(null);
@@ -191,6 +196,13 @@ function FolderActionsDialog({
     { query: search },
     { enabled: !picked && search.trim().length >= 2 },
   );
+  // Le sotto-cartelle di contenuto ("Season NN"/Specials/OVA/Movie) hanno extra=false; gli extra
+  // (backdrops, sigle...) extra=true (vedi isExtraEntry lato backend). >=2 cartelle di contenuto =
+  // serie multi-stagione: la riscarica va instradata al flusso correlazioni cosi' ogni stagione
+  // viene mappata alla sua entry AnimeUnion, invece della singola addAllBySlug.
+  const childrenQ = trpc.files.list.useQuery({ path: folder.path });
+  const seasonFolders = (childrenQ.data?.entries ?? []).filter((e) => e.type === 'dir' && !e.extra);
+  const multiSeason = seasonFolders.length >= 2;
   const addAll = trpc.download.addAllBySlug.useMutation();
   const remove = trpc.files.remove.useMutation();
   const busy = remove.isPending || addAll.isPending;
@@ -214,6 +226,22 @@ function FolderActionsDialog({
             },
           );
         },
+        onError: (e) => toast.error(e.message || 'Eliminazione non riuscita'),
+      },
+    );
+  }
+
+  // Multi-stagione: elimina la cartella, poi delega al dialog correlazioni (scelta + classifica di
+  // ogni stagione/correlato) invece della singola addAllBySlug che accoderebbe una sola entry.
+  function onRedownloadMulti() {
+    if (!picked) {
+      return;
+    }
+    const slug = picked.slug;
+    remove.mutate(
+      { path: folder.path },
+      {
+        onSuccess: () => onMultiSeasonRedownload(slug),
         onError: (e) => toast.error(e.message || 'Eliminazione non riuscita'),
       },
     );
@@ -266,18 +294,33 @@ function FolderActionsDialog({
             <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
               <span className="min-w-0 break-words">
-                La cartella <strong>{folder.name}</strong> verrà eliminata e gli episodi di{' '}
-                <strong>{picked.title}</strong> rimessi in coda di download. Operazione non
-                annullabile.
+                {multiSeason ? (
+                  <>
+                    La cartella <strong>{folder.name}</strong> ({seasonFolders.length} stagioni)
+                    verrà eliminata. Poi sceglierai quali stagioni e correlati di{' '}
+                    <strong>{picked.title}</strong> ri-scaricare e come classificarli. Operazione
+                    non annullabile.
+                  </>
+                ) : (
+                  <>
+                    La cartella <strong>{folder.name}</strong> verrà eliminata e gli episodi di{' '}
+                    <strong>{picked.title}</strong> rimessi in coda di download. Operazione non
+                    annullabile.
+                  </>
+                )}
               </span>
             </div>
             <DialogFooter>
               <Button variant="ghost" onClick={() => setConfirmRedownload(false)} disabled={busy}>
                 Annulla
               </Button>
-              <Button variant="destructive" onClick={onRedownload} disabled={busy}>
+              <Button
+                variant="destructive"
+                onClick={multiSeason ? onRedownloadMulti : onRedownload}
+                disabled={busy}
+              >
                 {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Elimina e riscarica
+                {multiSeason ? 'Elimina e scegli le stagioni' : 'Elimina e riscarica'}
               </Button>
             </DialogFooter>
           </div>
@@ -287,6 +330,15 @@ function FolderActionsDialog({
               <p className="break-words font-medium">{picked.title}</p>
               <p className="break-all text-xs text-muted-foreground">{folder.path}</p>
             </div>
+            {multiSeason ? (
+              <div className="flex items-start gap-2 rounded-md border border-primary/30 bg-primary/5 p-2.5 text-xs text-muted-foreground">
+                <Layers className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+                <span className="min-w-0 break-words">
+                  Questa cartella contiene {seasonFolders.length} stagioni: potrai ri-scaricarle
+                  tutte (e i correlati) e classificare ognuna prima di accodarla.
+                </span>
+              </div>
+            ) : null}
             <div className="flex flex-col gap-2">
               <Button asChild variant="outline">
                 <Link href={`/catalog/${picked.slug}`} onClick={onClose}>
@@ -296,7 +348,7 @@ function FolderActionsDialog({
               </Button>
               <Button variant="destructive" onClick={() => setConfirmRedownload(true)}>
                 <RefreshCw className="mr-2 h-4 w-4" />
-                Ri-scarica (elimina e riscarica)
+                {multiSeason ? 'Ri-scarica tutte le stagioni' : 'Ri-scarica (elimina e riscarica)'}
               </Button>
             </div>
             <Button variant="ghost" size="sm" className="gap-1" onClick={() => setPicked(null)}>
@@ -351,6 +403,9 @@ export function FileManager() {
   const [mkdirName, setMkdirName] = useState('');
   const [relinkTarget, setRelinkTarget] = useState<FileEntry | null>(null);
   const [folderTarget, setFolderTarget] = useState<FileEntry | null>(null);
+  // Riscarica multi-stagione: dopo l'eliminazione della cartella si apre il dialog correlazioni
+  // (riuso del catalogo) per scegliere e classificare ogni stagione/correlato.
+  const [franchise, setFranchise] = useState<{ slug: string } | null>(null);
   const [toolsAction, setToolsAction] = useState<'rename-scheme' | 'prune' | null>(null);
 
   const refresh = () => {
@@ -827,6 +882,26 @@ export function FileManager() {
           onChanged={() => {
             setFolderTarget(null);
             refresh();
+          }}
+          onMultiSeasonRedownload={(slug) => {
+            setFolderTarget(null);
+            setFranchise({ slug });
+            refresh();
+          }}
+        />
+      ) : null}
+
+      {franchise ? (
+        <RelationsDownloadDialog
+          related={[]}
+          slug={franchise.slug}
+          open
+          autoDiscover
+          onOpenChange={(o) => {
+            if (!o) {
+              setFranchise(null);
+              refresh();
+            }
           }}
         />
       ) : null}

@@ -117,10 +117,22 @@ dedicata `/library/missing` (`missing-view.tsx`): "Controlla la libreria" (riusa
 mancanti per serie a tutta larghezza con chip dei numeri, "N presenti · M mancanti" (incrocio
 `library.list`), Classifica + Ri-scarica/Ri-scarica tutti (`download.addMissing`); il badge "Mancanti"
 della Libreria è ora un link, `missing-dialog.tsx` rimosso. Frontend-only, 273 test a contorno.
-**Prossimo: Step 12** (gestore file: multi-season alla riscarica → correlazioni). _Aggiornare qui a
-ogni step._
+**Step 12** (gestore file: multi-season alla riscarica → correlazioni): l'azione "Ri-scarica" di una
+cartella ([file-manager.tsx](apps/web/src/components/library/file-manager.tsx) `FolderActionsDialog`)
+chiamava `download.addAllBySlug({slug})` = i mancanti di **una sola** entry → per una serie con più
+stagioni scaricata esternamente le altre stagioni si perdevano. **Fix frontend-only (riuso):**
+rilevamento multi-stagione senza backend — i figli di una cartella-serie hanno già `FileEntry.extra`
+(da `isExtraEntry`→`isContentFolderName`), quindi le stagioni sono `dir && !extra`; `>=2` = serie
+multi-stagione. In quel caso "Ri-scarica tutte le stagioni" elimina la cartella e instrada al **flusso
+correlazioni del catalogo** ([relations-download-dialog.tsx](apps/web/src/components/catalog/relations-download-dialog.tsx),
+montato in `FileManager` con nuova prop `autoDiscover` → scoperta franchise `series.franchise` avviata
+da sola), dove ogni stagione/correlato si seleziona e si **classifica** (`series.setOverride`) prima di
+accodare (`addAllBySlug`) = ogni stagione mappata alla sua entry AnimeUnion. `RelationsDownloadDialog`
+ora invalida l'intero router `download` (non più solo `download.queue`, non pollato dallo Step 8). Il
+caso ≤1 stagione resta invariato. Frontend-only, 273 test a contorno. **Prossimo: Step 13** (gestore
+file: collega senza scaricare, stato `external`). _Aggiornare qui a ogni step._
 
-## Stato attuale (2026-06-26)
+## Stato attuale (2026-06-27)
 
 **Batch "Potenziamenti diffusi" verso v0.10.0 (branch `feat/potenziamenti-diffusi`, non ancora
 merge/release):** piano vivo in [plan/potenziamenti-diffusi.md](plan/potenziamenti-diffusi.md)
@@ -333,7 +345,31 @@ badge "Mancanti" → `Link` a `/library/missing` (rimossi `MissingDialog`/stato)
 test nuovo (273 verdi a contorno), lint/typecheck/build web verdi (`/library/missing` prerenderizzata
 statica). Verifica manuale a runtime ancora da fare (gestore file che si aggiorna da solo durante i
 download; rinomina serie che mantiene i link; `/library/missing` a tutta larghezza con Classifica/
-Ri-scarica). **Prossimo: Step 12** (gestore file: multi-season alla riscarica → correlazioni).
+Ri-scarica). **Step 12** gestore file: multi-season alla riscarica → correlazioni. **Causa
+(verificata):** "Ri-scarica" di una cartella ([file-manager.tsx](apps/web/src/components/library/file-manager.tsx)
+`FolderActionsDialog`) eliminava la cartella e chiamava `download.addAllBySlug({slug})` = i mancanti di
+**una sola** entry ([download-service.ts:314-321](apps/api/src/services/download-service.ts#L314)); una
+serie multi-stagione scaricata esternamente (`<Serie>/Season 01`, `Season 02`, …) perdeva le altre
+stagioni. Sul catalogo il caso è già risolto dal flusso correlazioni (`series.franchise` + classifica
+per voce). **Fix frontend-only (riuso, coerente con Step 5/6/9/10/11):** **(A) rilevamento
+multi-stagione senza backend** — i figli di una cartella-serie hanno già `FileEntry.extra` (da
+`isExtraEntry`→`isContentFolderName`, [file-manager-service.ts:95-103](apps/api/src/services/file-manager-service.ts#L95)):
+le stagioni sono `dir && !extra`, `>=2` = multi-stagione (`childrenQ = files.list({path})`). **(B) ramo
+riscarica** — per le cartelle multi-stagione la vista "anime scelto" mostra una nota "N stagioni" (icona
+`Layers`) e il bottone diventa "Ri-scarica tutte le stagioni"; il flusso elimina la cartella
+(`files.remove`) e, on success, apre il dialog correlazioni (nuova prop `onMultiSeasonRedownload`) invece
+della singola `addAllBySlug`; il caso ≤1 stagione resta invariato. **(C) montaggio dialog** — `FileManager`
+con stato `franchise` renderizza [relations-download-dialog.tsx](apps/web/src/components/catalog/relations-download-dialog.tsx)
+(`RelationsDownloadDialog related={[]} slug autoDiscover`): la lista è popolata da `series.franchise`,
+ogni voce si classifica via `RelationClassifyButton`→`series.setOverride` e si accoda via `addAllBySlug`
+= ogni stagione mappata alla sua entry AnimeUnion. **(D) ritocchi al componente riusato** — nuova prop
+`autoDiscover?: boolean` (default `false`; dal gestore file la scoperta franchise parte da sola, dal
+catalogo resta il click manuale) e `onConfirm` ora invalida l'intero router `download` (non più solo
+`download.queue`, non pollato dallo Step 8 → allineamento). Nessun servizio core toccato, nessun test
+nuovo, 273 verdi a contorno, lint/typecheck/build web verdi. Verifica manuale a runtime ancora da fare
+(cartella con più "Season NN" → "Ri-scarica tutte le stagioni" apre il dialog correlazioni con scoperta
+avviata, selezione/classifica/accodamento per ogni stagione; cartella a stagione singola invariata).
+**Prossimo: Step 13** (gestore file: collega senza scaricare, stato `external`).
 
 ## Stato precedente (2026-06-25)
 

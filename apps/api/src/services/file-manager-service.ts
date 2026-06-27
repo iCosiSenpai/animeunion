@@ -7,7 +7,7 @@ import type {
   FileOpResult,
   Language,
 } from '@animeunion/shared';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, gte, lt, or } from 'drizzle-orm';
 import type { Db } from '../db';
 import { schema } from '../db';
 import { atomicMove, deleteFileAndPrune, ensureDir } from '../lib/download-fs';
@@ -39,6 +39,21 @@ function isContentFolderName(name: string): boolean {
 
 // Nomi file/cartella sicuri: niente separatori di percorso né caratteri illegali su NTFS.
 const ILLEGAL_NAME = /[/\\:*?"<>|]/;
+
+// Filtro SQL per le righe episode_file il cui localPath è `dir` o sta sotto `dir`, senza caricare
+// l'intera tabella su librerie giganti (One Piece). Range half-open su collation BINARY: i path
+// salvati sono canonici (join delle root configurate), il bound '\u{10FFFF}' è > di qualunque char
+// valido → sovrainsieme sicuro; il confronto JS `resolve()` resta la garanzia esatta a valle.
+function trackedUnder(dir: string) {
+  const prefix = dir + sep;
+  return or(
+    eq(schema.episodeFile.localPath, dir),
+    and(
+      gte(schema.episodeFile.localPath, prefix),
+      lt(schema.episodeFile.localPath, `${prefix}\u{10FFFF}`),
+    ),
+  );
+}
 
 /**
  * Ricava il numero episodio dal nome file per il collegamento "senza scaricare" (Step 13). Prova,
@@ -163,6 +178,7 @@ export function createFileManagerService(deps: FileManagerDeps): FileManagerServ
       const rows = tx
         .select({ id: schema.episodeFile.id, localPath: schema.episodeFile.localPath })
         .from(schema.episodeFile)
+        .where(trackedUnder(oldAbs))
         .all();
       const oldPrefix = oldAbs + sep;
       const ts = new Date().toISOString();
@@ -193,6 +209,7 @@ export function createFileManagerService(deps: FileManagerDeps): FileManagerServ
       const rows = tx
         .select({ id: schema.episodeFile.id, localPath: schema.episodeFile.localPath })
         .from(schema.episodeFile)
+        .where(trackedUnder(removedAbs))
         .all();
       const prefix = removedAbs + sep;
       const ts = new Date().toISOString();
@@ -249,21 +266,34 @@ export function createFileManagerService(deps: FileManagerDeps): FileManagerServ
       const target = assertInside(path);
       const dirents = await readdir(target, { withFileTypes: true }).catch(() => []);
 
-      // Mappa localPath -> episodeFileId per marcare i file tracciati/orfani.
+      // Mappa localPath -> episodeFileId per marcare i file tracciati/orfani. Solo i file del
+      // sotto-albero corrente: su una libreria gigante non si carica l'intera episode_file.
       const tracked = new Map<string, string>();
       for (const row of db
         .select({ id: schema.episodeFile.id, localPath: schema.episodeFile.localPath })
         .from(schema.episodeFile)
+        .where(trackedUnder(target))
         .all()) {
         if (row.localPath) {
           tracked.set(resolve(row.localPath), row.id);
         }
       }
-      const trackedPaths = [...tracked.keys()];
-      // Una cartella e' "importata" (managed) se contiene, a qualunque profondita', un file tracciato.
+      // Array ordinato: la verifica "managed" (esiste un file tracciato sotto la cartella) si fa in
+      // O(log n) con una ricerca binaria del primo path >= prefisso, invece di O(n) per ogni dirent.
+      const sortedTracked = [...tracked.keys()].sort();
       const isManagedDir = (full: string): boolean => {
-        const dirAbs = resolve(full);
-        return trackedPaths.some((tp) => tp === dirAbs || tp.startsWith(dirAbs + sep));
+        const prefix = resolve(full) + sep;
+        let lo = 0;
+        let hi = sortedTracked.length;
+        while (lo < hi) {
+          const mid = (lo + hi) >> 1;
+          if ((sortedTracked[mid] as string) < prefix) {
+            lo = mid + 1;
+          } else {
+            hi = mid;
+          }
+        }
+        return lo < sortedTracked.length && (sortedTracked[lo] as string).startsWith(prefix);
       };
 
       const entries: FileEntry[] = [];

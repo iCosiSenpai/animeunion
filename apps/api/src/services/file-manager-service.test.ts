@@ -227,6 +227,111 @@ describe('FileManagerService', () => {
     expect(dirs.indexOf('Altro')).toBeLessThan(dirs.indexOf('Show'));
   });
 
+  it('list con più serie: scoping per sotto-albero, nomi-prefisso non confusi', async () => {
+    const ts = new Date().toISOString();
+    // Serie A "Show": NESSUN file tracciato (solo un orfano su disco).
+    await mkdir(join(root, 'Show', 'Season 01'), { recursive: true });
+    await writeFile(join(root, 'Show', 'Season 01', 'orphan.mp4'), 'x');
+    // Serie B "Show 2": un file tracciato. Il suo nome ha "Show" come prefisso.
+    const trackedB = join(root, 'Show 2', 'Season 01', 'Show 2 - S01E01.mp4');
+    await mkdir(dirname(trackedB), { recursive: true });
+    await writeFile(trackedB, 'x');
+    db.insert(schema.anime)
+      .values({
+        id: 'a-2',
+        slug: 'show-2',
+        title: 'Show 2',
+        type: 'TV',
+        status: 'ONGOING',
+        episodeCount: 1,
+        createdAt: ts,
+        updatedAt: ts,
+      })
+      .run();
+    db.insert(schema.episode)
+      .values({ id: 'e-b1', animeId: 'a-2', number: 1, createdAt: ts, updatedAt: ts })
+      .run();
+    db.insert(schema.episodeFile)
+      .values({
+        id: 'ef-b1',
+        episodeId: 'e-b1',
+        language: 'SUB_ITA',
+        downloadStatus: 'downloaded',
+        localPath: resolve(trackedB),
+        createdAt: ts,
+        updatedAt: ts,
+      })
+      .run();
+
+    const list = await service.list(root);
+    // Il file tracciato di "Show 2" NON deve marcare "Show" come importata (confine sul separatore).
+    expect(list.entries.find((e) => e.name === 'Show')?.managed).toBe(false);
+    expect(list.entries.find((e) => e.name === 'Show 2')?.managed).toBe(true);
+
+    // Dentro "Show 2/Season 01" il file è riconosciuto come tracciato (scoping include il sotto-albero).
+    const insideB = await service.list(dirname(trackedB));
+    expect(insideB.entries.find((e) => e.name === 'Show 2 - S01E01.mp4')?.episodeFileId).toBe(
+      'ef-b1',
+    );
+
+    // Dentro "Show/Season 01" il file resta orfano (lo scoping non trascina i tracciati di altre serie).
+    const insideA = await service.list(join(root, 'Show', 'Season 01'));
+    expect(insideA.entries.find((e) => e.name === 'orphan.mp4')?.episodeFileId).toBeNull();
+  });
+
+  it('rename di una serie non tocca i link di una serie con nome-prefisso', async () => {
+    const ts = new Date().toISOString();
+    // "Show": tracciato (a-1, ef-1).
+    const fileA = join(root, 'Show', 'Season 01', 'Show - S01E01.mp4');
+    await mkdir(dirname(fileA), { recursive: true });
+    await writeFile(fileA, 'x');
+    seedEpisode(db, { localPath: fileA, status: 'downloaded' });
+    // "Show 2": tracciato (nome con "Show" come prefisso).
+    const fileB = join(root, 'Show 2', 'Season 01', 'Show 2 - S01E01.mp4');
+    await mkdir(dirname(fileB), { recursive: true });
+    await writeFile(fileB, 'x');
+    db.insert(schema.anime)
+      .values({
+        id: 'a-2',
+        slug: 'show-2',
+        title: 'Show 2',
+        type: 'TV',
+        status: 'ONGOING',
+        episodeCount: 1,
+        createdAt: ts,
+        updatedAt: ts,
+      })
+      .run();
+    db.insert(schema.episode)
+      .values({ id: 'e-b1', animeId: 'a-2', number: 1, createdAt: ts, updatedAt: ts })
+      .run();
+    db.insert(schema.episodeFile)
+      .values({
+        id: 'ef-b1',
+        episodeId: 'e-b1',
+        language: 'SUB_ITA',
+        downloadStatus: 'downloaded',
+        localPath: resolve(fileB),
+        createdAt: ts,
+        updatedAt: ts,
+      })
+      .run();
+
+    await service.rename(join(root, 'Show'), 'Show Renamed');
+    // Il link di "Show 2" resta intatto (lo scoping del sync non scavalca il confine).
+    const efB = db
+      .select()
+      .from(schema.episodeFile)
+      .where(eq(schema.episodeFile.id, 'ef-b1'))
+      .get();
+    expect(efB?.localPath).toBe(resolve(fileB));
+    // Il link di "Show" è stato aggiornato al nuovo nome.
+    const efA = db.select().from(schema.episodeFile).where(eq(schema.episodeFile.id, 'ef-1')).get();
+    expect(efA?.localPath).toBe(
+      resolve(join(root, 'Show Renamed', 'Season 01', 'Show - S01E01.mp4')),
+    );
+  });
+
   it('renameToScheme sposta i file tracciati nel percorso atteso dal renamer', async () => {
     const wrong = join(root, 'random', 'whatever.mp4');
     await mkdir(dirname(wrong), { recursive: true });

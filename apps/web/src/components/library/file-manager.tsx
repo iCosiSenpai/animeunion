@@ -26,6 +26,7 @@ import {
   AlertTriangle,
   ChevronLeft,
   ExternalLink,
+  FileSymlink,
   FileVideo,
   Folder,
   FolderPlus,
@@ -190,8 +191,10 @@ function FolderActionsDialog({
   onMultiSeasonRedownload: (slug: string) => void;
 }) {
   const [search, setSearch] = useState('');
-  const [picked, setPicked] = useState<{ slug: string; title: string } | null>(null);
+  const [picked, setPicked] = useState<{ id: string; slug: string; title: string } | null>(null);
   const [confirmRedownload, setConfirmRedownload] = useState(false);
+  // Sotto-vista "collega senza scaricare": scelta lingua, mappatura per numero episodio.
+  const [externalMode, setExternalMode] = useState(false);
   const searchQ = trpc.catalog.search.useQuery(
     { query: search },
     { enabled: !picked && search.trim().length >= 2 },
@@ -203,9 +206,33 @@ function FolderActionsDialog({
   const childrenQ = trpc.files.list.useQuery({ path: folder.path });
   const seasonFolders = (childrenQ.data?.entries ?? []).filter((e) => e.type === 'dir' && !e.extra);
   const multiSeason = seasonFolders.length >= 2;
+  // Carica gli episodi dell'anime scelto: mette in cache anime+episodi cosi' linkExternalFolder
+  // trova gli episode_file da mappare ai file della cartella.
+  const episodesQ = trpc.episode.byAnime.useQuery(
+    { animeSlug: picked?.slug ?? '' },
+    { enabled: !!picked },
+  );
   const addAll = trpc.download.addAllBySlug.useMutation();
   const remove = trpc.files.remove.useMutation();
+  const linkExternal = trpc.files.linkExternalFolder.useMutation({
+    onSuccess: (r) => {
+      if (r.linked > 0) {
+        const extra =
+          r.skipped || r.unmatched
+            ? ` (${r.skipped} saltati, ${r.unmatched} non riconosciuti)`
+            : '';
+        toast.success(`Collegati ${r.linked} episodi come esterni.${extra}`);
+        onChanged();
+      } else {
+        toast.warning(
+          `Nessun file collegato: ${r.unmatched} non riconosciuti, ${r.skipped} già presenti. Apri la singola stagione e controlla i nomi file.`,
+        );
+      }
+    },
+    onError: (e) => toast.error(e.message || 'Collegamento non riuscito'),
+  });
   const busy = remove.isPending || addAll.isPending;
+  const externalBusy = linkExternal.isPending || episodesQ.isFetching;
 
   function onRedownload() {
     if (!picked) {
@@ -277,7 +304,9 @@ function FolderActionsDialog({
                     <button
                       type="button"
                       className="block w-full truncate p-2 text-left hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
-                      onClick={() => setPicked({ slug: a.slug, title: a.titleIta ?? a.title })}
+                      onClick={() =>
+                        setPicked({ id: a.id, slug: a.slug, title: a.titleIta ?? a.title })
+                      }
                     >
                       {a.titleIta ?? a.title}
                     </button>
@@ -324,6 +353,67 @@ function FolderActionsDialog({
               </Button>
             </DialogFooter>
           </div>
+        ) : externalMode ? (
+          <div className="space-y-3">
+            <div className="rounded-md border p-3 text-sm">
+              <p className="break-words font-medium">{picked.title}</p>
+              <p className="break-all text-xs text-muted-foreground">{folder.path}</p>
+            </div>
+            <div className="flex items-start gap-2 rounded-md border border-primary/30 bg-primary/5 p-2.5 text-xs text-muted-foreground">
+              <FileSymlink className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+              <span className="min-w-0 break-words">
+                Colleghiamo i file video <strong>direttamente in questa cartella</strong> agli
+                episodi, ricavando il numero dal nome. I file restano dove sono (non spostati, non
+                scaricati) e compaiono in libreria. Scegli la lingua dei file.
+              </span>
+            </div>
+            {multiSeason ? (
+              <p className="text-xs text-amber-300">
+                Questa cartella contiene sottocartelle di stagione: apri la singola stagione per
+                collegarne i file.
+              </p>
+            ) : null}
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button
+                className="flex-1"
+                disabled={externalBusy}
+                onClick={() =>
+                  linkExternal.mutate({
+                    path: folder.path,
+                    animeId: picked.id,
+                    language: 'SUB_ITA',
+                  })
+                }
+              >
+                {externalBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Collega come SUB
+              </Button>
+              <Button
+                className="flex-1"
+                variant="outline"
+                disabled={externalBusy}
+                onClick={() =>
+                  linkExternal.mutate({
+                    path: folder.path,
+                    animeId: picked.id,
+                    language: 'DUB_ITA',
+                  })
+                }
+              >
+                {externalBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Collega come DUB
+              </Button>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1"
+              disabled={linkExternal.isPending}
+              onClick={() => setExternalMode(false)}
+            >
+              <ChevronLeft className="h-4 w-4" /> Indietro
+            </Button>
+          </div>
         ) : (
           <div className="space-y-3">
             <div className="rounded-md border p-3 text-sm">
@@ -345,6 +435,10 @@ function FolderActionsDialog({
                   <ExternalLink className="mr-2 h-4 w-4" />
                   Apri la scheda dell’anime
                 </Link>
+              </Button>
+              <Button variant="outline" onClick={() => setExternalMode(true)}>
+                <FileSymlink className="mr-2 h-4 w-4" />
+                Collega senza scaricare (esterno)
               </Button>
               <Button variant="destructive" onClick={() => setConfirmRedownload(true)}>
                 <RefreshCw className="mr-2 h-4 w-4" />

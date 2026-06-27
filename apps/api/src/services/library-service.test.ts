@@ -67,7 +67,8 @@ function insertFile(
   id: string,
   episodeId: string,
   language: Language,
-  status: 'not_downloaded' | 'downloaded' = 'not_downloaded',
+  status: 'not_downloaded' | 'downloaded' | 'external' = 'not_downloaded',
+  localPath: string | null = null,
 ) {
   const ts = new Date().toISOString();
   db.insert(schema.episodeFile)
@@ -76,6 +77,7 @@ function insertFile(
       episodeId,
       language,
       downloadStatus: status,
+      localPath,
       createdAt: ts,
       updatedAt: ts,
     })
@@ -140,6 +142,38 @@ describe('LibraryService', () => {
 
     expect(service.list()).toHaveLength(1);
     expect(service.stats()).toEqual({ totalEpisodes: 1, totalSizeBytes: 10, totalSeries: 1 });
+  });
+
+  it('scan non tocca i file external e la libreria li mostra (niente missing/orfani)', async () => {
+    const db = createTestDb();
+    insertAnime(db, 'show-x');
+    insertEpisode(db, 'ep-x-1', 'show-x', 1);
+    // File dell'utente fuori dallo schema renamer ma dentro la root configurata.
+    const userFile = join(tmpDir, 'My Anime', 'Season 01', 'My Anime - 01.mkv');
+    await mkdir(dirname(userFile), { recursive: true });
+    await writeFile(userFile, 'external-bytes'); // 14 byte
+    insertFile(db, 'file-x-1', 'ep-x-1', 'SUB_ITA', 'external', userFile);
+
+    const { service } = makeService(db, tmpDir);
+    const result = await service.scan();
+    expect(result.found).toBe(1);
+    expect(result.missing).toBe(0);
+    expect(result.orphans).toBe(0);
+
+    // La scan non riscrive lo stato external.
+    const row = db
+      .select()
+      .from(schema.episodeFile)
+      .where(eq(schema.episodeFile.id, 'file-x-1'))
+      .get();
+    expect(row?.downloadStatus).toBe('external');
+    expect(row?.localPath).toBe(userFile);
+
+    // La libreria lo conta come presente, con flag external.
+    const groups = service.list();
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.entries[0]?.episodes[0]?.external).toBe(true);
+    expect(service.stats().totalEpisodes).toBe(1);
   });
 
   it('segna come mancante un file che era stato cancellato', async () => {

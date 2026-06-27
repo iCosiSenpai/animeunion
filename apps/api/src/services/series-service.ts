@@ -6,7 +6,7 @@ import type {
   SeriesOverrideInput,
   SeriesResolved,
 } from '@animeunion/shared';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import type { Db } from '../db';
 import { schema } from '../db';
 import { NotFoundError, PreconditionError } from '../lib/errors';
@@ -65,7 +65,8 @@ export function createSeriesService(deps: SeriesServiceDeps): SeriesService {
       .where(
         and(
           eq(schema.episode.animeId, animeId),
-          eq(schema.episodeFile.downloadStatus, 'downloaded'),
+          // `external` (collegato senza scaricare) conta come stagione gia' decisa.
+          inArray(schema.episodeFile.downloadStatus, ['downloaded', 'external']),
         ),
       )
       .get();

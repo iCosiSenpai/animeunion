@@ -60,10 +60,13 @@ export const downloadStatusSchema = z.enum([
 export type DownloadStatus = z.infer<typeof downloadStatusSchema>;
 
 // Stato persistente del file episodio (tabella episode_file), distinto dallo stato della coda.
+// `external` = file dell'utente collegato manualmente (gia' presente, fuori dallo schema): conta
+// come "presente" in libreria ma e' escluso da download/auto-enqueue/retry (vedi Step 13).
 export const episodeFileStatusSchema = z.enum([
   'not_downloaded',
   'downloading',
   'downloaded',
   'failed',
+  'external',
 ]);
 export type EpisodeFileStatus = z.infer<typeof episodeFileStatusSchema>;

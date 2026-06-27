@@ -127,7 +127,8 @@ export function createFavoritesService(deps: FavoritesServiceDeps): FavoritesSer
     const timestamp = now().toISOString();
     let enqueued = 0;
     for (const file of files) {
-      if (file.status === 'completed') {
+      // `external` = file dell'utente collegato senza scaricare: il sync preferiti non lo ri-accoda.
+      if (file.status === 'completed' || file.status === 'external') {
         continue;
       }
       const inQueue = db

@@ -295,7 +295,8 @@ export function createDownloadService(deps: DownloadServiceDeps): DownloadServic
         .filter((f) => (language ? f.language === language : true));
       let count = 0;
       for (const file of files) {
-        if (file.status === 'downloaded') {
+        // `external` = file dell'utente gia' presente (collegato senza scaricare): non si ri-scarica.
+        if (file.status === 'downloaded' || file.status === 'external') {
           continue;
         }
         if (alreadyInQueue(file.id)) {

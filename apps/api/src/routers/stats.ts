@@ -1,5 +1,5 @@
 import { dashboardStatsSchema } from '@animeunion/shared';
-import { count, eq, inArray, sql } from 'drizzle-orm';
+import { count, inArray, sql } from 'drizzle-orm';
 import { schema } from '../db';
 import { publicProcedure, router } from '../trpc';
 
@@ -12,7 +12,8 @@ export const statsRouter = router({
       db
         .select({ n: count() })
         .from(schema.episodeFile)
-        .where(eq(schema.episodeFile.downloadStatus, 'downloaded'))
+        // Include gli `external` (collegati senza scaricare): contano come episodi presenti.
+        .where(inArray(schema.episodeFile.downloadStatus, ['downloaded', 'external']))
         .get()?.n ?? 0;
     const followedAnime = db.select({ n: count() }).from(schema.follow).get()?.n ?? 0;
     const totalSizeBytes =

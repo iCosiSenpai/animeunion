@@ -181,7 +181,10 @@ export function createRequestService(deps: RequestServiceDeps): RequestService {
       .where(eq(schema.episode.animeId, animeRow.id))
       .all();
     const total = rows.length;
-    const downloaded = rows.filter((r) => r.status === 'downloaded').length;
+    // `external` (collegato senza scaricare) e' disponibile quanto un download.
+    const downloaded = rows.filter(
+      (r) => r.status === 'downloaded' || r.status === 'external',
+    ).length;
     return { slug, total, downloaded, pending: total - downloaded };
   }
 

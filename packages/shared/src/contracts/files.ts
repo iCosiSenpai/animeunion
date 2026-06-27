@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { languageSchema } from './enums';
 
 /** Una voce (cartella o file) del gestore file incorporato. */
 export const fileEntrySchema = z.object({
@@ -65,3 +66,25 @@ export const fileRelinkInputSchema = z.object({
 export const fileRenameToSchemeInputSchema = z.object({ path: z.string().min(1) });
 /** Rimuove ricorsivamente le cartelle vuote sotto un percorso. */
 export const filePruneEmptyInputSchema = z.object({ path: z.string().min(1) });
+/**
+ * Collega "senza scaricare" i file video diretti di una cartella agli episodi di un anime: ricava
+ * il numero episodio dal nome file e marca i corrispondenti `episode_file` come `external` (file
+ * dell'utente, gia' presente) senza spostarli. Vedi Step 13.
+ */
+export const fileLinkExternalInputSchema = z.object({
+  path: z.string().min(1),
+  animeId: z.string().min(1),
+  language: languageSchema,
+});
+export type FileLinkExternalInput = z.infer<typeof fileLinkExternalInputSchema>;
+
+export const fileLinkExternalResultSchema = z.object({
+  ok: z.boolean(),
+  /** File collegati come external. */
+  linked: z.number().int(),
+  /** File con numero riconosciuto ma episodio gia' scaricato/non collegabile: lasciati stare. */
+  skipped: z.number().int(),
+  /** File senza numero episodio riconoscibile o senza episodio corrispondente in catalogo. */
+  unmatched: z.number().int(),
+});
+export type FileLinkExternalResult = z.infer<typeof fileLinkExternalResultSchema>;

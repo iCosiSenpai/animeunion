@@ -6,8 +6,45 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { schema } from '../db';
 import { createTestDb, testLogger } from '../test/helpers';
 import { createConfigService } from './config-service';
-import { createFileManagerService } from './file-manager-service';
+import { createFileManagerService, parseEpisodeNumber } from './file-manager-service';
 import { createRenamerService } from './renamer-service';
+
+/** Seed di un anime con N episodi + episode_file in una lingua (per i test linkExternalFolder). */
+function seedSeries(
+  db: ReturnType<typeof createTestDb>,
+  numbers: number[],
+  language: 'SUB_ITA' | 'DUB_ITA' = 'SUB_ITA',
+  status: 'not_downloaded' | 'downloaded' | 'external' = 'not_downloaded',
+) {
+  const ts = new Date().toISOString();
+  db.insert(schema.anime)
+    .values({
+      id: 'a-1',
+      slug: 'show',
+      title: 'Show',
+      type: 'TV',
+      status: 'ONGOING',
+      episodeCount: numbers.length,
+      createdAt: ts,
+      updatedAt: ts,
+    })
+    .run();
+  for (const n of numbers) {
+    db.insert(schema.episode)
+      .values({ id: `e-${n}`, animeId: 'a-1', number: n, createdAt: ts, updatedAt: ts })
+      .run();
+    db.insert(schema.episodeFile)
+      .values({
+        id: `ef-${n}`,
+        episodeId: `e-${n}`,
+        language,
+        downloadStatus: status,
+        createdAt: ts,
+        updatedAt: ts,
+      })
+      .run();
+  }
+}
 
 function seedEpisode(
   db: ReturnType<typeof createTestDb>,
@@ -204,6 +241,51 @@ describe('FileManagerService', () => {
     expect(row?.localPath).toBe(expected);
   });
 
+  it('linkExternalFolder collega i file esterni senza spostarli e li marca external', async () => {
+    const season = join(root, 'Show', 'Season 01');
+    await mkdir(season, { recursive: true });
+    const f1 = join(season, 'Show - 01.mkv');
+    const f2 = join(season, 'Show - 02.mkv');
+    const f99 = join(season, 'Show - 99.mkv'); // nessun episodio corrispondente
+    await writeFile(f1, 'a');
+    await writeFile(f2, 'bb');
+    await writeFile(f99, 'c');
+    await writeFile(join(season, 'note.txt'), 'x'); // non video: ignorato del tutto
+    seedSeries(db, [1, 2, 3]);
+
+    const res = await service.linkExternalFolder(season, 'a-1', 'SUB_ITA');
+    expect(res.linked).toBe(2);
+    expect(res.unmatched).toBe(1); // il 99 non ha episodio
+    expect(res.skipped).toBe(0);
+
+    // I file NON sono stati spostati.
+    expect((await stat(f1)).isFile()).toBe(true);
+    expect((await stat(f2)).isFile()).toBe(true);
+
+    const ef1 = db.select().from(schema.episodeFile).where(eq(schema.episodeFile.id, 'ef-1')).get();
+    expect(ef1?.downloadStatus).toBe('external');
+    expect(ef1?.localPath).toBe(resolve(f1));
+    expect(ef1?.fileSize).toBe(1);
+
+    // L'episodio senza file resta non scaricato.
+    const ef3 = db.select().from(schema.episodeFile).where(eq(schema.episodeFile.id, 'ef-3')).get();
+    expect(ef3?.downloadStatus).toBe('not_downloaded');
+    expect(ef3?.localPath).toBeNull();
+  });
+
+  it('linkExternalFolder salta gli episodi gia scaricati dall app', async () => {
+    const season = join(root, 'Show', 'Season 01');
+    await mkdir(season, { recursive: true });
+    await writeFile(join(season, 'Show - 01.mkv'), 'a');
+    seedSeries(db, [1], 'SUB_ITA', 'downloaded');
+
+    const res = await service.linkExternalFolder(season, 'a-1', 'SUB_ITA');
+    expect(res.linked).toBe(0);
+    expect(res.skipped).toBe(1);
+    const ef1 = db.select().from(schema.episodeFile).where(eq(schema.episodeFile.id, 'ef-1')).get();
+    expect(ef1?.downloadStatus).toBe('downloaded'); // invariato
+  });
+
   it('pruneEmpty rimuove le sottocartelle vuote ma non quelle con file', async () => {
     await mkdir(join(root, 'Empty', 'Nested'), { recursive: true });
     await mkdir(join(root, 'WithFile'), { recursive: true });
@@ -213,5 +295,22 @@ describe('FileManagerService', () => {
     expect(res.count).toBe(2); // Empty/Nested + Empty
     await expect(stat(join(root, 'Empty'))).rejects.toBeTruthy();
     expect((await stat(join(root, 'WithFile'))).isDirectory()).toBe(true);
+  });
+});
+
+describe('parseEpisodeNumber', () => {
+  it.each([
+    ['Show - S01E12.mkv', 12],
+    ['show_s1e5_1080p.mkv', 5],
+    ['One Piece - 01.mkv', 1],
+    ['Naruto Ep 07.mp4', 7],
+    ['Episodio 23.mp4', 23],
+    ['Show - 08v2.mkv', 8],
+    ['12.mkv', 12],
+    ['Show 2024 05.mkv', 5],
+    ['Show 1080p.mkv', null],
+    ['random-name.mkv', null],
+  ])('%s -> %s', (name, expected) => {
+    expect(parseEpisodeNumber(name)).toBe(expected);
   });
 });

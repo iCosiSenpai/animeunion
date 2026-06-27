@@ -66,7 +66,7 @@ function insertFile(
   id: string,
   episodeId: string,
   language: 'SUB_ITA' | 'DUB_ITA',
-  status: 'not_downloaded' | 'downloaded' = 'not_downloaded',
+  status: 'not_downloaded' | 'downloaded' | 'external' = 'not_downloaded',
 ) {
   const ts = new Date().toISOString();
   db.insert(schema.episodeFile)
@@ -208,6 +208,20 @@ describe('DownloadService', () => {
     const n = service.addMissing({ animeId: 'a-1' });
     expect(n).toBe(1);
     expect(enqueueSpy).toHaveBeenCalledWith('ef-2');
+  });
+
+  it('addMissing salta i file external (collegati senza scaricare)', () => {
+    const { service } = makeService();
+    insertAnime(db, 'a-1');
+    insertEpisode(db, 'e-1', 'a-1', 1);
+    insertEpisode(db, 'e-2', 'a-1', 2);
+    insertFile(db, 'ef-1', 'e-1', 'SUB_ITA', 'external'); // gia presente: non si ri-scarica
+    insertFile(db, 'ef-2', 'e-2', 'SUB_ITA', 'not_downloaded'); // accoda
+
+    const n = service.addMissing({ animeId: 'a-1' });
+    expect(n).toBe(1);
+    expect(enqueueSpy).toHaveBeenCalledWith('ef-2');
+    expect(enqueueSpy).not.toHaveBeenCalledWith('ef-1');
   });
 
   it('addMissing con filtro lingua', () => {

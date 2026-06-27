@@ -11,6 +11,8 @@ export const libraryEpisodeSchema = z.object({
   fileSize: z.number().int().nullable(),
   downloadedAt: z.string().nullable(),
   language: languageSchema,
+  /** File dell'utente collegato "senza scaricare" (downloadStatus `external`): non gestito dall'app. */
+  external: z.boolean().default(false),
 });
 export type LibraryEpisode = z.infer<typeof libraryEpisodeSchema>;
 

@@ -246,6 +246,14 @@ export function LibrarySeriesCard({ group }: { group: LibraryGroup }) {
                             <span className="truncate">
                               {ep.episodeTitle ?? `Episodio ${ep.episodeNumber}`}
                             </span>
+                            {ep.external ? (
+                              <Badge
+                                variant="outline"
+                                className="shrink-0 border-sky-500/50 text-sky-300"
+                              >
+                                Esterno
+                              </Badge>
+                            ) : null}
                           </div>
                           <div className="flex shrink-0 items-center gap-3 text-xs text-muted-foreground">
                             {ep.fileSize != null ? <span>{formatBytes(ep.fileSize)}</span> : null}
@@ -262,29 +270,31 @@ export function LibrarySeriesCard({ group }: { group: LibraryGroup }) {
                                 </Tooltip>
                               </TooltipProvider>
                             ) : null}
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                              aria-label="Elimina episodio"
-                              disabled={pending}
-                              onClick={() =>
-                                setTarget({
-                                  scope: 'episode',
-                                  episodeFileId: ep.episodeFileId,
-                                  title: 'Eliminare questo episodio?',
-                                  warning: `Verra' cancellato il file S${pad2(seasonNumber)}E${pad2(
-                                    ep.episodeNumber,
-                                  )} (${LANGUAGE_SHORT[entry.language]})${
-                                    ep.fileSize != null
-                                      ? `, liberando ${formatBytes(ep.fileSize)}`
-                                      : ''
-                                  }.`,
-                                })
-                              }
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                            {ep.external ? null : (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                aria-label="Elimina episodio"
+                                disabled={pending}
+                                onClick={() =>
+                                  setTarget({
+                                    scope: 'episode',
+                                    episodeFileId: ep.episodeFileId,
+                                    title: 'Eliminare questo episodio?',
+                                    warning: `Verra' cancellato il file S${pad2(seasonNumber)}E${pad2(
+                                      ep.episodeNumber,
+                                    )} (${LANGUAGE_SHORT[entry.language]})${
+                                      ep.fileSize != null
+                                        ? `, liberando ${formatBytes(ep.fileSize)}`
+                                        : ''
+                                    }.`,
+                                  })
+                                }
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
                           </div>
                         </li>
                       ))}

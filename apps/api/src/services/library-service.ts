@@ -86,6 +86,8 @@ interface ExpectedEntry {
   episodeNumber: number;
   language: Language;
   path: string;
+  /** File collegato "senza scaricare" (downloadStatus `external`): la scan non lo tocca. */
+  external: boolean;
 }
 
 export function createLibraryService(deps: LibraryServiceDeps): LibraryService {
@@ -101,6 +103,8 @@ export function createLibraryService(deps: LibraryServiceDeps): LibraryService {
         animeTitle: schema.anime.title,
         episodeNumber: schema.episode.number,
         language: schema.episodeFile.language,
+        downloadStatus: schema.episodeFile.downloadStatus,
+        localPath: schema.episodeFile.localPath,
       })
       .from(schema.episodeFile)
       .innerJoin(schema.episode, eq(schema.episode.id, schema.episodeFile.episodeId))
@@ -109,6 +113,19 @@ export function createLibraryService(deps: LibraryServiceDeps): LibraryService {
 
     return rows.map((row) => {
       const language = row.language as Language;
+      // Gli external stanno al localPath dell'utente (fuori schema): usalo come path atteso cosi'
+      // la scan li ritrova senza marcarli mancanti/orfani.
+      const external = row.downloadStatus === 'external';
+      const path =
+        external && row.localPath
+          ? resolve(row.localPath)
+          : resolve(
+              renamer.computeEpisodePath({
+                animeId: row.animeId,
+                episodeNumber: row.episodeNumber,
+                language,
+              }),
+            );
       return {
         episodeFileId: row.episodeFileId,
         animeId: row.animeId,
@@ -116,13 +133,8 @@ export function createLibraryService(deps: LibraryServiceDeps): LibraryService {
         animeTitle: row.animeTitle,
         episodeNumber: row.episodeNumber,
         language,
-        path: resolve(
-          renamer.computeEpisodePath({
-            animeId: row.animeId,
-            episodeNumber: row.episodeNumber,
-            language,
-          }),
-        ),
+        path,
+        external,
       };
     });
   }
@@ -307,6 +319,13 @@ export function createLibraryService(deps: LibraryServiceDeps): LibraryService {
 
       db.transaction((tx) => {
         for (const [path, entry] of expectedByPath) {
+          // I file external sono gestiti dall'utente: la scan non li tocca (ne' missing ne' reset).
+          if (entry.external) {
+            if (foundPaths.has(path)) {
+              found += 1;
+            }
+            continue;
+          }
           if (!foundPaths.has(path)) {
             missingEntries.push({
               animeId: entry.animeId,
@@ -395,6 +414,7 @@ export function createLibraryService(deps: LibraryServiceDeps): LibraryService {
           localPath: schema.episodeFile.localPath,
           fileSize: schema.episodeFile.fileSize,
           downloadedAt: schema.episodeFile.downloadedAt,
+          downloadStatus: schema.episodeFile.downloadStatus,
           language: schema.episodeFile.language,
           episodeId: schema.episode.id,
           episodeNumber: schema.episode.number,
@@ -415,7 +435,8 @@ export function createLibraryService(deps: LibraryServiceDeps): LibraryService {
         .from(schema.episodeFile)
         .innerJoin(schema.episode, eq(schema.episode.id, schema.episodeFile.episodeId))
         .innerJoin(schema.anime, eq(schema.anime.id, schema.episode.animeId))
-        .where(eq(schema.episodeFile.downloadStatus, 'downloaded'))
+        // `external` = file dell'utente collegato senza scaricare: conta come "presente" in libreria.
+        .where(inArray(schema.episodeFile.downloadStatus, ['downloaded', 'external']))
         .all();
 
       if (rows.length === 0) {
@@ -515,6 +536,7 @@ export function createLibraryService(deps: LibraryServiceDeps): LibraryService {
           fileSize: row.fileSize ?? null,
           downloadedAt: row.downloadedAt ?? null,
           language,
+          external: row.downloadStatus === 'external',
         });
         // Assicura che il summary del rappresentativo sia disponibile.
         summaryOf(row);
@@ -567,7 +589,7 @@ export function createLibraryService(deps: LibraryServiceDeps): LibraryService {
         .from(schema.episodeFile)
         .innerJoin(schema.episode, eq(schema.episode.id, schema.episodeFile.episodeId))
         .innerJoin(schema.anime, eq(schema.anime.id, schema.episode.animeId))
-        .where(eq(schema.episodeFile.downloadStatus, 'downloaded'))
+        .where(inArray(schema.episodeFile.downloadStatus, ['downloaded', 'external']))
         .all();
 
       let totalSizeBytes = 0;

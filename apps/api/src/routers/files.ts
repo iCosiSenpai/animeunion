@@ -1,5 +1,7 @@
 import {
   fileDeleteInputSchema,
+  fileLinkExternalInputSchema,
+  fileLinkExternalResultSchema,
   fileListInputSchema,
   fileListSchema,
   fileMkdirInputSchema,
@@ -43,6 +45,13 @@ export const filesRouter = router({
     .input(fileRelinkInputSchema)
     .output(fileOpResultSchema)
     .mutation(({ ctx, input }) => ctx.services.files.relink(input.path, input.episodeFileId)),
+
+  linkExternalFolder: publicProcedure
+    .input(fileLinkExternalInputSchema)
+    .output(fileLinkExternalResultSchema)
+    .mutation(({ ctx, input }) =>
+      ctx.services.files.linkExternalFolder(input.path, input.animeId, input.language),
+    ),
 
   renameToScheme: publicProcedure
     .input(fileRenameToSchemeInputSchema)

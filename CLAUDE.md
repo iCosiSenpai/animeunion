@@ -129,8 +129,28 @@ montato in `FileManager` con nuova prop `autoDiscover` → scoperta franchise `s
 da sola), dove ogni stagione/correlato si seleziona e si **classifica** (`series.setOverride`) prima di
 accodare (`addAllBySlug`) = ogni stagione mappata alla sua entry AnimeUnion. `RelationsDownloadDialog`
 ora invalida l'intero router `download` (non più solo `download.queue`, non pollato dallo Step 8). Il
-caso ≤1 stagione resta invariato. Frontend-only, 273 test a contorno. **Prossimo: Step 13** (gestore
-file: collega senza scaricare, stato `external`). _Aggiornare qui a ogni step._
+caso ≤1 stagione resta invariato. Frontend-only, 273 test a contorno. **Step 13** (gestore file:
+collega senza scaricare, stato `external`): l'utente ha già i file su disco (scaricati altrove) e vuole
+che l'app li conosca senza ri-scaricarli/spostarli. **Nessuna migrazione DB** —
+`episode_file.download_status` è `text` senza CHECK, l'enum vive solo nel contratto: aggiunto
+`'external'` a `episodeFileStatusSchema` (deviazione consapevole dal piano che ipotizzava `0013`).
+**Mapping cartella-auto (scelta utente):** nuovo `parseEpisodeNumber` esportato (SxxExx → marcatori
+Ep/Episodio/E/# → "- 12" fansub → fallback unico numero non risoluzione/codec/anno) +
+`linkExternalFolder(path, animeId, language)` in [file-manager-service.ts](apps/api/src/services/file-manager-service.ts)
+che legge i file video **diretti** della cartella, ricava il numero e marca i corrispondenti
+`episode_file` `external` con `localPath` puntato al file dell'utente (**senza spostarli**), saltando i
+già `downloaded`; router `files.linkExternalFolder` con report `{linked,skipped,unmatched}`.
+**Esclusioni:** `addMissing` salta `downloaded`+`external` (copre auto-enqueue/addAll/addAllBySlug) e
+`favorites.enqueueDownloads` salta `external` (il retry del worker opera su righe coda → external mai
+toccato). **Presente in libreria:** `library.list`/`stats` `inArray(['downloaded','external'])`, flag
+`external` per episodio; `scan` tratta gli external via `localPath` reale (non mancanti, non orfani,
+nessuna scrittura); `series.hasExistingDownload`/`request.availability`/`stats.dashboard` li contano
+presenti. **Frontend:** `FolderActionsDialog` ([file-manager.tsx](apps/web/src/components/library/file-manager.tsx))
+azione "Collega senza scaricare (esterno)" (scelta anime → `episode.byAnime` cachea gli episodi → SUB/
+DUB → toast-report) + badge "Esterno" e delete per-episodio nascosto per gli external (mai cancellare i
+file dell'utente) in [library-series-card.tsx](apps/web/src/components/library/library-series-card.tsx).
+**+14 test (287)** (`parseEpisodeNumber`, `linkExternalFolder`, `addMissing` salta external, scan/list
+external). **Prossimo: Step 14** (home personalizzabile: mostra/nascondi + riordina). _Aggiornare qui a ogni step._
 
 ## Stato attuale (2026-06-27)
 
@@ -369,7 +389,39 @@ catalogo resta il click manuale) e `onConfirm` ora invalida l'intero router `dow
 nuovo, 273 verdi a contorno, lint/typecheck/build web verdi. Verifica manuale a runtime ancora da fare
 (cartella con più "Season NN" → "Ri-scarica tutte le stagioni" apre il dialog correlazioni con scoperta
 avviata, selezione/classifica/accodamento per ogni stagione; cartella a stagione singola invariata).
-**Prossimo: Step 13** (gestore file: collega senza scaricare, stato `external`).
+**Step 13** gestore file: collega senza scaricare (stato `external`). **Caso reale:** l'utente ha già i
+file su disco (scaricati altrove) e vuole che l'app li conosca senza ri-scaricarli né spostarli.
+**Niente migrazione DB (deviazione dal piano):** `episode_file.download_status` è
+`text DEFAULT 'not_downloaded'` **senza CHECK** ([0000_init.sql:100](apps/api/drizzle/0000_init.sql#L100)),
+l'enum vive solo nel contratto zod → aggiunto `'external'` a `episodeFileStatusSchema`
+([enums.ts](packages/shared/src/contracts/enums.ts)); una `0013` sarebbe un no-op (Regola #1). `mappers.ts`
+usa `episodeFileStatusSchema.catch('not_downloaded')` → senza il valore degraderebbe l'external.
+**Scelta utente: mapping cartella-auto.** Nuovo `parseEpisodeNumber(name)` esportato + tested
+(SxxExx → marcatori Ep/Episodio/E/# → "- 12" fansub → fallback unico numero scartando
+risoluzioni/codec/anni) e `linkExternalFolder(path, animeId, language)` in
+[file-manager-service.ts](apps/api/src/services/file-manager-service.ts): legge i file video **diretti**
+della cartella (no ricorsione, no `.part`), ricava il numero, risolve l'`episode_file`
+`(episode.animeId, episode.number, language)` e — se non già `downloaded` — lo marca `external` con
+`localPath` puntato al file dell'utente (**senza spostarlo**), `fileSize` da `stat`; report
+`{linked,skipped,unmatched}`. Router `files.linkExternalFolder`. **Esclusioni (anti ri-download):**
+`addMissing` salta `downloaded`+`external` (copre `enqueueForAutoFollows`/`addAll`/`addAllBySlug`) e
+`favorites.enqueueDownloads` salta `external` (il retry del worker opera su righe `download_queue` →
+gli external, senza riga coda, non sono mai toccati). **Presente in libreria + scan sicuro:**
+`library.list`/`library.stats` `inArray(['downloaded','external'])`, flag `external` per episodio nel
+contratto; `library.scan` tratta gli external via `localPath` reale (path atteso = localPath) così non
+finiscono né in `missingEntries` né tra gli orfani e **non** vengono riscritti a `downloaded`;
+`series.hasExistingDownload`/`request.availability`/`stats.dashboard` li contano "presenti".
+**Frontend:** `FolderActionsDialog` ([file-manager.tsx](apps/web/src/components/library/file-manager.tsx))
+ha l'azione "Collega senza scaricare (esterno)" (scegli anime → `episode.byAnime` cachea gli episodi →
+SUB/DUB → `files.linkExternalFolder` con toast-report); badge "Esterno" + delete per-episodio nascosto
+per gli external (mai cancellare i file dell'utente; entry/serie già filtrano `downloaded`) in
+[library-series-card.tsx](apps/web/src/components/library/library-series-card.tsx). **Limite noto:**
+niente "scollega" dedicato (undo = ri-collegare un altro anime o eliminare la cartella). **+14 test
+(287 verdi)** (`parseEpisodeNumber` 10 pattern, `linkExternalFolder` no-move/report/salta-scaricati/
+unmatched, `addMissing` salta external, `library.scan`+`list` external), lint/typecheck/build web verdi.
+Verifica manuale a runtime ancora da fare (cartella "Season NN" esterna → "Collega senza scaricare" →
+episodi in libreria con badge "Esterno", file non spostati, niente download/auto-enqueue).
+**Prossimo: Step 14** (home personalizzabile: mostra/nascondi + riordina sezioni).
 
 ## Stato precedente (2026-06-25)
 

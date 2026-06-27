@@ -1,7 +1,13 @@
 import { readdir, rm, rmdir, stat } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
-import type { FileEntry, FileList, FileOpResult } from '@animeunion/shared';
-import { eq } from 'drizzle-orm';
+import type {
+  FileEntry,
+  FileLinkExternalResult,
+  FileList,
+  FileOpResult,
+  Language,
+} from '@animeunion/shared';
+import { and, eq } from 'drizzle-orm';
 import type { Db } from '../db';
 import { schema } from '../db';
 import { atomicMove, deleteFileAndPrune, ensureDir } from '../lib/download-fs';
@@ -34,6 +40,43 @@ function isContentFolderName(name: string): boolean {
 // Nomi file/cartella sicuri: niente separatori di percorso né caratteri illegali su NTFS.
 const ILLEGAL_NAME = /[/\\:*?"<>|]/;
 
+/**
+ * Ricava il numero episodio dal nome file per il collegamento "senza scaricare" (Step 13). Prova,
+ * in ordine di affidabilità: SxxExx, marcatori espliciti (Ep/Episodio/Episode/E + numero), il
+ * separatore a trattino tipico dei fansub ("- 12"), infine un unico numero isolato che non sia una
+ * risoluzione/codec/anno. Ritorna null se non riconosce nulla di certo.
+ */
+export function parseEpisodeNumber(fileName: string): number | null {
+  const base = fileName.replace(/\.[^.]+$/, '');
+  // 1) SxxExx (S01E12, s1e5)
+  const se = base.match(/s\d{1,3}\s*e\s*(\d{1,4})/i);
+  if (se?.[1]) {
+    return Number(se[1]);
+  }
+  // 2) Marcatori espliciti: Ep / Episodio / Episode / E / # + numero
+  const ep = base.match(/(?:\bepisodio|\bepisode|\bep|#)\.?\s*[._-]?\s*0*(\d{1,4})\b/i);
+  if (ep?.[1]) {
+    return Number(ep[1]);
+  }
+  // 3) Separatore a trattino dei fansub: "Titolo - 12" (eventuale "v2" di revisione)
+  const dash = base.match(/[-–]\s*0*(\d{1,4})(?:v\d)?(?=$|[\s_.\][-])/);
+  if (dash?.[1]) {
+    return Number(dash[1]);
+  }
+  // 4) Fallback: un solo numero isolato, scartati risoluzioni/codec/anni/bit-depth.
+  const cleaned = base
+    .replace(/\b\d{3,4}p\b/gi, ' ')
+    .replace(/\bx?\s?26[45]\b/gi, ' ')
+    .replace(/\bh\.?26[45]\b/gi, ' ')
+    .replace(/\b(?:19|20)\d{2}\b/g, ' ')
+    .replace(/\b\d+\s*bit\b/gi, ' ');
+  const nums = cleaned.match(/\d{1,4}/g);
+  if (nums?.length === 1 && nums[0]) {
+    return Number(nums[0]);
+  }
+  return null;
+}
+
 export interface FileManagerService {
   list(path?: string): Promise<FileList>;
   rename(path: string, newName: string): Promise<FileOpResult>;
@@ -41,6 +84,16 @@ export interface FileManagerService {
   remove(path: string): Promise<FileOpResult>;
   mkdir(parent: string, name: string): Promise<FileOpResult>;
   relink(path: string, episodeFileId: string): Promise<FileOpResult>;
+  /**
+   * Collega "senza scaricare" i file video diretti di `path` agli episodi di un anime: ricava il
+   * numero episodio dal nome file e marca i corrispondenti `episode_file` come `external` (senza
+   * spostarli). Non passa dal downloader.
+   */
+  linkExternalFolder(
+    path: string,
+    animeId: string,
+    language: Language,
+  ): Promise<FileLinkExternalResult>;
   /** Rinomina/sposta i file tracciati sotto `path` secondo lo schema del renamer. */
   renameToScheme(path: string): Promise<FileOpResult>;
   /** Rimuove ricorsivamente le cartelle vuote sotto `path`. */
@@ -378,6 +431,70 @@ export function createFileManagerService(deps: FileManagerDeps): FileManagerServ
         .where(eq(schema.episodeFile.id, episodeFileId))
         .run();
       return { ok: true, path: dest };
+    },
+
+    async linkExternalFolder(path, animeId, language) {
+      const target = assertInside(path);
+      const dirents = await readdir(target, { withFileTypes: true }).catch(() => []);
+      // episode_file dell'anime nella lingua scelta, indicizzati per numero episodio.
+      const byNumber = new Map<number, { fileId: string; status: string }>();
+      for (const row of db
+        .select({
+          fileId: schema.episodeFile.id,
+          number: schema.episode.number,
+          status: schema.episodeFile.downloadStatus,
+        })
+        .from(schema.episodeFile)
+        .innerJoin(schema.episode, eq(schema.episode.id, schema.episodeFile.episodeId))
+        .where(and(eq(schema.episode.animeId, animeId), eq(schema.episodeFile.language, language)))
+        .all()) {
+        byNumber.set(row.number, { fileId: row.fileId, status: row.status });
+      }
+
+      let linked = 0;
+      let skipped = 0;
+      let unmatched = 0;
+      const ts = new Date().toISOString();
+      for (const d of dirents) {
+        // Solo i file video diretti (le stagioni sono cartelle a parte: niente ricorsione).
+        if (!d.isFile() || !isVideo(d.name) || d.name.includes('.part.')) {
+          continue;
+        }
+        const num = parseEpisodeNumber(d.name);
+        if (num == null) {
+          unmatched += 1;
+          continue;
+        }
+        const match = byNumber.get(num);
+        if (!match) {
+          unmatched += 1;
+          continue;
+        }
+        // Non scavalcare un episodio gia' scaricato dall'app.
+        if (match.status === 'downloaded') {
+          skipped += 1;
+          continue;
+        }
+        const full = assertInside(join(target, d.name));
+        let size: number | null = null;
+        try {
+          size = (await stat(full)).size;
+        } catch {
+          size = null;
+        }
+        db.update(schema.episodeFile)
+          .set({
+            downloadStatus: 'external',
+            localPath: full,
+            fileSize: size,
+            downloadedAt: ts,
+            updatedAt: ts,
+          })
+          .where(eq(schema.episodeFile.id, match.fileId))
+          .run();
+        linked += 1;
+      }
+      return { ok: true, linked, skipped, unmatched };
     },
 
     async renameToScheme(path) {

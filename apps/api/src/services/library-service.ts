@@ -7,6 +7,7 @@ import type {
   LibraryGroup,
   LibraryScanResult,
   LibraryStats,
+  LibraryUnlinkExternalResult,
 } from '@animeunion/shared';
 import { and, eq, inArray } from 'drizzle-orm';
 import type { Db } from '../db';
@@ -34,6 +35,15 @@ export interface LibraryService {
   deleteSeries(input: { animeId: string; deleteFolder?: boolean }): Promise<LibraryDeleteResult>;
   /** Elimina i file orfani indicati (rilevati dalla scansione). */
   deleteOrphans(paths: string[]): Promise<LibraryDeleteResult>;
+  /**
+   * Scollega i file collegati "senza scaricare" (downloadStatus `external`): li riporta a
+   * `not_downloaded` e dimentica il path SENZA toccare i file su disco. Mai sui `downloaded`.
+   */
+  unlinkExternal(input: {
+    episodeFileId?: string;
+    animeId?: string;
+    language?: Language;
+  }): LibraryUnlinkExternalResult;
 }
 
 export interface LibraryServiceDeps {
@@ -663,6 +673,55 @@ export function createLibraryService(deps: LibraryServiceDeps): LibraryService {
         result.freedBytes += folder.freedBytes;
       }
       return result;
+    },
+
+    unlinkExternal({ episodeFileId, animeId, language }) {
+      // Risolvi solo le righe davvero `external`: la guardia sullo stato impedisce di toccare i
+      // file scaricati dall'app (mai cancellati comunque: qui si azzera solo il collegamento).
+      let ids: string[] = [];
+      if (episodeFileId) {
+        ids = db
+          .select({ id: schema.episodeFile.id })
+          .from(schema.episodeFile)
+          .where(
+            and(
+              eq(schema.episodeFile.id, episodeFileId),
+              eq(schema.episodeFile.downloadStatus, 'external'),
+            ),
+          )
+          .all()
+          .map((row) => row.id);
+      } else if (animeId) {
+        const conds = [
+          eq(schema.episode.animeId, animeId),
+          eq(schema.episodeFile.downloadStatus, 'external'),
+        ];
+        if (language) {
+          conds.push(eq(schema.episodeFile.language, language));
+        }
+        ids = db
+          .select({ id: schema.episodeFile.id })
+          .from(schema.episodeFile)
+          .innerJoin(schema.episode, eq(schema.episode.id, schema.episodeFile.episodeId))
+          .where(and(...conds))
+          .all()
+          .map((row) => row.id);
+      }
+      if (ids.length === 0) {
+        return { ok: true, unlinked: 0 };
+      }
+      const ts = new Date().toISOString();
+      db.update(schema.episodeFile)
+        .set({
+          downloadStatus: 'not_downloaded',
+          localPath: null,
+          fileSize: null,
+          downloadedAt: null,
+          updatedAt: ts,
+        })
+        .where(inArray(schema.episodeFile.id, ids))
+        .run();
+      return { ok: true, unlinked: ids.length };
     },
 
     async deleteOrphans(paths) {

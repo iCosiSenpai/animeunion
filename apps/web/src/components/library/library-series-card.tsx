@@ -22,7 +22,16 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { trpc } from '@/lib/trpc';
 import { formatBytes, formatDate, pad2 } from '@/lib/utils';
 import type { Language, LibraryEntry, LibraryGroup } from '@animeunion/shared';
-import { ChevronDown, ChevronUp, Eye, FileVideo, HardDrive, Layers, Trash2 } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronUp,
+  Eye,
+  FileVideo,
+  HardDrive,
+  Layers,
+  Trash2,
+  Unlink,
+} from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -84,6 +93,28 @@ export function LibrarySeriesCard({ group }: { group: LibraryGroup }) {
   const delEntry = trpc.library.deleteEntry.useMutation({ onSuccess, onError });
   const delSeries = trpc.library.deleteSeries.useMutation({ onSuccess, onError });
   const pending = delEpisode.isPending || delEntry.isPending || delSeries.isPending;
+
+  // Scollega file esterni: non distruttivo (i file restano sul disco), conferma a parte.
+  const [unlinkTarget, setUnlinkTarget] = useState<{
+    episodeFileId?: string;
+    animeId?: string;
+    language?: Language;
+    label: string;
+  } | null>(null);
+  const unlink = trpc.library.unlinkExternal.useMutation({
+    onSuccess: (res) => {
+      toast.success(
+        res.unlinked > 0
+          ? `Scollegati ${res.unlinked} episodi esterni (i file restano sul disco)`
+          : 'Nessun file esterno da scollegare',
+      );
+      void utils.library.list.invalidate();
+      void utils.library.stats.invalidate();
+      void utils.catalog.invalidate();
+      setUnlinkTarget(null);
+    },
+    onError: () => toast.error('Scollegamento fallito'),
+  });
 
   function confirmDelete() {
     if (!target) return;
@@ -198,109 +229,154 @@ export function LibrarySeriesCard({ group }: { group: LibraryGroup }) {
                     {seasonLabel(seasonNumber)}
                   </h4>
                 ) : null}
-                {entries.map((entry) => (
-                  <div key={`${entry.animeId}-${entry.language}`} className="space-y-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                        <LanguageBadge language={entry.language} />
-                        <span>
-                          {entry.episodes.length} episod{entry.episodes.length === 1 ? 'io' : 'i'}
-                        </span>
-                        <span>{formatBytes(entrySize(entry))}</span>
+                {entries.map((entry) => {
+                  const entryExternal = entry.episodes.filter((ep) => ep.external).length;
+                  return (
+                    <div key={`${entry.animeId}-${entry.language}`} className="space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                          <LanguageBadge language={entry.language} />
+                          <span>
+                            {entry.episodes.length} episod{entry.episodes.length === 1 ? 'io' : 'i'}
+                          </span>
+                          <span>{formatBytes(entrySize(entry))}</span>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-1">
+                          {entryExternal > 0 ? (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 gap-1 text-sky-400 hover:bg-sky-500/10 hover:text-sky-300"
+                              disabled={unlink.isPending}
+                              onClick={() =>
+                                setUnlinkTarget({
+                                  animeId: entry.animeId,
+                                  language: entry.language,
+                                  label: `Stai per scollegare i ${entryExternal} episodi esterni di "${title}"${
+                                    group.category === 'film'
+                                      ? ''
+                                      : ` — ${seasonLabel(seasonNumber)}`
+                                  } (${LANGUAGE_SHORT[entry.language]}).`,
+                                })
+                              }
+                            >
+                              <Unlink className="h-4 w-4" />
+                              Scollega esterni
+                            </Button>
+                          ) : null}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 gap-1 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                            disabled={pending}
+                            onClick={() =>
+                              setTarget({
+                                scope: 'entry',
+                                animeId: entry.animeId,
+                                language: entry.language,
+                                title: `Eliminare ${
+                                  group.category === 'film' ? 'il film' : seasonLabel(seasonNumber)
+                                } (${LANGUAGE_SHORT[entry.language]})?`,
+                                warning: `Verranno cancellati i ${entry.episodes.length} file di "${title}"${
+                                  group.category === 'film' ? '' : ` — ${seasonLabel(seasonNumber)}`
+                                } (${LANGUAGE_SHORT[entry.language]}), liberando ${formatBytes(
+                                  entrySize(entry),
+                                )}.`,
+                              })
+                            }
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            Elimina
+                          </Button>
+                        </div>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 gap-1 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                        disabled={pending}
-                        onClick={() =>
-                          setTarget({
-                            scope: 'entry',
-                            animeId: entry.animeId,
-                            language: entry.language,
-                            title: `Eliminare ${
-                              group.category === 'film' ? 'il film' : seasonLabel(seasonNumber)
-                            } (${LANGUAGE_SHORT[entry.language]})?`,
-                            warning: `Verranno cancellati i ${entry.episodes.length} file di "${title}"${
-                              group.category === 'film' ? '' : ` — ${seasonLabel(seasonNumber)}`
-                            } (${LANGUAGE_SHORT[entry.language]}), liberando ${formatBytes(
-                              entrySize(entry),
-                            )}.`,
-                          })
-                        }
-                      >
-                        <Trash2 className="h-4 w-4" />
-                        Elimina
-                      </Button>
+                      <ul className="space-y-2">
+                        {entry.episodes.map((ep) => (
+                          <li
+                            key={ep.episodeFileId}
+                            className="flex items-center justify-between gap-3 rounded-md border bg-background p-2 text-sm"
+                          >
+                            <div className="flex min-w-0 items-center gap-2">
+                              <span className="shrink-0 font-mono text-xs text-muted-foreground">
+                                S{pad2(seasonNumber)}E{pad2(ep.episodeNumber)}
+                              </span>
+                              <span className="truncate">
+                                {ep.episodeTitle ?? `Episodio ${ep.episodeNumber}`}
+                              </span>
+                              {ep.external ? (
+                                <Badge
+                                  variant="outline"
+                                  className="shrink-0 border-sky-500/50 text-sky-300"
+                                >
+                                  Esterno
+                                </Badge>
+                              ) : null}
+                            </div>
+                            <div className="flex shrink-0 items-center gap-3 text-xs text-muted-foreground">
+                              {ep.fileSize != null ? <span>{formatBytes(ep.fileSize)}</span> : null}
+                              {ep.downloadedAt ? <span>{formatDate(ep.downloadedAt)}</span> : null}
+                              {ep.localPath ? (
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <FileVideo className="h-4 w-4" />
+                                    </TooltipTrigger>
+                                    <TooltipContent side="left" className="max-w-md break-all">
+                                      <p>{ep.localPath}</p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              ) : null}
+                              {ep.external ? (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 text-sky-400 hover:bg-sky-500/10 hover:text-sky-300"
+                                  aria-label="Scollega episodio esterno"
+                                  disabled={unlink.isPending}
+                                  onClick={() =>
+                                    setUnlinkTarget({
+                                      episodeFileId: ep.episodeFileId,
+                                      label: `Stai per scollegare l'episodio esterno S${pad2(
+                                        seasonNumber,
+                                      )}E${pad2(ep.episodeNumber)} (${LANGUAGE_SHORT[entry.language]}).`,
+                                    })
+                                  }
+                                >
+                                  <Unlink className="h-4 w-4" />
+                                </Button>
+                              ) : (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                  aria-label="Elimina episodio"
+                                  disabled={pending}
+                                  onClick={() =>
+                                    setTarget({
+                                      scope: 'episode',
+                                      episodeFileId: ep.episodeFileId,
+                                      title: 'Eliminare questo episodio?',
+                                      warning: `Verra' cancellato il file S${pad2(seasonNumber)}E${pad2(
+                                        ep.episodeNumber,
+                                      )} (${LANGUAGE_SHORT[entry.language]})${
+                                        ep.fileSize != null
+                                          ? `, liberando ${formatBytes(ep.fileSize)}`
+                                          : ''
+                                      }.`,
+                                    })
+                                  }
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              )}
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
                     </div>
-                    <ul className="space-y-2">
-                      {entry.episodes.map((ep) => (
-                        <li
-                          key={ep.episodeFileId}
-                          className="flex items-center justify-between gap-3 rounded-md border bg-background p-2 text-sm"
-                        >
-                          <div className="flex min-w-0 items-center gap-2">
-                            <span className="shrink-0 font-mono text-xs text-muted-foreground">
-                              S{pad2(seasonNumber)}E{pad2(ep.episodeNumber)}
-                            </span>
-                            <span className="truncate">
-                              {ep.episodeTitle ?? `Episodio ${ep.episodeNumber}`}
-                            </span>
-                            {ep.external ? (
-                              <Badge
-                                variant="outline"
-                                className="shrink-0 border-sky-500/50 text-sky-300"
-                              >
-                                Esterno
-                              </Badge>
-                            ) : null}
-                          </div>
-                          <div className="flex shrink-0 items-center gap-3 text-xs text-muted-foreground">
-                            {ep.fileSize != null ? <span>{formatBytes(ep.fileSize)}</span> : null}
-                            {ep.downloadedAt ? <span>{formatDate(ep.downloadedAt)}</span> : null}
-                            {ep.localPath ? (
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <FileVideo className="h-4 w-4" />
-                                  </TooltipTrigger>
-                                  <TooltipContent side="left" className="max-w-md break-all">
-                                    <p>{ep.localPath}</p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                            ) : null}
-                            {ep.external ? null : (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                                aria-label="Elimina episodio"
-                                disabled={pending}
-                                onClick={() =>
-                                  setTarget({
-                                    scope: 'episode',
-                                    episodeFileId: ep.episodeFileId,
-                                    title: 'Eliminare questo episodio?',
-                                    warning: `Verra' cancellato il file S${pad2(seasonNumber)}E${pad2(
-                                      ep.episodeNumber,
-                                    )} (${LANGUAGE_SHORT[entry.language]})${
-                                      ep.fileSize != null
-                                        ? `, liberando ${formatBytes(ep.fileSize)}`
-                                        : ''
-                                    }.`,
-                                  })
-                                }
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            )}
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ))}
           </div>
@@ -349,6 +425,48 @@ export function LibrarySeriesCard({ group }: { group: LibraryGroup }) {
             >
               <Trash2 className="h-4 w-4" />
               Elimina definitivamente
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={unlinkTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setUnlinkTarget(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Scollegare i file esterni?</DialogTitle>
+            <DialogDescription>
+              {unlinkTarget?.label} I file <strong>restano sul disco</strong>: l&apos;app smette
+              solo di tracciarli (potrai ricollegarli dal Gestore file).
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setUnlinkTarget(null)}
+              disabled={unlink.isPending}
+            >
+              Annulla
+            </Button>
+            <Button
+              className="gap-2"
+              disabled={unlink.isPending}
+              onClick={() => {
+                if (unlinkTarget) {
+                  unlink.mutate({
+                    episodeFileId: unlinkTarget.episodeFileId,
+                    animeId: unlinkTarget.animeId,
+                    language: unlinkTarget.language,
+                  });
+                }
+              }}
+            >
+              <Unlink className="h-4 w-4" />
+              Scollega
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -89,3 +89,22 @@ export const libraryDeleteResultSchema = z.object({
   failedFiles: z.number().int().default(0),
 });
 export type LibraryDeleteResult = z.infer<typeof libraryDeleteResultSchema>;
+
+// Scollega i file collegati "senza scaricare" (downloadStatus `external`): li dimentica senza
+// toccarli su disco. Per-episodio (episodeFileId) oppure per-entry (animeId [+ language]).
+export const libraryUnlinkExternalInputSchema = z
+  .object({
+    episodeFileId: z.string().min(1).optional(),
+    animeId: z.string().min(1).optional(),
+    language: languageSchema.optional(),
+  })
+  .refine((v) => Boolean(v.episodeFileId) || Boolean(v.animeId), {
+    message: 'Specificare episodeFileId oppure animeId.',
+  });
+export type LibraryUnlinkExternalInput = z.infer<typeof libraryUnlinkExternalInputSchema>;
+
+export const libraryUnlinkExternalResultSchema = z.object({
+  ok: z.boolean(),
+  unlinked: z.number().int(),
+});
+export type LibraryUnlinkExternalResult = z.infer<typeof libraryUnlinkExternalResultSchema>;

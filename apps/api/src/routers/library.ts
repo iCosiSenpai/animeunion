@@ -6,6 +6,8 @@ import {
   libraryGroupSchema,
   libraryScanResultSchema,
   libraryStatsSchema,
+  libraryUnlinkExternalInputSchema,
+  libraryUnlinkExternalResultSchema,
 } from '@animeunion/shared';
 import { z } from 'zod';
 import { publicProcedure, router } from '../trpc';
@@ -43,4 +45,9 @@ export const libraryRouter = router({
     .input(z.object({ paths: z.array(z.string().min(1)) }))
     .output(libraryDeleteResultSchema)
     .mutation(({ ctx, input }) => ctx.services.library.deleteOrphans(input.paths)),
+
+  unlinkExternal: publicProcedure
+    .input(libraryUnlinkExternalInputSchema)
+    .output(libraryUnlinkExternalResultSchema)
+    .mutation(({ ctx, input }) => ctx.services.library.unlinkExternal(input)),
 });

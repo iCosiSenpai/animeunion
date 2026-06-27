@@ -176,6 +176,78 @@ describe('LibraryService', () => {
     expect(service.stats().totalEpisodes).toBe(1);
   });
 
+  it('unlinkExternal scollega un external senza toccare il file su disco', async () => {
+    const db = createTestDb();
+    insertAnime(db, 'show-u');
+    insertEpisode(db, 'ep-u-1', 'show-u', 1);
+    const userFile = join(tmpDir, 'Mine', 'Season 01', 'Mine - 01.mkv');
+    await mkdir(dirname(userFile), { recursive: true });
+    await writeFile(userFile, 'external-bytes');
+    insertFile(db, 'file-u-1', 'ep-u-1', 'SUB_ITA', 'external', userFile);
+    const { service } = makeService(db, tmpDir);
+
+    const res = service.unlinkExternal({ episodeFileId: 'file-u-1' });
+    expect(res).toEqual({ ok: true, unlinked: 1 });
+
+    const row = db
+      .select()
+      .from(schema.episodeFile)
+      .where(eq(schema.episodeFile.id, 'file-u-1'))
+      .get();
+    expect(row?.downloadStatus).toBe('not_downloaded');
+    expect(row?.localPath).toBeNull();
+    // Il file dell'utente resta sul disco (mai cancellato dallo scollega).
+    expect(existsSync(userFile)).toBe(true);
+    // Non è più in libreria.
+    expect(service.list()).toHaveLength(0);
+  });
+
+  it('unlinkExternal non tocca i file downloaded (no-op di sicurezza)', () => {
+    const db = createTestDb();
+    insertAnime(db, 'show-d');
+    insertEpisode(db, 'ep-d-1', 'show-d', 1);
+    insertFile(db, 'file-d-1', 'ep-d-1', 'SUB_ITA', 'downloaded', '/somewhere/x.mp4');
+    const { service } = makeService(db, tmpDir);
+
+    const res = service.unlinkExternal({ episodeFileId: 'file-d-1' });
+    expect(res).toEqual({ ok: true, unlinked: 0 });
+    const row = db
+      .select()
+      .from(schema.episodeFile)
+      .where(eq(schema.episodeFile.id, 'file-d-1'))
+      .get();
+    expect(row?.downloadStatus).toBe('downloaded');
+    expect(row?.localPath).toBe('/somewhere/x.mp4');
+  });
+
+  it('unlinkExternal per-entry scollega gli external della lingua, lascia i downloaded', () => {
+    const db = createTestDb();
+    insertAnime(db, 'show-m');
+    insertEpisode(db, 'ep-m-1', 'show-m', 1);
+    insertEpisode(db, 'ep-m-2', 'show-m', 2);
+    insertEpisode(db, 'ep-m-3', 'show-m', 3);
+    insertFile(db, 'file-m-1', 'ep-m-1', 'SUB_ITA', 'external', join(tmpDir, 'a.mkv'));
+    insertFile(db, 'file-m-2', 'ep-m-2', 'SUB_ITA', 'downloaded', join(tmpDir, 'b.mp4'));
+    insertFile(db, 'file-m-3', 'ep-m-3', 'DUB_ITA', 'external', join(tmpDir, 'c.mkv'));
+    const { service } = makeService(db, tmpDir);
+    const statusOf = (id: string) =>
+      db.select().from(schema.episodeFile).where(eq(schema.episodeFile.id, id)).get()
+        ?.downloadStatus;
+
+    // Solo SUB_ITA: scollega l'unico external SUB, non tocca il downloaded né il DUB external.
+    expect(service.unlinkExternal({ animeId: 'show-m', language: 'SUB_ITA' })).toEqual({
+      ok: true,
+      unlinked: 1,
+    });
+    expect(statusOf('file-m-1')).toBe('not_downloaded');
+    expect(statusOf('file-m-2')).toBe('downloaded');
+    expect(statusOf('file-m-3')).toBe('external');
+
+    // Senza language: scollega tutti gli external rimasti (il DUB).
+    expect(service.unlinkExternal({ animeId: 'show-m' })).toEqual({ ok: true, unlinked: 1 });
+    expect(statusOf('file-m-3')).toBe('not_downloaded');
+  });
+
   it('segna come mancante un file che era stato cancellato', async () => {
     const db = createTestDb();
     insertAnime(db, 'show-b');

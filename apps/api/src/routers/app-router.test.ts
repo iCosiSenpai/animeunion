@@ -12,6 +12,7 @@ import { createFavoritesService } from '../services/favorites-service';
 import { createFileManagerService } from '../services/file-manager-service';
 import { createFollowService } from '../services/follow-service';
 import { createHomeService } from '../services/home-service';
+import { createJellyfinService } from '../services/jellyfin-service';
 import { createLibraryService } from '../services/library-service';
 import { createLockService } from '../services/lock-service';
 import { createNotificationService } from '../services/notification-service';
@@ -48,6 +49,7 @@ function makeCaller() {
   const lock = createLockService({ db, env: { WEB_LOCK_DISABLED: undefined } });
   const requestAuth = createRequestAuthService({ db });
   const push = createPushService({ db, logger: testLogger });
+  const jellyfin = createJellyfinService({ config, logger: testLogger });
   const download = createDownloadService({
     db,
     worker: {
@@ -82,6 +84,7 @@ function makeCaller() {
       push,
       requestAuth,
       requests,
+      jellyfin,
     },
     logger: testLogger,
   };

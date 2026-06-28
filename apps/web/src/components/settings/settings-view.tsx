@@ -306,7 +306,11 @@ export function SettingsView() {
       for (const key of dirtyKeys) {
         await setMutation.mutateAsync({ key, value: draft[key] });
       }
-      await utils.config.getAll.invalidate();
+      // Refetch + reset del draft (come onImport): cosi' draft === original anche per i campi che il
+      // server normalizza/maschera (segreti -> ••••••••), altrimenti il banner "Modifiche non salvate"
+      // resterebbe acceso per sempre sul confronto draft[key] !== original[key].
+      const fresh = await utils.config.getAll.fetch();
+      setDraft(fresh);
       toast.success('Impostazioni salvate.');
       return true;
     } catch (error) {

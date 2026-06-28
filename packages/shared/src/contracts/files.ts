@@ -20,6 +20,12 @@ export const fileEntrySchema = z.object({
    * (un `episode_file.localPath` tracciato). false = cartella "non importata" dall'app.
    */
   managed: z.boolean().default(false),
+  /**
+   * Per le cartelle: true se è una cartella di "contenuto" stagionale (Season NN, Specials, OVA,
+   * ONA, Movie) per nome. Usato dalla UI per contare le stagioni di una serie senza riconoscere di
+   * nuovo i nomi lato client (evita falsi multi-stagione su sottocartelle come Season 01/backdrops).
+   */
+  content: z.boolean().default(false),
 });
 export type FileEntry = z.infer<typeof fileEntrySchema>;
 

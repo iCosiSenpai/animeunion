@@ -175,8 +175,8 @@ function RelinkDialog({
 
 /**
  * Azioni su una cartella (es. una Season scaricata esternamente): la collega a un anime di
- * AnimeUnion, poi permette di aprirne la scheda o di ri-scaricarla (elimina la cartella e
- * rimette in coda gli episodi).
+ * AnimeUnion, poi permette di aprirne la scheda, collegarne i file come esterni o ri-scaricare gli
+ * episodi (riaccoda soltanto, i file vengono sovrascritti all'arrivo: niente eliminazione).
  */
 function FolderActionsDialog({
   folder,
@@ -198,12 +198,14 @@ function FolderActionsDialog({
     { query: search },
     { enabled: !picked && search.trim().length >= 2 },
   );
-  // Le sotto-cartelle di contenuto ("Season NN"/Specials/OVA/Movie) hanno extra=false; gli extra
-  // (backdrops, sigle...) extra=true (vedi isExtraEntry lato backend). >=2 cartelle di contenuto =
-  // serie multi-stagione: la riscarica va instradata al flusso correlazioni cosi' ogni stagione
-  // viene mappata alla sua entry AnimeUnion, invece della singola addAllBySlug.
+  // Le sotto-cartelle di contenuto ("Season NN"/Specials/OVA/Movie) hanno content=true (fonte unica
+  // dal backend, vedi FileEntry.content): contarle e' robusto e non scambia una sottocartella come
+  // "Season 01/backdrops" per una stagione. >=2 cartelle di contenuto = serie multi-stagione: la
+  // riscarica va instradata al flusso correlazioni cosi' ogni stagione viene mappata alla sua entry.
   const childrenQ = trpc.files.list.useQuery({ path: folder.path });
-  const seasonFolders = (childrenQ.data?.entries ?? []).filter((e) => e.type === 'dir' && !e.extra);
+  const seasonFolders = (childrenQ.data?.entries ?? []).filter(
+    (e) => e.type === 'dir' && e.content,
+  );
   const multiSeason = seasonFolders.length >= 2;
   // Carica gli episodi dell'anime scelto: mette in cache anime+episodi cosi' linkExternalFolder
   // trova gli episode_file da mappare ai file della cartella.

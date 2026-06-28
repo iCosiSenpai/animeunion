@@ -108,6 +108,37 @@ describe('FileManagerService', () => {
     expect(inside.entries.find((e) => e.name === 'Show - S01E01.mp4')?.type).toBe('file');
   });
 
+  it('marca extra le sottocartelle (backdrops/themes) a qualunque profondita e content le stagioni', async () => {
+    await mkdir(join(root, 'Show', 'Season 01', 'backdrops'), { recursive: true });
+    await mkdir(join(root, 'Show', 'Season 02'), { recursive: true });
+    await mkdir(join(root, 'Show', 'Specials', 'themes'), { recursive: true });
+    await mkdir(join(root, 'Show', 'backdrops'), { recursive: true });
+    await writeFile(join(root, 'Show', 'Season 01', 'Show - S01E01.mp4'), 'x');
+
+    const series = await service.list(join(root, 'Show'));
+    const byName = (n: string) => series.entries.find((e) => e.name === n);
+    // Le stagioni/Specials sono content (contate come stagioni dal frontend), non extra.
+    expect(byName('Season 01')).toMatchObject({ content: true, extra: false });
+    expect(byName('Season 02')).toMatchObject({ content: true, extra: false });
+    expect(byName('Specials')).toMatchObject({ content: true, extra: false });
+    // I contenitori artwork a livello serie sono extra e non content.
+    expect(byName('backdrops')).toMatchObject({ content: false, extra: true });
+    // Solo 3 cartelle di contenuto: Season 01, Season 02, Specials (backdrops escluso).
+    expect(series.entries.filter((e) => e.type === 'dir' && e.content)).toHaveLength(3);
+
+    // Dentro una stagione: backdrops resta extra (profondita' >1), il file no.
+    const inside = await service.list(join(root, 'Show', 'Season 01'));
+    expect(inside.entries.find((e) => e.name === 'backdrops')).toMatchObject({
+      content: false,
+      extra: true,
+    });
+    expect(inside.entries.find((e) => e.name === 'Show - S01E01.mp4')?.extra).toBe(false);
+
+    // Dentro Specials: themes e' extra (nome noto, profondita' >1).
+    const specials = await service.list(join(root, 'Show', 'Specials'));
+    expect(specials.entries.find((e) => e.name === 'themes')?.extra).toBe(true);
+  });
+
   it('mkdir, rename e move funzionano dentro le radici', async () => {
     await service.mkdir(root, 'New');
     expect((await stat(join(root, 'New'))).isDirectory()).toBe(true);

@@ -390,6 +390,25 @@ export function createFileManagerService(deps: FileManagerDeps): FileManagerServ
       if (isRoot(target)) {
         throw new PreconditionError('Non puoi eliminare una cartella radice.');
       }
+      // Salvaguardia anti-perdita-dati: mai cancellare file collegati come esterni (di proprietà
+      // dell'utente, scaricati fuori app). Vanno prima scollegati ("Scollega esterno").
+      const externalUnder = db
+        .select({ localPath: schema.episodeFile.localPath })
+        .from(schema.episodeFile)
+        .where(and(eq(schema.episodeFile.downloadStatus, 'external'), trackedUnder(target)))
+        .all()
+        .filter((r) => {
+          if (!r.localPath) {
+            return false;
+          }
+          const lp = resolve(r.localPath);
+          return lp === target || lp.startsWith(target + sep);
+        });
+      if (externalUnder.length > 0) {
+        throw new PreconditionError(
+          `La cartella contiene ${externalUnder.length} file collegati come esterni: scollegali (Scollega esterno) prima di eliminarla.`,
+        );
+      }
       const root = rootOf(target);
       let isDir = false;
       try {

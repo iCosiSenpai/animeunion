@@ -129,6 +129,25 @@ describe('FileManagerService', () => {
     await expect(service.rename(root, 'X')).rejects.toThrow();
   });
 
+  it('remove rifiuta cartelle e file collegati come esterni (anti-perdita-dati)', async () => {
+    const season = join(root, 'Show', 'Season 01');
+    await mkdir(season, { recursive: true });
+    const ext = join(season, 'Show - 01.mkv');
+    await writeFile(ext, 'a');
+    seedSeries(db, [1], 'SUB_ITA', 'external');
+    // localPath che punta al file dell'utente (come dopo linkExternalFolder).
+    db.update(schema.episodeFile)
+      .set({ localPath: resolve(ext) })
+      .where(eq(schema.episodeFile.id, 'ef-1'))
+      .run();
+
+    // Eliminare la cartella che contiene l'esterno è bloccato e i file restano su disco.
+    await expect(service.remove(join(root, 'Show'))).rejects.toThrow(/esterni/i);
+    await expect(service.remove(season)).rejects.toThrow(/esterni/i);
+    await expect(service.remove(ext)).rejects.toThrow(/esterni/i);
+    expect((await stat(ext)).isFile()).toBe(true);
+  });
+
   it('sincronizza episode_file su rename e azzera su remove', async () => {
     await mkdir(join(root, 'Show', 'Season 01'), { recursive: true });
     const file = join(root, 'Show', 'Season 01', 'Show - S01E01.mp4');

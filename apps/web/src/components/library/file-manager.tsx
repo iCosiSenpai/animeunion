@@ -192,7 +192,6 @@ function FolderActionsDialog({
 }) {
   const [search, setSearch] = useState('');
   const [picked, setPicked] = useState<{ id: string; slug: string; title: string } | null>(null);
-  const [confirmRedownload, setConfirmRedownload] = useState(false);
   // Sotto-vista "collega senza scaricare": scelta lingua, mappatura per numero episodio.
   const [externalMode, setExternalMode] = useState(false);
   const searchQ = trpc.catalog.search.useQuery(
@@ -213,7 +212,6 @@ function FolderActionsDialog({
     { enabled: !!picked },
   );
   const addAll = trpc.download.addAllBySlug.useMutation();
-  const remove = trpc.files.remove.useMutation();
   const linkExternal = trpc.files.linkExternalFolder.useMutation({
     onSuccess: (r) => {
       if (r.linked > 0) {
@@ -231,47 +229,37 @@ function FolderActionsDialog({
     },
     onError: (e) => toast.error(e.message || 'Collegamento non riuscito'),
   });
-  const busy = remove.isPending || addAll.isPending;
+  const busy = addAll.isPending;
   const externalBusy = linkExternal.isPending || episodesQ.isFetching;
 
+  // Ri-scarica NON distruttiva: riaccoda soltanto, i nuovi file sovrascrivono i vecchi all'arrivo
+  // (atomicMove sul path finale). Niente eliminazione anticipata della cartella: la cancellazione
+  // resta un'azione separata e confermata (evita la perdita dati vista con gli Special non classificati).
   function onRedownload() {
     if (!picked) {
       return;
     }
-    remove.mutate(
-      { path: folder.path },
+    addAll.mutate(
+      { slug: picked.slug },
       {
-        onSuccess: () => {
-          addAll.mutate(
-            { slug: picked.slug },
-            {
-              onSuccess: (r) => {
-                toast.success(`Cartella eliminata. ${r.enqueued} episodi rimessi in coda.`);
-                onChanged();
-              },
-              onError: (e) => toast.error(e.message || 'Accodamento non riuscito'),
-            },
+        onSuccess: (r) => {
+          toast.success(
+            r.enqueued > 0 ? `${r.enqueued} episodi in coda` : 'Nessun nuovo episodio da scaricare',
           );
+          onChanged();
         },
-        onError: (e) => toast.error(e.message || 'Eliminazione non riuscita'),
+        onError: (e) => toast.error(e.message || 'Accodamento non riuscito'),
       },
     );
   }
 
-  // Multi-stagione: elimina la cartella, poi delega al dialog correlazioni (scelta + classifica di
-  // ogni stagione/correlato) invece della singola addAllBySlug che accoderebbe una sola entry.
+  // Multi-stagione: delega al dialog correlazioni (scelta + classifica di ogni stagione/correlato)
+  // invece della singola addAllBySlug che accoderebbe una sola entry. Anche qui niente eliminazione.
   function onRedownloadMulti() {
     if (!picked) {
       return;
     }
-    const slug = picked.slug;
-    remove.mutate(
-      { path: folder.path },
-      {
-        onSuccess: () => onMultiSeasonRedownload(slug),
-        onError: (e) => toast.error(e.message || 'Eliminazione non riuscita'),
-      },
-    );
+    onMultiSeasonRedownload(picked.slug);
   }
 
   return (
@@ -280,8 +268,9 @@ function FolderActionsDialog({
         <DialogHeader>
           <DialogTitle>Collega “{folder.name}” a AnimeUnion</DialogTitle>
           <DialogDescription>
-            Trova l’anime a cui appartiene questa cartella: potrai aprirne la scheda o ri-scaricarlo
-            (elimina la cartella e rimette in coda gli episodi).
+            Trova l’anime a cui appartiene questa cartella: potrai aprirne la scheda, collegarne i
+            file come esterni o rimettere in coda gli episodi (i file vengono sovrascritti, non
+            cancellati).
           </DialogDescription>
         </DialogHeader>
 
@@ -317,41 +306,6 @@ function FolderActionsDialog({
                 ) : null}
               </ul>
             ) : null}
-          </div>
-        ) : confirmRedownload ? (
-          <div className="space-y-3">
-            <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-              <span className="min-w-0 break-words">
-                {multiSeason ? (
-                  <>
-                    La cartella <strong>{folder.name}</strong> ({seasonFolders.length} stagioni)
-                    verrà eliminata. Poi sceglierai quali stagioni e correlati di{' '}
-                    <strong>{picked.title}</strong> ri-scaricare e come classificarli. Operazione
-                    non annullabile.
-                  </>
-                ) : (
-                  <>
-                    La cartella <strong>{folder.name}</strong> verrà eliminata e gli episodi di{' '}
-                    <strong>{picked.title}</strong> rimessi in coda di download. Operazione non
-                    annullabile.
-                  </>
-                )}
-              </span>
-            </div>
-            <DialogFooter>
-              <Button variant="ghost" onClick={() => setConfirmRedownload(false)} disabled={busy}>
-                Annulla
-              </Button>
-              <Button
-                variant="destructive"
-                onClick={multiSeason ? onRedownloadMulti : onRedownload}
-                disabled={busy}
-              >
-                {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                {multiSeason ? 'Elimina e scegli le stagioni' : 'Elimina e riscarica'}
-              </Button>
-            </DialogFooter>
           </div>
         ) : externalMode ? (
           <div className="space-y-3">
@@ -440,9 +394,13 @@ function FolderActionsDialog({
                 <FileSymlink className="mr-2 h-4 w-4" />
                 Collega senza scaricare (esterno)
               </Button>
-              <Button variant="destructive" onClick={() => setConfirmRedownload(true)}>
-                <RefreshCw className="mr-2 h-4 w-4" />
-                {multiSeason ? 'Ri-scarica tutte le stagioni' : 'Ri-scarica (elimina e riscarica)'}
+              <Button onClick={multiSeason ? onRedownloadMulti : onRedownload} disabled={busy}>
+                {busy ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                )}
+                {multiSeason ? 'Ri-scarica tutte le stagioni' : 'Ri-scarica episodi'}
               </Button>
             </div>
             <Button variant="ghost" size="sm" className="gap-1" onClick={() => setPicked(null)}>
@@ -451,13 +409,11 @@ function FolderActionsDialog({
           </div>
         )}
 
-        {!confirmRedownload ? (
-          <DialogFooter>
-            <Button variant="ghost" onClick={onClose} disabled={busy}>
-              Chiudi
-            </Button>
-          </DialogFooter>
-        ) : null}
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose} disabled={busy}>
+            Chiudi
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

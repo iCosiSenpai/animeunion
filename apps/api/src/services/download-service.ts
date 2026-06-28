@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs';
+import { resolve, sep } from 'node:path';
 import type {
   DownloadAddByRefInput,
   DownloadCounts,
@@ -238,6 +240,54 @@ export function createDownloadService(deps: DownloadServiceDeps): DownloadServic
     return existing.id;
   }
 
+  function presentOnDisk(localPath: string | null): boolean {
+    return !!localPath && existsSync(localPath);
+  }
+
+  // La root configurata che contiene il file e' raggiungibile? Se il NAS/mount e' staccato NON si
+  // resetta: eviteremmo di azzerare l'intera libreria solo perche' il disco e' temporaneamente giu'.
+  function rootPresent(localPath: string | null): boolean {
+    if (!localPath) {
+      return false;
+    }
+    const lp = resolve(localPath);
+    return config.distinctDownloadRoots().some((r) => {
+      if (!r) {
+        return false;
+      }
+      const rr = resolve(r);
+      return (lp === rr || lp.startsWith(rr + sep)) && existsSync(rr);
+    });
+  }
+
+  // Self-healing: un episode_file marcato downloaded/external ma non piu' presente su disco
+  // (cancellato fuori app) viene azzerato — e l'eventuale riga di coda terminale rimossa — cosi' puo'
+  // essere riaccodato invece di restare "gia' scaricato" per sempre. Solo se la root e' raggiungibile.
+  // Ritorna true se ha liberato il file.
+  function healMissing(file: { id: string; status: string; localPath: string | null }): boolean {
+    if (file.status !== 'downloaded' && file.status !== 'external') {
+      return false;
+    }
+    if (presentOnDisk(file.localPath) || !rootPresent(file.localPath)) {
+      return false;
+    }
+    const ts = now().toISOString();
+    db.update(schema.episodeFile)
+      .set({ downloadStatus: 'not_downloaded', localPath: null, updatedAt: ts })
+      .where(eq(schema.episodeFile.id, file.id))
+      .run();
+    db.delete(schema.downloadQueue)
+      .where(
+        and(
+          eq(schema.downloadQueue.episodeFileId, file.id),
+          inArray(schema.downloadQueue.status, ['completed', 'cancelled', 'failed']),
+        ),
+      )
+      .run();
+    logger.info({ episodeFileId: file.id }, 'Self-healing: file mancante su disco, stato azzerato');
+    return true;
+  }
+
   // Accoda gli episodi mancanti di un anime. `auto` = chiamata dallo scheduler: applica il cooldown
   // sui falliti per non ritentare gli errori permanenti a ogni ciclo. Conta solo ciò che accoda o
   // ritenta davvero (un fallito ritentato via worker.retry, un nuovo via worker.enqueue), così il
@@ -251,6 +301,7 @@ export function createDownloadService(deps: DownloadServiceDeps): DownloadServic
         id: schema.episodeFile.id,
         language: schema.episodeFile.language,
         status: schema.episodeFile.downloadStatus,
+        localPath: schema.episodeFile.localPath,
       })
       .from(schema.episodeFile)
       .innerJoin(schema.episode, eq(schema.episodeFile.episodeId, schema.episode.id))
@@ -260,8 +311,10 @@ export function createDownloadService(deps: DownloadServiceDeps): DownloadServic
     const nowMs = now().getTime();
     let count = 0;
     for (const file of files) {
+      // Self-healing: se il file e' sparito dal disco lo riaccodiamo invece di saltarlo.
+      const healed = healMissing(file);
       // `external` = file dell'utente gia' presente (collegato senza scaricare): non si ri-scarica.
-      if (file.status === 'downloaded' || file.status === 'external') {
+      if (!healed && (file.status === 'downloaded' || file.status === 'external')) {
         continue;
       }
       const existing = db
@@ -313,6 +366,20 @@ export function createDownloadService(deps: DownloadServiceDeps): DownloadServic
     addEpisode({ episodeFileId, priority }) {
       if (!config.isConfigured()) {
         throw new PreconditionError(NOT_CONFIGURED_MSG);
+      }
+      // Self-healing: se e' marcato scaricato/esterno ma il file e' sparito dal disco, azzera lo
+      // stato (e rimuove la riga di coda terminale) cosi' worker.enqueue ne crea una nuova.
+      const file = db
+        .select({
+          id: schema.episodeFile.id,
+          status: schema.episodeFile.downloadStatus,
+          localPath: schema.episodeFile.localPath,
+        })
+        .from(schema.episodeFile)
+        .where(eq(schema.episodeFile.id, episodeFileId))
+        .get();
+      if (file) {
+        healMissing(file);
       }
       const existing = alreadyInQueue(episodeFileId);
       if (existing) {

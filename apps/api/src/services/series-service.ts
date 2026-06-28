@@ -58,6 +58,9 @@ export function createSeriesService(deps: SeriesServiceDeps): SeriesService {
   // L'utente ha gia' scaricato/accodato da questa serie? Allora la stagione e' di
   // fatto gia' decisa: non serve richiedere la conferma.
   function hasExistingDownload(animeId: string): boolean {
+    // Stagione "gia' decisa": basta che l'utente abbia gia' scaricato/collegato o accodato qualcosa
+    // di questa serie. NON e' disk-aware di proposito: la scelta della stagione persiste anche se i
+    // file vengono poi cancellati (il re-download e' gia' sbloccato dal self-healing in addMissing).
     const downloaded = db
       .select({ id: schema.episodeFile.id })
       .from(schema.episodeFile)

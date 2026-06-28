@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { schema } from '../db';
 import { createDownloadWorker } from '../lib/download-worker';
@@ -282,6 +282,52 @@ describe('DownloadService', () => {
     expect(n).toBe(1);
     expect(enqueueSpy).toHaveBeenCalledWith('ef-2');
     expect(enqueueSpy).not.toHaveBeenCalledWith('ef-1');
+  });
+
+  it('addMissing self-heal: file downloaded sparito dal disco viene riaccodato (root presente)', () => {
+    const { service } = makeService();
+    insertAnime(db, 'a-1');
+    insertEpisode(db, 'e-1', 'a-1', 1);
+    insertFile(db, 'ef-1', 'e-1', 'SUB_ITA', 'downloaded');
+    // localPath sotto la root configurata (animePath, che esiste) ma il file non c'e' piu'.
+    db.update(schema.episodeFile)
+      .set({ localPath: join(animePath, 'Show', 'Season 01', 'missing.mp4') })
+      .where(eq(schema.episodeFile.id, 'ef-1'))
+      .run();
+    insertQueue(db, 'q-old', 'ef-1', 'completed');
+
+    const n = service.addMissing({ animeId: 'a-1' });
+    expect(n).toBe(1);
+    expect(enqueueSpy).toHaveBeenCalledWith('ef-1');
+    const ef = db.select().from(schema.episodeFile).where(eq(schema.episodeFile.id, 'ef-1')).get();
+    expect(ef?.downloadStatus).toBe('not_downloaded');
+    expect(ef?.localPath).toBeNull();
+    // La vecchia riga di coda terminale e' stata rimossa cosi' enqueue ne crea una nuova.
+    const oldQ = db
+      .select()
+      .from(schema.downloadQueue)
+      .where(eq(schema.downloadQueue.id, 'q-old'))
+      .get();
+    expect(oldQ).toBeUndefined();
+  });
+
+  it('addMissing self-heal: NON azzera se la root non e raggiungibile (disco offline)', () => {
+    const { service, config } = makeService();
+    const goneRoot = join(tmpdir(), 'au-gone-root-xyz-123');
+    config.set('seriesPathSub', goneRoot); // root configurata inesistente = NAS staccato
+    insertAnime(db, 'a-1');
+    insertEpisode(db, 'e-1', 'a-1', 1);
+    insertFile(db, 'ef-1', 'e-1', 'SUB_ITA', 'downloaded');
+    db.update(schema.episodeFile)
+      .set({ localPath: join(goneRoot, 'x.mp4') })
+      .where(eq(schema.episodeFile.id, 'ef-1'))
+      .run();
+
+    const n = service.addMissing({ animeId: 'a-1' });
+    expect(n).toBe(0);
+    expect(enqueueSpy).not.toHaveBeenCalled();
+    const ef = db.select().from(schema.episodeFile).where(eq(schema.episodeFile.id, 'ef-1')).get();
+    expect(ef?.downloadStatus).toBe('downloaded'); // invariato
   });
 
   it('addMissing con filtro lingua', () => {

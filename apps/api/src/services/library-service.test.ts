@@ -176,6 +176,29 @@ describe('LibraryService', () => {
     expect(service.stats().totalEpisodes).toBe(1);
   });
 
+  it('scan riconcilia un external sparito dal disco (root presente): reset + mancante', async () => {
+    const db = createTestDb();
+    insertAnime(db, 'show-x');
+    insertEpisode(db, 'ep-x-1', 'show-x', 1);
+    // localPath dell'utente dentro la root configurata (tmpDir esiste) ma il file NON c'e' piu'.
+    const userFile = join(tmpDir, 'My Anime', 'Season 01', 'My Anime - 01.mkv');
+    insertFile(db, 'file-x-1', 'ep-x-1', 'SUB_ITA', 'external', userFile);
+
+    const { service } = makeService(db, tmpDir);
+    const result = await service.scan();
+    expect(result.missing).toBe(1);
+    expect(result.missingEntries.some((m) => m.episodeFileId === 'file-x-1')).toBe(true);
+
+    // Lo stato e' azzerato cosi' puo' essere riscaricato.
+    const row = db
+      .select()
+      .from(schema.episodeFile)
+      .where(eq(schema.episodeFile.id, 'file-x-1'))
+      .get();
+    expect(row?.downloadStatus).toBe('not_downloaded');
+    expect(row?.localPath).toBeNull();
+  });
+
   it('unlinkExternal scollega un external senza toccare il file su disco', async () => {
     const db = createTestDb();
     insertAnime(db, 'show-u');

@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { readdir, rm, stat } from 'node:fs/promises';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import type {
@@ -308,6 +309,11 @@ export function createLibraryService(deps: LibraryServiceDeps): LibraryService {
 
       // Scansiona tutte le cartelle radice distinte configurate.
       const roots = config.distinctDownloadRoots();
+      // Root effettivamente presenti su disco: se una manca (NAS/mount staccato) NON resettiamo gli
+      // stati dei file che vivono sotto di essa, altrimenti azzereremmo la libreria a disco offline.
+      const presentRoots = roots.filter((r) => r && existsSync(resolve(r))).map((r) => resolve(r));
+      const rootPresentFor = (p: string): boolean =>
+        presentRoots.some((r) => p === r || p.startsWith(r + sep));
       const walked = await Promise.all(roots.map((root) => walk(root, logger)));
       const allFiles = [...new Set(walked.flat())].filter(isVideoFile).map((file) => resolve(file));
       const foundPaths = new Set(allFiles);
@@ -329,10 +335,33 @@ export function createLibraryService(deps: LibraryServiceDeps): LibraryService {
 
       db.transaction((tx) => {
         for (const [path, entry] of expectedByPath) {
-          // I file external sono gestiti dall'utente: la scan non li tocca (ne' missing ne' reset).
+          // I file external stanno al localPath dell'utente. Se sono presenti, contano. Se sono
+          // spariti dal disco (cancellati fuori app) MA la root e' raggiungibile, li riconciliamo
+          // (reset a not_downloaded + segnalati mancanti) cosi' possono essere riscaricati; se la
+          // root e' offline non si tocca nulla.
           if (entry.external) {
             if (foundPaths.has(path)) {
               found += 1;
+            } else if (rootPresentFor(path)) {
+              missingEntries.push({
+                animeId: entry.animeId,
+                episodeFileId: entry.episodeFileId,
+                animeTitle: entry.animeTitle,
+                animeSlug: entry.animeSlug,
+                seasonNumber: resolver.resolve(entry.animeId).seasonNumber,
+                episodeNumber: entry.episodeNumber,
+                language: entry.language,
+              });
+              tx.update(schema.episodeFile)
+                .set({
+                  downloadStatus: 'not_downloaded',
+                  localPath: null,
+                  downloadedAt: null,
+                  updatedAt: now,
+                })
+                .where(eq(schema.episodeFile.id, entry.episodeFileId))
+                .run();
+              updated += 1;
             }
             continue;
           }
@@ -351,7 +380,8 @@ export function createLibraryService(deps: LibraryServiceDeps): LibraryService {
               .from(schema.episodeFile)
               .where(eq(schema.episodeFile.id, entry.episodeFileId))
               .get();
-            if (row?.status === 'downloaded') {
+            // Reset solo se la root e' presente: a disco offline non azzeriamo lo stato.
+            if (row?.status === 'downloaded' && rootPresentFor(path)) {
               tx.update(schema.episodeFile)
                 .set({
                   downloadStatus: 'not_downloaded',

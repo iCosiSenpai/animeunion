@@ -7,7 +7,7 @@ import {
   type FollowWithAnime,
   followStatusSchema,
 } from '@animeunion/shared';
-import { eq } from 'drizzle-orm';
+import { eq, max } from 'drizzle-orm';
 import type { Db } from '../db';
 import { schema } from '../db';
 import { NotFoundError } from '../lib/errors';
@@ -75,6 +75,17 @@ export function createFollowService(deps: FollowServiceDeps): FollowService {
     );
   }
 
+  // Massimo numero episodio noto a catalogo per l'anime: e' la "soglia forward-only" da cui far
+  // partire l'auto-download (cosi' il backlog gia' uscito non viene ri-scaricato in massa).
+  function maxEpisode(animeId: string): number {
+    const row = db
+      .select({ value: max(schema.episode.number) })
+      .from(schema.episode)
+      .where(eq(schema.episode.animeId, animeId))
+      .get();
+    return row?.value ?? 0;
+  }
+
   return {
     list(): FollowWithAnime[] {
       const rows = db
@@ -118,6 +129,9 @@ export function createFollowService(deps: FollowServiceDeps): FollowService {
         status: input.status,
         notes: null,
         autoDownload,
+        // Forward-only: cattura il backlog gia' uscito al momento del follow, cosi' l'auto-download
+        // accodera' solo gli episodi futuri (anche se piu' tardi si passa a "In corso").
+        autoDownloadFromEp: maxEpisode(input.animeId),
         addedAt: timestamp,
         updatedAt: timestamp,
         lastCheckAt: null,
@@ -157,11 +171,21 @@ export function createFollowService(deps: FollowServiceDeps): FollowService {
       }
       const timestamp = new Date().toISOString();
       const autoDownload = input.autoDownload ? 1 : 0;
+      // Accendendo l'auto-download la soglia forward-only si allinea al max episodio attuale: da qui
+      // in poi solo i nuovi. Spegnendolo resta com'e' (irrilevante: non si auto-accoda).
+      const fromEp = input.autoDownload
+        ? maxEpisode(existing.animeId)
+        : existing.autoDownloadFromEp;
       db.update(schema.follow)
-        .set({ autoDownload, updatedAt: timestamp })
+        .set({ autoDownload, autoDownloadFromEp: fromEp, updatedAt: timestamp })
         .where(eq(schema.follow.id, existing.id))
         .run();
-      return toFollow({ ...existing, autoDownload, updatedAt: timestamp });
+      return toFollow({
+        ...existing,
+        autoDownload,
+        autoDownloadFromEp: fromEp,
+        updatedAt: timestamp,
+      });
     },
   };
 }

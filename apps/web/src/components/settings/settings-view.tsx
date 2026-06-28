@@ -521,7 +521,7 @@ export function SettingsView() {
           <Section id="pianificazione" hidden={active !== 'pianificazione'} title="Pianificazione">
             <Field
               label="Auto-download"
-              hint="Scarica automaticamente i nuovi episodi dei preferiti."
+              hint="Scarica i nuovi episodi (da quando inizi a seguire in poi) dei seguiti «In corso». Non tocca gli episodi già presenti su disco."
             >
               <Select
                 value={draft.autoDownload ? 'on' : 'off'}

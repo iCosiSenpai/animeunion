@@ -292,7 +292,12 @@ export function createDownloadService(deps: DownloadServiceDeps): DownloadServic
   // sui falliti per non ritentare gli errori permanenti a ogni ciclo. Conta solo ciò che accoda o
   // ritenta davvero (un fallito ritentato via worker.retry, un nuovo via worker.enqueue), così il
   // contatore — e la notifica "Nuovi episodi" che ne dipende — non viene gonfiato da no-op.
-  function addMissingImpl(animeId: string, language: Language | undefined, auto: boolean): number {
+  function addMissingImpl(
+    animeId: string,
+    language: Language | undefined,
+    auto: boolean,
+    minEpisodeNumber?: number,
+  ): number {
     if (!config.isConfigured()) {
       throw new PreconditionError(NOT_CONFIGURED_MSG);
     }
@@ -302,6 +307,7 @@ export function createDownloadService(deps: DownloadServiceDeps): DownloadServic
         language: schema.episodeFile.language,
         status: schema.episodeFile.downloadStatus,
         localPath: schema.episodeFile.localPath,
+        number: schema.episode.number,
       })
       .from(schema.episodeFile)
       .innerJoin(schema.episode, eq(schema.episodeFile.episodeId, schema.episode.id))
@@ -311,6 +317,11 @@ export function createDownloadService(deps: DownloadServiceDeps): DownloadServic
     const nowMs = now().getTime();
     let count = 0;
     for (const file of files) {
+      // Forward-only (solo auto): salta il backlog gia' uscito al momento del follow. Le azioni
+      // manuali (addMissing/addAll/addAllBySlug) passano minEpisodeNumber undefined = nessun limite.
+      if (minEpisodeNumber != null && file.number <= minEpisodeNumber) {
+        continue;
+      }
       // Self-healing: se il file e' sparito dal disco lo riaccodiamo invece di saltarlo.
       const healed = healMissing(file);
       // `external` = file dell'utente gia' presente (collegato senza scaricare): non si ri-scarica.
@@ -727,7 +738,7 @@ export function createDownloadService(deps: DownloadServiceDeps): DownloadServic
           animeId: schema.follow.animeId,
           status: schema.follow.status,
           autoDownload: schema.follow.autoDownload,
-          animeStatus: schema.anime.status,
+          autoDownloadFromEp: schema.follow.autoDownloadFromEp,
           slug: schema.anime.slug,
         })
         .from(schema.follow)
@@ -735,25 +746,25 @@ export function createDownloadService(deps: DownloadServiceDeps): DownloadServic
         .all();
       let count = 0;
       for (const f of follows) {
+        // Eligibilita' dallo stato del SEGUITO, non dallo stato d'onda dell'anime (che dalla source
+        // puo' essere errato: un anime in corso marcato COMPLETED veniva escluso per sempre).
+        if (f.status === 'dropped') {
+          continue; // droppato = mai
+        }
         const wanted = f.autoDownload != null ? f.autoDownload === 1 : f.status === 'watching';
-        // Una serie conclusa non riceve nuovi episodi: niente auto-download ricorrente.
-        if (!wanted || f.animeStatus === 'COMPLETED') {
+        if (!wanted) {
           continue;
         }
-        // Per le serie in corso rinfresca il catalogo: i nuovi episodi vengono rilevati anche
-        // quando il sito non aggiorna il segnale `?updatedSince` dei preferiti. Best-effort:
-        // se il refresh fallisce si prosegue comunque con la cache locale.
-        if (f.animeStatus === 'ONGOING') {
-          try {
-            await catalog.getBySlug(f.slug, { forceRefresh: true });
-          } catch (error) {
-            logger.debug(
-              { err: error, slug: f.slug },
-              'Refresh auto-download fallito (best-effort)',
-            );
-          }
+        // Rinfresca SEMPRE il catalogo dei seguiti voluti: i nuovi episodi emergono anche quando il
+        // sito non aggiorna `?updatedSince`, e un anime in corso marcato COMPLETED si auto-corregge.
+        // Best-effort: se il refresh fallisce si prosegue con la cache locale.
+        try {
+          await catalog.getBySlug(f.slug, { forceRefresh: true });
+        } catch (error) {
+          logger.debug({ err: error, slug: f.slug }, 'Refresh auto-download fallito (best-effort)');
         }
-        const added = addMissingImpl(f.animeId, undefined, true);
+        // Forward-only: solo gli episodi oltre la soglia catturata all'attivazione dell'auto-download.
+        const added = addMissingImpl(f.animeId, undefined, true, f.autoDownloadFromEp ?? undefined);
         if (added > 0) {
           count += added;
           deps.onAutoEnqueued?.(f.animeId, added);

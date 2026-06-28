@@ -572,8 +572,10 @@ describe('DownloadService', () => {
     expect(enqueueSpy).toHaveBeenCalledWith('ef-1');
   });
 
-  it('enqueueForAutoFollows esclude gli anime COMPLETED (niente refresh né accodamento)', async () => {
-    const getBySlug = vi.fn().mockResolvedValue(undefined);
+  it('enqueueForAutoFollows rinfresca e accoda anche per un anime marcato COMPLETED (lo stato d onda non e un gate)', async () => {
+    // Caso reale: la source marca per errore COMPLETED un anime in corso. Il seguito "watching"
+    // deve comunque rinfrescare e accodare i nuovi episodi, invece di essere escluso per sempre.
+    const getBySlug = vi.fn().mockResolvedValue({ id: 'a-1' });
     const catalog = { getBySlug } as unknown as CatalogService;
     const { service } = makeService(catalog);
     insertAnime(db, 'a-1', 'COMPLETED');
@@ -592,9 +594,41 @@ describe('DownloadService', () => {
       .run();
 
     const n = await service.enqueueForAutoFollows();
-    expect(n).toBe(0);
-    expect(enqueueSpy).not.toHaveBeenCalled();
-    expect(getBySlug).not.toHaveBeenCalled();
+    expect(n).toBe(1);
+    expect(getBySlug).toHaveBeenCalledWith('a-1', { forceRefresh: true });
+    expect(enqueueSpy).toHaveBeenCalledWith('ef-1');
+  });
+
+  it('enqueueForAutoFollows: forward-only, salta il backlog sotto la soglia', async () => {
+    const getBySlug = vi.fn().mockResolvedValue({ id: 'a-1' });
+    const catalog = { getBySlug } as unknown as CatalogService;
+    const { service } = makeService(catalog);
+    insertAnime(db, 'a-1', 'ONGOING');
+    insertEpisode(db, 'e-1', 'a-1', 1);
+    insertEpisode(db, 'e-2', 'a-1', 2);
+    insertEpisode(db, 'e-3', 'a-1', 3);
+    insertFile(db, 'ef-1', 'e-1', 'SUB_ITA');
+    insertFile(db, 'ef-2', 'e-2', 'SUB_ITA');
+    insertFile(db, 'ef-3', 'e-3', 'SUB_ITA');
+    // Soglia 2: solo gli episodi con number > 2 (il 3) vengono accodati, il backlog 1-2 no.
+    db.insert(schema.follow)
+      .values({
+        id: 'f-1',
+        animeId: 'a-1',
+        status: 'watching',
+        autoDownloadFromEp: 2,
+        addedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        lastCheckAt: null,
+        notes: null,
+      })
+      .run();
+
+    const n = await service.enqueueForAutoFollows();
+    expect(n).toBe(1);
+    expect(enqueueSpy).toHaveBeenCalledWith('ef-3');
+    expect(enqueueSpy).not.toHaveBeenCalledWith('ef-1');
+    expect(enqueueSpy).not.toHaveBeenCalledWith('ef-2');
   });
 
   it('enqueueForAutoFollows rinfresca gli ONGOING e accoda i nuovi episodi', async () => {
@@ -624,18 +658,18 @@ describe('DownloadService', () => {
     expect(onAutoEnqueued).toHaveBeenCalledWith('a-1', 1);
   });
 
-  it("enqueueForAutoFollows: autoDownload=1 non basta se l'anime è COMPLETED", async () => {
-    const getBySlug = vi.fn().mockResolvedValue(undefined);
+  it('enqueueForAutoFollows: un seguito dropped non accoda mai (anche con autoDownload=1)', async () => {
+    const getBySlug = vi.fn().mockResolvedValue({ id: 'a-1' });
     const catalog = { getBySlug } as unknown as CatalogService;
     const { service } = makeService(catalog);
-    insertAnime(db, 'a-1', 'COMPLETED');
+    insertAnime(db, 'a-1', 'ONGOING');
     insertEpisode(db, 'e-1', 'a-1', 1);
     insertFile(db, 'ef-1', 'e-1', 'SUB_ITA');
     db.insert(schema.follow)
       .values({
         id: 'f-1',
         animeId: 'a-1',
-        status: 'plan_to_watch',
+        status: 'dropped',
         autoDownload: 1,
         addedAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),

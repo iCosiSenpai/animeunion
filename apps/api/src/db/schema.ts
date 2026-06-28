@@ -149,6 +149,10 @@ export const follow = sqliteTable(
     notes: text('notes'),
     // null = comportamento di default in base allo stato (watching = on). 0/1 = scelta esplicita.
     autoDownload: integer('auto_download'),
+    // Soglia "solo nuovi episodi" (forward-only): l'auto-download accoda solo gli episodi con
+    // number > di questo valore. Impostata al max episodio gia' presente quando l'auto-download
+    // diventa attivo, cosi' non ri-scarica il backlog gia' posseduto. null = nessun limite.
+    autoDownloadFromEp: integer('auto_download_from_ep'),
     addedAt: text('added_at').notNull(),
     updatedAt: text('updated_at').notNull(),
     lastCheckAt: text('last_check_at'),

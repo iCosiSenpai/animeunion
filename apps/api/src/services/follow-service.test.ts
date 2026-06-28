@@ -1,10 +1,26 @@
+import { eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
+import { schema } from '../db';
 import { NotFoundError } from '../lib/errors';
 import { createMockSource } from '../sources/mock-source';
 import { createTestDb, testLogger } from '../test/helpers';
 import { createCatalogService } from './catalog-service';
 import { createConfigService } from './config-service';
 import { createFollowService } from './follow-service';
+
+function insertEpisode(
+  db: ReturnType<typeof createTestDb>,
+  id: string,
+  animeId: string,
+  number: number,
+) {
+  const ts = new Date().toISOString();
+  db.insert(schema.episode).values({ id, animeId, number, createdAt: ts, updatedAt: ts }).run();
+}
+
+function followRow(db: ReturnType<typeof createTestDb>, animeId: string) {
+  return db.select().from(schema.follow).where(eq(schema.follow.animeId, animeId)).get();
+}
 
 async function setup() {
   const db = createTestDb();
@@ -33,6 +49,28 @@ describe('FollowService', () => {
     const list = service.list();
     expect(list).toHaveLength(1);
     expect(list[0]?.anime.id).toBe(animeId);
+  });
+
+  it('add imposta la soglia forward-only al max episodio noto', async () => {
+    const { db, service, animeId } = await setup();
+    insertEpisode(db, 'e-1', animeId, 1);
+    insertEpisode(db, 'e-2', animeId, 5);
+
+    service.add({ animeId, status: 'watching' });
+
+    // Forward-only: solo gli episodi oltre il 5 (l'ultimo gia' uscito) verranno auto-scaricati.
+    expect(followRow(db, animeId)?.autoDownloadFromEp).toBe(5);
+  });
+
+  it('setAutoDownload(true) allinea la soglia al max episodio attuale', async () => {
+    const { db, service, animeId } = await setup();
+    service.add({ animeId, status: 'plan_to_watch' }); // nessun episodio ancora -> soglia 0
+    expect(followRow(db, animeId)?.autoDownloadFromEp).toBe(0);
+    insertEpisode(db, 'e-1', animeId, 3);
+
+    service.setAutoDownload({ animeId, autoDownload: true });
+
+    expect(followRow(db, animeId)?.autoDownloadFromEp).toBe(3);
   });
 
   it('add su anime gia seguito aggiorna lo status (idempotente)', async () => {

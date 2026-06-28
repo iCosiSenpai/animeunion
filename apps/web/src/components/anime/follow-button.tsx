@@ -29,7 +29,8 @@ export function FollowButton({
   const utils = trpc.useUtils();
   const follows = trpc.follow.list.useQuery();
   const current = follows.data?.find((follow) => follow.animeId === animeId) ?? null;
-  // Serie conclusa: non riceve nuovi episodi, quindi l'auto-download non ha senso.
+  // Serie conclusa: l'auto-download resta attivabile (lo stato d'onda non e' piu' un gate),
+  // mostriamo solo una nota informativa.
   const isCompleted = animeStatus === 'COMPLETED';
 
   const [open, setOpen] = useState(false);
@@ -66,13 +67,9 @@ export function FollowButton({
     if (next) {
       const initialStatus = current?.status ?? 'watching';
       setStatus(initialStatus);
-      if (isCompleted) {
-        setAutoDownload(false);
-        setAutoTouched(false);
-      } else {
-        setAutoDownload(current?.autoDownload ?? initialStatus === 'watching');
-        setAutoTouched(current?.autoDownload != null);
-      }
+      // Rispetta lo stato auto reale (anche per le serie concluse: ora e' attivabile).
+      setAutoDownload(current?.autoDownload ?? initialStatus === 'watching');
+      setAutoTouched(current?.autoDownload != null);
       setDownloadExisting(false);
     }
     setOpen(next);
@@ -80,7 +77,7 @@ export function FollowButton({
 
   function pickStatus(next: FollowStatus) {
     setStatus(next);
-    if (!autoTouched && !isCompleted) {
+    if (!autoTouched) {
       setAutoDownload(next === 'watching');
     }
   }
@@ -161,17 +158,11 @@ export function FollowButton({
             </div>
 
             <div className="space-y-2 rounded-md border p-3">
-              <label
-                className={cn(
-                  'flex items-center gap-2 text-sm',
-                  isCompleted && 'cursor-not-allowed opacity-50',
-                )}
-              >
+              <label className="flex items-center gap-2 text-sm">
                 <input
                   type="checkbox"
                   className="h-4 w-4 accent-primary"
-                  checked={isCompleted ? false : autoDownload}
-                  disabled={isCompleted}
+                  checked={autoDownload}
                   onChange={(e) => {
                     setAutoDownload(e.target.checked);
                     setAutoTouched(true);
@@ -181,8 +172,8 @@ export function FollowButton({
               </label>
               {isCompleted ? (
                 <p className="pl-6 text-xs text-muted-foreground">
-                  Serie completata: non ci sono nuovi episodi da scaricare automaticamente. Usa
-                  l&apos;opzione qui sotto per gli episodi già usciti.
+                  Serie conclusa: di norma non escono nuovi episodi. Per quelli già usciti usa
+                  l&apos;opzione qui sotto.
                 </p>
               ) : null}
               <label className="flex items-center gap-2 text-sm">

@@ -66,6 +66,20 @@ describe('SeasonWatcher', () => {
     expect(list[0]?.type).toBe('season_available');
   });
 
+  it('esclude i seguiti in pausa (on_hold) e droppati dagli avvisi di nuova stagione', async () => {
+    const { db, config, notifications } = setup();
+    db.update(schema.follow).set({ status: 'on_hold' }).run();
+    let related: RelatedAnime[] = [rel('r2')];
+    const catalog = { getBySlug: async () => detail(related) } as unknown as CatalogService;
+    const watcher = createSeasonWatcher({ db, catalog, notifications, config });
+
+    // L'on_hold non viene nemmeno preso in carico: niente baseline, niente notifica al cambio.
+    expect(await watcher.checkNewSeasons()).toBe(0);
+    related = [rel('r2'), rel('r3')];
+    expect(await watcher.checkNewSeasons()).toBe(0);
+    expect(notifications.list()).toHaveLength(0);
+  });
+
   it('non notifica se notifyNewSeasons è disattivo', async () => {
     const { db, config, notifications } = setup();
     config.set('notifyNewSeasons', false);

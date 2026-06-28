@@ -1,4 +1,4 @@
-import { asc, eq, ne } from 'drizzle-orm';
+import { asc, eq, notInArray } from 'drizzle-orm';
 import type { Db } from '../db';
 import { schema } from '../db';
 import type { Logger } from '../lib/logger';
@@ -45,7 +45,9 @@ export function createSeasonWatcher(deps: SeasonWatcherDeps): SeasonWatcher {
         })
         .from(schema.follow)
         .innerJoin(schema.anime, eq(schema.anime.id, schema.follow.animeId))
-        .where(ne(schema.follow.status, 'dropped'))
+        // Droppato e In pausa non ricevono avvisi di nuova stagione (l'utente non li sta seguendo
+        // attivamente). Watching/Completato/Da guardare restano inclusi.
+        .where(notInArray(schema.follow.status, ['dropped', 'on_hold']))
         .orderBy(asc(schema.follow.lastCheckAt)) // null prima → i mai controllati per primi
         .limit(BATCH)
         .all();

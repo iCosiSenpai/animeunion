@@ -98,7 +98,8 @@ export function FollowCard({ follow }: { follow: FollowWithAnime }) {
 
   const anime = follow.anime;
   const { ensureConfirmed, dialog: seasonDialog } = useSeasonGate(anime.id);
-  // Serie conclusa: niente auto-download (coerente con enqueueForAutoFollows che esclude i COMPLETED).
+  // Serie conclusa: l'auto-download resta attivabile (lo stato d'onda non e' piu' un gate, vedi
+  // enqueueForAutoFollows), mostriamo solo una nota informativa.
   const isCompleted = anime.status === 'COMPLETED';
   const autoEffective = follow.autoDownload ?? follow.status === 'watching';
   // I file scaricati si possono eliminare quando la serie e' conclusa o abbandonata
@@ -152,11 +153,15 @@ export function FollowCard({ follow }: { follow: FollowWithAnime }) {
                 Scarica episodi mancanti
               </DropdownMenuItem>
               <DropdownMenuItem
-                disabled={isCompleted}
                 onClick={() => setAuto.mutate({ animeId: anime.id, autoDownload: !autoEffective })}
               >
                 {autoEffective ? 'Disattiva auto-download' : 'Attiva auto-download'}
               </DropdownMenuItem>
+              {isCompleted ? (
+                <div className="px-2 py-1 text-[11px] leading-tight text-muted-foreground">
+                  Serie conclusa: di norma non escono nuovi episodi.
+                </div>
+              ) : null}
               <DropdownMenuSeparator />
               {canDeleteFiles ? (
                 <DropdownMenuItem
@@ -175,7 +180,7 @@ export function FollowCard({ follow }: { follow: FollowWithAnime }) {
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-        {autoEffective && !isCompleted ? (
+        {autoEffective ? (
           <span className="absolute left-1 top-1 inline-flex items-center gap-1 rounded-full bg-primary/90 px-1.5 py-0.5 text-[10px] font-medium text-primary-foreground shadow-sm">
             <Download className="h-3 w-3" />
             Auto

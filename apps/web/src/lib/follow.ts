@@ -15,7 +15,7 @@ export const FOLLOW_STATUSES: FollowStatusMeta[] = [
   {
     value: 'plan_to_watch',
     label: 'Da guardare',
-    hint: 'Segnalato come interesse: non scarica automaticamente, ma riceve le novità.',
+    hint: 'Interesse: nessun download automatico (puoi forzarlo), ma ricevi gli avvisi di novità.',
   },
   {
     value: 'on_hold',
@@ -25,7 +25,7 @@ export const FOLLOW_STATUSES: FollowStatusMeta[] = [
   {
     value: 'completed',
     label: 'Completato',
-    hint: 'Serie finita: mostrata in libreria, nessun download automatico.',
+    hint: 'Serie finita: in libreria, nessun download automatico (puoi forzarlo); avvisi per nuove stagioni.',
   },
   {
     value: 'dropped',

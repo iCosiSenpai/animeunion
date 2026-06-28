@@ -33,7 +33,9 @@ export function EpisodeCard({ episode }: { episode: LatestEpisode }) {
 
   const addEpisodeRef = trpc.download.addEpisodeRef.useMutation({
     onSuccess: () => {
-      toast.success(`Ep ${episode.episodeNumber} accodato (${LANGUAGE_LABELS[episode.language]})`);
+      toast.success(
+        `Episodio ${episode.episodeNumber} in coda (${LANGUAGE_LABELS[episode.language]})`,
+      );
       void utils.download.queue.invalidate();
       setOpen(false);
     },

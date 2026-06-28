@@ -62,7 +62,9 @@ export function FollowCard({ follow }: { follow: FollowWithAnime }) {
   });
   const addAll = trpc.download.addAll.useMutation({
     onSuccess: (res) => {
-      toast.success(`${res.enqueued} episodi accodati`);
+      toast.success(
+        res.enqueued > 0 ? `${res.enqueued} episodi in coda` : 'Nessun nuovo episodio da scaricare',
+      );
       void utils.download.invalidate();
     },
     onError: (error) => toast.error(error.message || 'Impossibile accodare i download'),

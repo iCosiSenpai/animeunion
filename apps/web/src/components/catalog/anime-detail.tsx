@@ -356,15 +356,17 @@ function EpisodeList({ anime }: { anime: AnimeDetailType }) {
     (queue.data ?? []).map((item) => [item.episodeFileId, item.status]),
   );
   const addEpisodeMutation = trpc.download.addEpisode.useMutation({
-    onSuccess: (res) => {
-      toast.success(`Ep accodato (#${res.queueId.slice(0, 8)})`);
+    onSuccess: () => {
+      toast.success('Episodio in coda');
       void utils.download.queue.invalidate();
     },
     onError: () => toast.error('Impossibile accodare il download'),
   });
   const addAllMutation = trpc.download.addAll.useMutation({
     onSuccess: (res) => {
-      toast.success(`${res.enqueued} episodi accodati`);
+      toast.success(
+        res.enqueued > 0 ? `${res.enqueued} episodi in coda` : 'Nessun nuovo episodio da scaricare',
+      );
       void utils.download.queue.invalidate();
     },
     onError: () => toast.error('Impossibile accodare i download'),

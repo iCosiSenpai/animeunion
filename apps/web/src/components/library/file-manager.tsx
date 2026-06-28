@@ -111,7 +111,7 @@ function RelinkDialog({
                   <li key={a.id}>
                     <button
                       type="button"
-                      className="block w-full truncate p-2 text-left hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
+                      className="block w-full whitespace-normal break-words p-2 text-left hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
                       onClick={() => setSlug(a.slug)}
                     >
                       {a.titleIta ?? a.title}
@@ -292,7 +292,7 @@ function FolderActionsDialog({
                   <li key={a.id}>
                     <button
                       type="button"
-                      className="block w-full truncate p-2 text-left hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
+                      className="block w-full whitespace-normal break-words p-2 text-left hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
                       onClick={() =>
                         setPicked({ id: a.id, slug: a.slug, title: a.titleIta ?? a.title })
                       }

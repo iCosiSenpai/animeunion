@@ -4,11 +4,19 @@ import { AnimeCard } from '@/components/anime/anime-card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { trpc } from '@/lib/trpc';
-import type { AnimeSummary, FeaturedAnime, HomeSectionId, Season } from '@animeunion/shared';
+import type {
+  AnimeSummary,
+  FeaturedAnime,
+  HomeSectionId,
+  PaginatedAnime,
+  Season,
+} from '@animeunion/shared';
 import {
   Calendar,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   Clock,
   Newspaper,
   Play,
@@ -97,6 +105,7 @@ function Section({
   isLoading,
   href,
   carouselClassName,
+  loadMore,
 }: {
   title: string;
   icon: ElementType;
@@ -104,18 +113,88 @@ function Section({
   isLoading: boolean;
   href?: string;
   carouselClassName?: string;
+  /** Carica la pagina successiva (sezioni paginate): abilita "Carica altri" da espanse. */
+  loadMore?: (page: number) => Promise<PaginatedAnime>;
 }) {
-  if (!isLoading && items.length === 0) {
+  const [expanded, setExpanded] = useState(false);
+  const [extra, setExtra] = useState<AnimeSummary[]>([]);
+  const [nextPage, setNextPage] = useState(2);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+
+  // Dedup difensivo (una pagina potrebbe ripetere un id al confine): mantiene le key React uniche.
+  const seen = new Set<string>();
+  const all = [...items, ...extra].filter((a) => (seen.has(a.id) ? false : seen.add(a.id)));
+
+  if (!isLoading && all.length === 0) {
     return null;
   }
+
+  // Espandere ha senso se possiamo caricare altro (paginata) o se c'e' gia' piu' di una riga.
+  const canExpand = all.length > 0 && (loadMore != null || all.length > 6);
+
+  async function onLoadMore() {
+    if (!loadMore) {
+      return;
+    }
+    setLoadingMore(true);
+    try {
+      const res = await loadMore(nextPage);
+      setExtra((prev) => [...prev, ...res.data]);
+      setNextPage((p) => p + 1);
+      setHasMore(res.meta.hasMore);
+    } finally {
+      setLoadingMore(false);
+    }
+  }
+
   return (
     <section className="space-y-1">
-      <SectionHeader icon={icon} title={title} href={href} />
+      <SectionHeader
+        icon={icon}
+        title={title}
+        href={expanded ? undefined : href}
+        action={
+          canExpand ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1 text-muted-foreground"
+              onClick={() => setExpanded((e) => !e)}
+            >
+              {expanded ? (
+                <>
+                  Mostra di meno <ChevronUp className="h-4 w-4" />
+                </>
+              ) : (
+                <>
+                  Mostra di più <ChevronDown className="h-4 w-4" />
+                </>
+              )}
+            </Button>
+          ) : undefined
+        }
+      />
       {isLoading ? (
         <CardCarouselSkeleton count={6} className={carouselClassName} />
+      ) : expanded ? (
+        <div className="space-y-4">
+          <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6">
+            {all.map((item) => (
+              <AnimeCard key={item.id} anime={item} />
+            ))}
+          </div>
+          {loadMore && hasMore ? (
+            <div className="flex justify-center">
+              <Button variant="outline" size="sm" onClick={onLoadMore} disabled={loadingMore}>
+                {loadingMore ? 'Carico…' : 'Carica altri'}
+              </Button>
+            </div>
+          ) : null}
+        </div>
       ) : (
         <CardCarousel className={carouselClassName}>
-          {items.slice(0, 12).map((item) => (
+          {all.slice(0, 12).map((item) => (
             <AnimeCard key={item.id} anime={item} />
           ))}
         </CardCarousel>
@@ -346,6 +425,7 @@ export function HomeView() {
   const year = now.getFullYear();
   const todayWeekday = JS_DAY_TO_WEEKDAY[now.getDay()] ?? 'LUNEDI';
 
+  const utils = trpc.useUtils();
   const week = trpc.calendar.week.useQuery();
   const seasonal = trpc.catalog.bySeason.useQuery({ season, year, page: 1 });
   const topRated = trpc.catalog.topRated.useQuery({ page: 1 });
@@ -403,6 +483,7 @@ export function HomeView() {
         items={seasonal.data?.data ?? []}
         isLoading={seasonal.isLoading}
         href={`/catalog?season=${season}&year=${year}`}
+        loadMore={(page) => utils.catalog.bySeason.fetch({ season, year, page })}
       />
     ),
     topRated: (
@@ -411,6 +492,7 @@ export function HomeView() {
         icon={TrendingUp}
         items={topRated.data?.data ?? []}
         isLoading={topRated.isLoading}
+        loadMore={(page) => utils.catalog.topRated.fetch({ page })}
       />
     ),
     recentlyAdded: (
@@ -419,6 +501,7 @@ export function HomeView() {
         icon={Clock}
         items={recent.data?.data ?? []}
         isLoading={recent.isLoading}
+        loadMore={(page) => utils.catalog.recent.fetch({ page })}
       />
     ),
     news: (

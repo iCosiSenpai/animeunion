@@ -57,6 +57,43 @@ function formatSize(bytes: number | null): string {
   return `${n.toFixed(n >= 10 || i === 0 ? 0 : 1)} ${units[i]}`;
 }
 
+// Una cartella di "contenuto" stagionale per nome (Season NN, Specials, OVA/ONA, Movie): per
+// pre-compilare la ricerca risaliamo oltre queste fino al nome della serie.
+function isContentSegment(name: string): boolean {
+  const n = name.trim().toLowerCase();
+  return (
+    /^(season|stagione)\s*\d+$/.test(n) ||
+    /^specials?$/.test(n) ||
+    /^(ova|ona)s?(\s*\d+)?$/.test(n) ||
+    /^(movie|film)s?$/.test(n)
+  );
+}
+
+// Pulisce un nome cartella/file per usarlo come query: toglie estensione, separatori e tag tra
+// parentesi (anno/qualita'/gruppo fansub).
+function cleanSeed(raw: string): string {
+  return raw
+    .replace(/\.[a-z0-9]{2,4}$/i, '')
+    .replace(/[([{].*?[)\]}]/g, ' ')
+    .replace(/[._]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Seme per la ricerca quando si apre il dialog "Collega"/"Relink": il titolo della serie ricavato
+ * dal percorso. Per un file parte dalla cartella che lo contiene; risale finche' incontra cartelle
+ * di contenuto (Season NN, Specials...) cosi' "Season 01" usa il nome della serie (cartella padre).
+ */
+function deriveSearchSeed(entry: FileEntry): string {
+  const segs = entry.path.split(/[\\/]/).filter(Boolean);
+  let idx = entry.type === 'file' ? segs.length - 2 : segs.length - 1;
+  while (idx > 0 && segs[idx] != null && isContentSegment(segs[idx] as string)) {
+    idx -= 1;
+  }
+  return cleanSeed(segs[idx] ?? entry.name);
+}
+
 /** Collega un file orfano a un episodio: cerca la serie, scegli l'episodio, sposta+marca. */
 function RelinkDialog({
   file,
@@ -67,7 +104,7 @@ function RelinkDialog({
   onClose: () => void;
   onDone: () => void;
 }) {
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(() => deriveSearchSeed(file));
   const [slug, setSlug] = useState<string | null>(null);
   const searchQ = trpc.catalog.search.useQuery(
     { query: search },
@@ -190,7 +227,7 @@ function FolderActionsDialog({
   /** La cartella ha piu' stagioni: dopo l'eliminazione si passa al flusso correlazioni. */
   onMultiSeasonRedownload: (slug: string) => void;
 }) {
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(() => deriveSearchSeed(folder));
   const [picked, setPicked] = useState<{ id: string; slug: string; title: string } | null>(null);
   // Sotto-vista "collega senza scaricare": scelta lingua, mappatura per numero episodio.
   const [externalMode, setExternalMode] = useState(false);

@@ -207,7 +207,47 @@ notifiche); **17.8** `nfo-service` sidecar `.nfo`+poster/fanart (config `writeNf
 scaffolding E2E Playwright (job CI non bloccante); **17.11** release v0.10.0. **316 test** (+25 nel
 batch), lint/typecheck/build web verdi. Batch COMPLETO. _Aggiornare qui a ogni step._
 
-## Stato attuale (2026-06-27)
+## Stato attuale (2026-06-28)
+
+**Batch "Auto-download affidabile + fix gestore file" (branch
+`feat/auto-download-affidabile-e-fix-gestore-file`, post-v0.10.0, non ancora merge/tag):** raccolto
+dall'uso reale, due bug gravi + rifiniture. Piano in
+[~/.claude/plans/ide-opened-file-the-user-opened-the-purring-karp.md]. **11 step, un commit ciascuno,
+325 test (+9), lint/typecheck/build web verdi.**
+
+- **Step 1 (P0 — perdita dati gestore file):** collegando come esterni i "bonus stage" di Konosuba i
+  file sparivano dal NAS. **Forensics sui log del NAS (confermato):** `POST /trpc/files.remove` sulla
+  cartella `Kono Subarashii...3 Bonus Stage` (200) l'ha **cancellata fisicamente** — il path distruttivo
+  "Ri-scarica (elimina e riscarica)" → `files.remove` → `rm(recursive,force)` **prima** del re-download;
+  `linkExternalFolder` e' provatamente non distruttivo. Fix: "Ri-scarica" ora **riaccoda soltanto** (i
+  nuovi file sovrascrivono, niente eliminazione anticipata) e `files.remove` **rifiuta** cartelle/file
+  con episodi `external` (di proprieta' dell'utente). +1 test.
+- **Step 2:** "Salva" Impostazioni azzera il banner "Modifiche non salvate" (refetch+reset draft, fix
+  anche per i segreti mascherati). **Step 3:** toast accodamento leggibili ("Episodio/N episodi in coda",
+  niente id coda). **Step 4:** sfondo wallpaper visibile su tema chiaro (overlay velo theme-aware
+  55%/80%). **Step 5:** popup gestore file, i titoli lunghi vanno a capo invece di essere tagliati.
+- **Step 6:** tag "Extra" anche nelle sottocartelle (`isExtraEntry` depth-agnostic per nome) + conteggio
+  stagioni robusto (nuovo `FileEntry.content`, fonte unica → niente falso "2 stagioni"). +1 test.
+  **Step 7:** ricerca "Collega"/"Relink" pre-compilata col titolo della serie (cartella padre).
+- **Step 8:** stato download **disk-aware/self-healing** — un file cancellato a mano sul NAS non resta
+  "gia' scaricato": `addMissing`/`addEpisode` azzerano e riaccodano se il file manca (root presente);
+  `library.scan` riconcilia anche gli `external` mancanti; guardia "root presente" anti-mass-reset a
+  NAS offline. +3 test.
+- **Step 9 (auto-download):** migrazione **0014** (`follow.auto_download_from_ep`, backfill al max
+  episodio gia' su disco). **Forward-only:** la soglia si fissa all'attivazione (nuovo follow /
+  `setAutoDownload(true)`), `addMissingImpl` salta gli episodi `<= soglia` solo in auto. **Eligibilita'
+  dallo stato del seguito** (non piu' da `anime.status`): `dropped` mai, `watching`/override si, refresh
+  **sempre** (un anime in corso marcato COMPLETED per errore si auto-corregge invece di restare escluso
+  per sempre = causa del seguito che non scaricava i nuovi episodi). +4 test.
+- **Step 10:** stati seguiti con comportamento distinto (season-watcher esclude anche `on_hold`) e
+  toggle auto-download **sempre usabile** (non piu' grigio per le serie concluse, solo nota
+  informativa). +1 test. **Step 11:** home "Mostra di più" per sezione con "Carica altri" (paginazione
+  on-demand `utils.catalog.*.fetch`).
+
+**Resta:** verifiche manuali a runtime; merge `main` + deploy NAS (l'utente deve **ri-scaricare** i
+bonus stage Konosuba persi). _Aggiornare a ogni step._
+
+## Stato precedente (2026-06-27)
 
 **Batch "Potenziamenti diffusi" → v0.10.0 (branch `feat/potenziamenti-diffusi`, COMPLETO Step 0-17,
 versione bumpata; restano merge `main` + tag + deploy NAS):** piano vivo in [plan/potenziamenti-diffusi.md](plan/potenziamenti-diffusi.md)

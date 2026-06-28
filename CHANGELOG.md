@@ -12,6 +12,39 @@ e il progetto aderisce al [Semantic Versioning](https://semver.org/lang/it/).
 - GitHub Pages (landing pubblica + spazio mascotte).
 - Esecuzione degli E2E Playwright in CI (scaffolding già presente).
 
+## [0.11.0] - 2026-06-28
+
+Batch "Auto-download affidabile + fix gestore file": due bug gravi raccolti dall'uso reale
+(auto-download che non prendeva i nuovi episodi; perdita di file nel gestore file) più rifiniture
+diffuse.
+
+### Fixed
+- **Perdita dati nel gestore file (P0):** il pulsante "Ri-scarica" cancellava la cartella prima di
+  riscaricare (`files.remove` → `rm` ricorsivo); per uno Special non classificato i file venivano
+  persi. Ora "Ri-scarica" riaccoda soltanto (i nuovi file sovrascrivono i vecchi, niente eliminazione
+  anticipata) e `files.remove` rifiuta cartelle/file collegati come esterni.
+- **Auto-download dei nuovi episodi:** l'eligibilità dipendeva dallo stato d'onda dell'anime, quindi
+  un anime in corso marcato per errore COMPLETED veniva escluso per sempre. Ora dipende dallo stato
+  del seguito (con refresh sempre) ed è forward-only (migrazione 0014): accodati solo i nuovi episodi
+  dal momento dell'attivazione, mai il backlog già su disco.
+- Stato download disk-aware: un file cancellato a mano (es. sul NAS) non resta più "già scaricato" e
+  può essere riscaricato; reset protetto dalla presenza della root (niente azzeramenti a disco offline).
+- Gestore file: tag "Extra" riconosciuto anche nelle sottocartelle (backdrops/themes dentro una
+  stagione) e conteggio stagioni robusto (niente falso "2 stagioni"); titoli lunghi nei popup che
+  vanno a capo invece di essere tagliati.
+- Impostazioni: "Salva" azzera il banner "Modifiche non salvate" anche per i campi mascherati.
+- Sfondo wallpaper visibile sul tema chiaro (velo theme-aware).
+- Toast di accodamento leggibili ("Episodio/N episodi in coda", niente id interno).
+
+### Changed
+- Stati dei seguiti con comportamento distinto (download e notifiche nuova stagione per stato) e
+  toggle "scarica automaticamente" sempre usabile (non più disabilitato per le serie concluse).
+- Ricerca "Collega"/"Relink" del gestore file pre-compilata con il titolo della serie.
+
+### Added
+- Home: pulsante "Mostra di più" per sezione, con "Carica altri" (paginazione on-demand) per le
+  sezioni paginate.
+
 ## [0.10.0] - 2026-06-27
 
 Batch "Potenziamenti diffusi": bug-fix e potenziamenti raccolti dall'uso reale (dettaglio anime,

@@ -36,7 +36,9 @@ export function AppTheme() {
         className="absolute inset-0 bg-cover bg-center"
         style={{ backgroundImage: `url(${backgroundUrl})` }}
       />
-      <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
+      {/* Velo theme-aware: su tema chiaro --background e' quasi bianco, all'80% slaverebbe il
+          wallpaper; su scuro resta denso. Le card usano --card opaco -> il testo resta leggibile. */}
+      <div className="absolute inset-0 bg-background/55 backdrop-blur-sm dark:bg-background/80" />
     </div>
   );
 }

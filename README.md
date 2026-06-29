@@ -163,15 +163,30 @@ dell'app: è una regola di sicurezza dei browser (Chrome/Firefox/Safari), uguale
 Su `http://` puro in LAN queste funzioni restano disattivate e nelle Impostazioni vedrai una nota che
 spiega come attivarle — tutto il resto dell'app funziona comunque.
 
+### Quale via scegliere?
+
+| Se vuoi… | Soluzione consigliata | Perché |
+|---|---|---|
+| Solo accesso privato (tu/famiglia) | **Tailscale** | Più semplice in assoluto: niente dominio né porte aperte sul router, HTTPS automatico |
+| Accesso pubblico da un tuo dominio | **Cloudflare Tunnel** | Nessuna porta aperta verso Internet, TLS gestito da Cloudflare |
+| Hai già un reverse proxy / dominio | **Reverse proxy + TLS** | Caddy, Nginx Proxy Manager o il reverse proxy DSM di Synology |
+
+> 🔒 Se esponi l'app **pubblicamente**, imposta prima il **passcode** della web UI
+> (Impostazioni → Sicurezza): è mono-utente e collegata al tuo account AnimeUnion.
+
 ### Esporre l'app in HTTPS (scegli una via)
 
-- **Tailscale** (rete privata, zero config DNS): col container/host Tailscale, esponi la porta web:
-  ```bash
-  tailscale serve --bg 7979
-  ```
-  Accedi poi da `https://<nome-host>.<tua-tailnet>.ts.net`. (In alternativa `tailscale cert` +
-  reverse proxy.) Il traffico è cifrato end-to-end e l'origine è HTTPS → push/PWA attive.
-- **Cloudflare Tunnel** (`cloudflared`): crea un tunnel e instrada un hostname pubblico verso il web:
+- **Tailscale** (rete privata, zero config DNS) — la via più rapida:
+  1. Installa Tailscale sull'host/NAS e fai il login (stessa tailnet del tuo telefono/PC).
+  2. Nella [admin console](https://login.tailscale.com/admin/dns) abilita **MagicDNS** e
+     **HTTPS Certificates** (una volta sola — serve a Tailscale per emettere i certificati).
+  3. Esponi la porta web:
+     ```bash
+     tailscale serve --bg 7979
+     ```
+  Accedi da `https://<nome-host>.<tua-tailnet>.ts.net`. Il traffico è cifrato end-to-end e
+  l'origine è HTTPS → push/PWA attive.
+- **Cloudflare Tunnel** (`cloudflared`) — accesso pubblico da un tuo dominio, senza aprire porte:
   ```yaml
   # config.yml di cloudflared
   tunnel: <ID>
@@ -183,7 +198,12 @@ spiega come attivarle — tutto il resto dell'app funziona comunque.
   ```
   Cloudflare termina il TLS → accedi via `https://animeunion.tuodominio.com`.
 - **Reverse proxy con TLS** (Caddy, Nginx Proxy Manager, reverse proxy di Synology/DSM): punta un
-  hostname HTTPS (Let's Encrypt) al servizio `web` sulla porta `7979`.
+  hostname HTTPS (Let's Encrypt) al servizio `web` sulla porta `7979`. Esempio con Caddy (due righe):
+  ```caddyfile
+  animeunion.tuodominio.com {
+      reverse_proxy <ip-nas>:7979
+  }
+  ```
 
 > Dopo aver attivato l'HTTPS, se imposti `CORS_ORIGINS` aggiungi l'origine https (es.
 > `CORS_ORIGINS=https://animeunion.tuodominio.com`). Le chiavi VAPID per le push vengono generate e
@@ -191,11 +211,28 @@ spiega come attivarle — tutto il resto dell'app funziona comunque.
 
 ### Installare la PWA e attivare le push
 
-1. Apri l'app via **`https://…`**.
+1. Apri l'app via **`https://…`** (l'indirizzo sicuro, non l'IP `http://`).
 2. **Installa**: dal menu del browser "Installa app" / "Aggiungi a schermata Home" (o il bottone
    **Installa app** in Impostazioni → Notifiche, quando disponibile).
 3. **Push**: Impostazioni → Notifiche → **Attiva push** → concedi il permesso. Da quel momento ricevi
-   le notifiche del browser anche ad app chiusa; il click apre la scheda giusta.
+   le notifiche del browser anche ad app chiusa; il click apre la scheda giusta. Con **Invia notifica
+   di test** verifichi subito che arrivino.
+
+> 📱 **iPhone/iPad (iOS 16.4+)**: le notifiche push web arrivano **solo dopo** aver aggiunto l'app
+> alla schermata Home (passo 2) e averla aperta **da lì** — la scheda di Safari non le riceve. Apri
+> quindi la PWA installata e attiva le push da dentro l'app.
+
+### Non funziona?
+
+- **Il pulsante "Attiva push" è grigio o assente** → non sei in un contesto sicuro. Controlla che
+  l'URL inizi con `https://` (oppure `localhost`); su `http://<ip>` la funzione resta disattivata per
+  regola del browser, non dell'app.
+- **Le push non arrivano su iPhone** → verifica iOS 16.4+ e di aver aperto l'app **installata** (non
+  la scheda di Safari); poi riattiva le push da lì e prova **Invia notifica di test**.
+- **Errore CORS dopo aver messo il proxy** → aggiungi l'origine `https://…` a `CORS_ORIGINS` e
+  riavvia i container.
+- **Manca solo la push, il resto funziona** → è il comportamento atteso su `http://` in LAN: usa la
+  campanella in-app o Telegram, oppure attiva l'HTTPS come sopra.
 
 ---
 

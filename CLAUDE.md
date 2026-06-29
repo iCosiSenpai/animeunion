@@ -29,10 +29,13 @@ Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
 
 ## Roadmap verso v0.12.0 — "Super rinforzo" (COMPLETO)
 
-> **Batch COMPLETO (Step 0-11), versione bumpata a 0.12.0.** Piano vivo (durevole, canonico):
+> **Batch COMPLETO (Step 0-11), versione bumpata a 0.12.0. RILASCIATO su `main` + tag `v0.12.0`
+> pushati su `origin` (2026-06-29).** Piano vivo (durevole, canonico):
 > **[plan/super-rinforzo.md](plan/super-rinforzo.md)** (gitignored). Branch: `feat/super-rinforzo` da
-> `main`. **Restano solo:** merge in `main`, tag `v0.12.0` (GHCR multi-arch), deploy NAS e le
-> verifiche manuali a runtime. **Nessun lavoro di sviluppo aperto.**
+> `main` (gia' ff-merged in `main` a `5248588`). Push: `d052235..5248588` su `main` + tag `v0.12.0`
+> → workflow GHCR multi-arch "Docker Publish" avviato (run `28389552192`). **Restano solo:** deploy
+> NAS (aggiornare `api`+`web` dalle immagini GHCR) e le verifiche manuali a runtime. **Nessun lavoro
+> di sviluppo aperto.**
 >
 > **Cosa è stato fatto (Step 0-11):** **0** governance (branch, piano in `plan/`, puntatori).
 > **1** pragmas SQLite (`busy_timeout`+`synchronous=NORMAL`; error mapping già coerente). **2** guardia
@@ -231,7 +234,8 @@ batch), lint/typecheck/build web verdi. Batch COMPLETO. _Aggiornare qui a ogni s
 ## Stato attuale (2026-06-29)
 
 **Batch "Super rinforzo" → v0.12.0 (branch `feat/super-rinforzo`, COMPLETO Step 0-11, versione
-bumpata; restano merge `main` + tag `v0.12.0` + deploy NAS):** rinforzo trasversale di robustezza,
+bumpata; merge `main` + tag `v0.12.0` + push `origin` FATTI il 2026-06-29, GHCR in build; resta solo
+deploy NAS):** rinforzo trasversale di robustezza,
 sicurezza dei dati e qualità su download/ricerca/gestore file/backend/frontend, su richiesta
 dell'utente ("andiamo pesante"). Piano vivo in [plan/super-rinforzo.md](plan/super-rinforzo.md)
 (gitignored). Decisioni utente (plan mode): versione **0.12.0**; download **resta a 1** (Regola #13)
@@ -253,8 +257,9 @@ dell'utente ("andiamo pesante"). Piano vivo in [plan/super-rinforzo.md](plan/sup
   vetrina `PremiumUpsell` (no gating); helper `toastError` coerente; wallpaper via var CSS;
   Impostazioni con toggle verifica/cestino + nuova sezione **Backup**.
 
-**342 test (+26 nel batch)**, lint/typecheck/build web verdi. **Resta:** merge `main` + tag `v0.12.0`
-(GHCR) + deploy NAS + verifiche manuali a runtime. _Aggiornare a ogni step._
+**342 test (+26 nel batch)**, lint/typecheck/build web verdi. **Merge `main` + tag `v0.12.0` + push
+`origin` FATTI (2026-06-29):** workflow GHCR multi-arch "Docker Publish" avviato (run `28389552192`).
+**Resta solo:** deploy NAS + verifiche manuali a runtime. _Aggiornare a ogni step._
 
 ## Stato precedente (2026-06-28)
 

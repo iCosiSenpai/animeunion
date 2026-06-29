@@ -151,6 +151,25 @@ describe('FileManagerService', () => {
     expect((await stat(join(root, 'New', 'b.mp4'))).isFile()).toBe(true);
   });
 
+  it('rename e move rifiutano la sovrascrittura di un elemento esistente (anti-perdita-dati)', async () => {
+    await writeFile(join(root, 'uno.mp4'), 'AAA');
+    await writeFile(join(root, 'due.mp4'), 'BBB');
+
+    // Rinominare "uno.mp4" in "due.mp4" (gia' esistente) e' bloccato: niente clobber.
+    await expect(service.rename(join(root, 'uno.mp4'), 'due.mp4')).rejects.toThrow(/esiste/i);
+    expect((await stat(join(root, 'uno.mp4'))).size).toBe(3); // 'AAA' intatto
+    expect((await stat(join(root, 'due.mp4'))).size).toBe(3); // 'BBB' intatto
+
+    // Spostare "uno.mp4" in una cartella che contiene gia' un "uno.mp4" e' bloccato.
+    await mkdir(join(root, 'Dest'), { recursive: true });
+    await writeFile(join(root, 'Dest', 'uno.mp4'), 'CCCCC');
+    await expect(service.move(join(root, 'uno.mp4'), join(root, 'Dest'))).rejects.toThrow(
+      /destinazione/i,
+    );
+    expect((await stat(join(root, 'uno.mp4'))).size).toBe(3); // origine intatta
+    expect((await stat(join(root, 'Dest', 'uno.mp4'))).size).toBe(5); // 'CCCCC' intatto
+  });
+
   it('remove elimina i file e rifiuta operazioni fuori dalle radici', async () => {
     await writeFile(join(root, 'c.mp4'), 'x');
     await service.remove(join(root, 'c.mp4'));

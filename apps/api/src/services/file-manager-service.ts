@@ -63,6 +63,16 @@ function isExtraFolderName(name: string): boolean {
   return EXTRA_FOLDER_NAMES.has(name.trim().toLowerCase());
 }
 
+/** Vero se esiste già qualcosa (file o cartella) al percorso `p`. */
+async function pathExists(p: string): Promise<boolean> {
+  try {
+    await stat(p);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // Nomi file/cartella sicuri: niente separatori di percorso né caratteri illegali su NTFS.
 const ILLEGAL_NAME = /[/\\:*?"<>|]/;
 
@@ -393,6 +403,11 @@ export function createFileManagerService(deps: FileManagerDeps): FileManagerServ
         throw new PreconditionError('Non puoi rinominare una cartella radice.');
       }
       const dest = assertInside(join(dirname(target), newName));
+      // Guardia anti-sovrascrittura: `fs.rename` clobbererebbe silenziosamente un elemento esistente.
+      // (Coerente con `renameToScheme`, che già salta se la destinazione esiste.)
+      if (dest !== target && (await pathExists(dest))) {
+        throw new PreconditionError('Esiste già un elemento con questo nome nella cartella.');
+      }
       await atomicMove(target, dest, logger);
       syncMovedPaths(target, dest);
       return { ok: true, path: dest };
@@ -416,6 +431,10 @@ export function createFileManagerService(deps: FileManagerDeps): FileManagerServ
       const dest = assertInside(join(dir, basename(target)));
       if (dest === target) {
         return { ok: true, path: dest };
+      }
+      // Guardia anti-sovrascrittura: non spostare sopra un elemento già presente alla destinazione.
+      if (await pathExists(dest)) {
+        throw new PreconditionError('La destinazione contiene già un elemento con questo nome.');
       }
       await atomicMove(target, dest, logger);
       syncMovedPaths(target, dest);

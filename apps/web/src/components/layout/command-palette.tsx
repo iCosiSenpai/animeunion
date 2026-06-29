@@ -11,6 +11,7 @@ import {
   CalendarClock,
   Compass,
   Crown,
+  Database,
   Download,
   Film,
   FolderCog,
@@ -251,6 +252,12 @@ export function CommandPalette() {
       label: 'Impostazioni: Integrazioni',
       icon: <Webhook className="h-4 w-4" />,
       onSelect: () => go('/settings?section=integrazioni'),
+    },
+    {
+      id: 'settings-backup',
+      label: 'Impostazioni: Backup',
+      icon: <Database className="h-4 w-4" />,
+      onSelect: () => go('/settings?section=backup'),
     },
     {
       id: 'settings-premium',

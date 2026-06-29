@@ -1,6 +1,7 @@
 'use client';
 
 import { AccentPicker } from '@/components/settings/accent-picker';
+import { BackupSection } from '@/components/settings/backup-section';
 import { FolderInput } from '@/components/settings/folder-picker';
 import { HomeLayoutSection } from '@/components/settings/home-layout-section';
 import { InstallButton } from '@/components/settings/install-button';
@@ -37,6 +38,7 @@ import {
   CalendarClock,
   Compass,
   Crown,
+  Database,
   ExternalLink,
   FolderDown,
   Languages,
@@ -130,6 +132,7 @@ type SectionId =
   | 'home'
   | 'sicurezza'
   | 'integrazioni'
+  | 'backup'
   | 'premium'
   | 'avanzate';
 
@@ -143,6 +146,7 @@ const SECTIONS: { id: SectionId; label: string; icon: LucideIcon }[] = [
   { id: 'home', label: 'Home', icon: LayoutGrid },
   { id: 'sicurezza', label: 'Sicurezza', icon: Shield },
   { id: 'integrazioni', label: 'Integrazioni', icon: Webhook },
+  { id: 'backup', label: 'Backup', icon: Database },
   { id: 'premium', label: 'Premium', icon: Crown },
   { id: 'avanzate', label: 'Avanzate', icon: SlidersHorizontal },
 ];
@@ -525,6 +529,52 @@ export function SettingsView() {
                 </a>
               </div>
             </Field>
+            <Field
+              label="Verifica integrità download"
+              hint="Dopo ogni download, controlla con ffmpeg che il file sia un video riproducibile (cattura le corruzioni). Aggiunge un po’ di lavoro alla CPU per ogni file."
+            >
+              <Select
+                value={draft.verifyDownloads ? 'on' : 'off'}
+                onValueChange={(v) => update('verifyDownloads', v === 'on')}
+              >
+                <SelectTrigger className="w-40">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="on">Attiva</SelectItem>
+                  <SelectItem value="off">Disattiva</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field
+              label="Cestino eliminazioni"
+              hint="Le eliminazioni dal gestore file finiscono nel cestino (recuperabili) invece di essere cancellate subito."
+            >
+              <Select
+                value={draft.trashEnabled ? 'on' : 'off'}
+                onValueChange={(v) => update('trashEnabled', v === 'on')}
+              >
+                <SelectTrigger className="w-40">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="on">Attivo</SelectItem>
+                  <SelectItem value="off">Disattivo</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field
+              label="Pulizia cestino"
+              hint="Dopo quanti giorni svuotare definitivamente le voci del cestino."
+            >
+              <Input
+                type="number"
+                min={1}
+                className="w-32"
+                value={draft.trashRetentionDays}
+                onChange={(e) => update('trashRetentionDays', Number(e.target.value))}
+              />
+            </Field>
           </Section>
 
           <Section id="pianificazione" hidden={active !== 'pianificazione'} title="Pianificazione">
@@ -869,6 +919,10 @@ export function SettingsView() {
 
           <div className={cn(active !== 'sicurezza' && 'hidden')}>
             <SecuritySection />
+          </div>
+
+          <div className={cn(active !== 'backup' && 'hidden')}>
+            <BackupSection />
           </div>
 
           <div className={cn(active !== 'premium' && 'hidden')}>

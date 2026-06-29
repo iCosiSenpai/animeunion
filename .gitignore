@@ -22,6 +22,8 @@ out/
 credentials*.json
 service-account*.json
 secrets*.json
+# Credenziali locali (es. login SSH del NAS): MAI committare
+.secrets/
 
 # Database SQLite (locale, generato a runtime)
 *.db

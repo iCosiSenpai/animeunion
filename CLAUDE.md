@@ -1004,6 +1004,10 @@ potrebbe bloccare l'accesso, da fare con una scelta UX esplicita.
   Il prossimo step (STEP 6 — Docker/PWA) parte da `main`.
 - **Credenziali**: email/password in `.env` (gitignored); token in SQLite (tabella `auth`). Mai
   segreti nel codice/compose. L'utente usa l'account `lookatale95@gmail.com`.
+- **Credenziali NAS (deploy)**: il login SSH del NAS sta in **`.secrets/nas.md`** (cartella
+  `.secrets/` **gitignored**, vedi `.gitignore`). Lì dentro host/utente/password. **Mai** copiare
+  quei valori in file tracciati (CLAUDE.md, commit, compose). In alternativa al login esplicito,
+  l'alias `ssh nas` (a chiave) resta valido dove configurato (vedi memoria `nas-deployment.md`).
 - **Verifica sempre**: `npm run lint` + `npm run typecheck` + `npm run test` verdi prima di committare.
 - **Download engine**: il file MP4 viene scaricato in `<target>.part.<queueId>` e rinominato
   atomicamente (`fs.rename`) al path finale `SXXEXY.<lang>.mp4` SUBITO dopo il singolo download.

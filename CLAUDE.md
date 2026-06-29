@@ -27,6 +27,25 @@ Shared: `packages/shared` (zod + interfaccia `AnimeSource`). Video: ffmpeg-stati
 Scheduler: setInterval (node-cron non usato). Lint: Biome. Test: Vitest (+ Playwright in futuro).
 Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
 
+## Roadmap verso v0.12.0 — "Super rinforzo" (IN CORSO)
+
+> **Batch ATTIVO.** Piano vivo (durevole, canonico): **[plan/super-rinforzo.md](plan/super-rinforzo.md)**
+> (gitignored). Branch: `feat/super-rinforzo` da `main`. Rinforzo trasversale post-v0.11.0:
+> robustezza/sicurezza dati/qualità, **non** nuove feature di scoperta. **Per ogni step si entra in
+> plan mode, si approfondisce nel piano, si esce e si implementa** (Regola #14/#15). L'AVANZAMENTO
+> nel piano dice il prossimo step.
+>
+> **Fasi (12 step):** A — fondamenta backend (pragmas SQLite, error mapping; guardia
+> anti-sovrascrittura gestore file). B — download robustezza, **resta a 1** (verifica integrità video
+> ffmpeg-static; re-risoluzione URL scaduti). C — ricerca FTS5 (accenti + ranking + title eng/jpn).
+> D — sicurezza dati (cestino/undo eliminazioni; backup automatico DB). E — Premium upsell (tag
+> cliccabile → animeunion.tv/premium + vetrina, **no gating**). F — frontend perf/polish. G —
+> coerenza Impostazioni + release v0.12.0. Nuovi comportamenti **settabili in Impostazioni** dove
+> possibile (`verifyDownloads`, `trashEnabled`/`trashRetentionDays`, `dbBackupEnabled`/`dbBackupRetention`).
+>
+> **Stato batch:** Step 0 (governance) fatto — branch creato, piano in `plan/`, puntatori CLAUDE.md.
+> _Aggiornare qui a ogni step._
+
 ## Roadmap verso v0.10.0 — "Potenziamenti diffusi" (COMPLETO)
 
 > **Batch COMPLETO (Step 0-17), versione bumpata a 0.10.0.** Piano vivo (durevole):

@@ -94,3 +94,24 @@ export const fileLinkExternalResultSchema = z.object({
   unmatched: z.number().int(),
 });
 export type FileLinkExternalResult = z.infer<typeof fileLinkExternalResultSchema>;
+
+/** Una voce del cestino: un file/cartella eliminato ma recuperabile (soft-delete). */
+export const trashEntrySchema = z.object({
+  /** Id interno (nome della sotto-cartella in `.trash`). */
+  id: z.string(),
+  /** Nome originale dell'elemento. */
+  name: z.string(),
+  /** Percorso assoluto da cui è stato eliminato (per il ripristino). */
+  originalPath: z.string(),
+  /** Quando è stato spostato nel cestino (ISO). */
+  deletedAt: z.string(),
+  type: z.enum(['dir', 'file']),
+  /** Dimensione in byte (solo per i file; null per le cartelle). */
+  size: z.number().nullable(),
+});
+export type TrashEntry = z.infer<typeof trashEntrySchema>;
+
+export const trashListSchema = z.object({ entries: trashEntrySchema.array() });
+export type TrashList = z.infer<typeof trashListSchema>;
+
+export const trashRestoreInputSchema = z.object({ id: z.string().min(1) });

@@ -11,6 +11,8 @@ import {
   fileRelinkInputSchema,
   fileRenameInputSchema,
   fileRenameToSchemeInputSchema,
+  trashListSchema,
+  trashRestoreInputSchema,
 } from '@animeunion/shared';
 import { publicProcedure, router } from '../trpc';
 
@@ -62,4 +64,17 @@ export const filesRouter = router({
     .input(filePruneEmptyInputSchema)
     .output(fileOpResultSchema)
     .mutation(({ ctx, input }) => ctx.services.files.pruneEmpty(input.path)),
+
+  trashList: publicProcedure
+    .output(trashListSchema)
+    .query(({ ctx }) => ctx.services.files.trashList()),
+
+  trashRestore: publicProcedure
+    .input(trashRestoreInputSchema)
+    .output(fileOpResultSchema)
+    .mutation(({ ctx, input }) => ctx.services.files.trashRestore(input.id)),
+
+  trashEmpty: publicProcedure
+    .output(fileOpResultSchema)
+    .mutation(({ ctx }) => ctx.services.files.trashEmpty()),
 });

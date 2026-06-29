@@ -1,4 +1,5 @@
-import { readdir, rm, rmdir, stat } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { readFile, readdir, rm, rmdir, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import type {
   FileEntry,
@@ -6,6 +7,8 @@ import type {
   FileList,
   FileOpResult,
   Language,
+  TrashEntry,
+  TrashList,
 } from '@animeunion/shared';
 import { and, eq, gte, lt, or } from 'drizzle-orm';
 import type { Db } from '../db';
@@ -17,6 +20,19 @@ import type { ConfigService } from './config-service';
 import type { RenamerService } from './renamer-service';
 
 const VIDEO_EXTENSIONS = new Set(['.mp4', '.mkv', '.avi', '.mov', '.webm']);
+
+// Cartella cestino dentro ogni root configurata. Inizia con '.' → già esclusa dal `list`.
+const TRASH_DIR = '.trash';
+const TRASH_INFO = '.trashinfo.json';
+// Id voce cestino sicuro: `<timestamp>_<hex>`. Vincola l'input di restore (no path traversal).
+const TRASH_ID = /^\d+_[a-f0-9]+$/;
+
+interface TrashInfo {
+  originalPath: string;
+  name: string;
+  deletedAt: string;
+  type: 'dir' | 'file';
+}
 
 function isVideo(name: string): boolean {
   const dot = name.lastIndexOf('.');
@@ -149,6 +165,14 @@ export interface FileManagerService {
   renameToScheme(path: string): Promise<FileOpResult>;
   /** Rimuove ricorsivamente le cartelle vuote sotto `path`. */
   pruneEmpty(path: string): Promise<FileOpResult>;
+  /** Elenca le voci del cestino (file/cartelle eliminati ma recuperabili). */
+  trashList(): Promise<TrashList>;
+  /** Ripristina una voce del cestino al suo percorso originale. */
+  trashRestore(id: string): Promise<FileOpResult>;
+  /** Svuota il cestino (eliminazione definitiva di tutte le voci). */
+  trashEmpty(): Promise<FileOpResult>;
+  /** Elimina definitivamente le voci del cestino più vecchie di `retentionDays`. */
+  pruneTrash(retentionDays: number): Promise<number>;
 }
 
 export interface FileManagerDeps {
@@ -301,6 +325,39 @@ export function createFileManagerService(deps: FileManagerDeps): FileManagerServ
       }
     }
     return { path: '', parent: null, atRoot: false, entries };
+  }
+
+  /** Sposta `target` nel cestino della sua root, scrivendo i metadati per il ripristino. */
+  async function moveToTrash(target: string, root: string, isDir: boolean): Promise<void> {
+    const id = `${Date.now()}_${randomUUID().slice(0, 8)}`;
+    const entryDir = join(root, TRASH_DIR, id);
+    await ensureDir(entryDir, logger);
+    const moved = join(entryDir, basename(target));
+    await atomicMove(target, moved, logger);
+    const info: TrashInfo = {
+      originalPath: target,
+      name: basename(target),
+      deletedAt: new Date().toISOString(),
+      type: isDir ? 'dir' : 'file',
+    };
+    await writeFile(join(entryDir, TRASH_INFO), JSON.stringify(info), 'utf8');
+  }
+
+  /** Legge i metadati di una voce cestino, o null se assenti/corrotti. */
+  async function readTrashInfo(entryDir: string): Promise<TrashInfo | null> {
+    const raw = await readFile(join(entryDir, TRASH_INFO), 'utf8').catch(() => null);
+    if (!raw) {
+      return null;
+    }
+    try {
+      const parsed = JSON.parse(raw) as TrashInfo;
+      if (typeof parsed.originalPath === 'string' && typeof parsed.deletedAt === 'string') {
+        return parsed;
+      }
+    } catch {
+      // corrotto
+    }
+    return null;
   }
 
   return {
@@ -471,6 +528,12 @@ export function createFileManagerService(deps: FileManagerDeps): FileManagerServ
         isDir = (await stat(target)).isDirectory();
       } catch {
         isDir = false;
+      }
+      // Cestino (soft-delete): sposta in `.trash` invece di cancellare subito, così è recuperabile.
+      if (config.get('trashEnabled') && root) {
+        await moveToTrash(target, root, isDir);
+        syncDeletedPaths(target);
+        return { ok: true };
       }
       if (isDir) {
         await rm(target, { recursive: true, force: true });
@@ -684,6 +747,104 @@ export function createFileManagerService(deps: FileManagerDeps): FileManagerServ
       }
       await walk(target);
       return { ok: true, count: removed };
+    },
+
+    async trashList(): Promise<TrashList> {
+      const entries: TrashEntry[] = [];
+      for (const root of roots()) {
+        const trashRoot = join(root, TRASH_DIR);
+        const dirents = await readdir(trashRoot, { withFileTypes: true }).catch(() => []);
+        for (const d of dirents) {
+          if (!d.isDirectory() || !TRASH_ID.test(d.name)) {
+            continue;
+          }
+          const entryDir = join(trashRoot, d.name);
+          const info = await readTrashInfo(entryDir);
+          if (!info) {
+            continue;
+          }
+          let size: number | null = null;
+          if (info.type === 'file') {
+            size = await stat(join(entryDir, info.name))
+              .then((s) => s.size)
+              .catch(() => null);
+          }
+          entries.push({
+            id: d.name,
+            name: info.name,
+            originalPath: info.originalPath,
+            deletedAt: info.deletedAt,
+            type: info.type,
+            size,
+          });
+        }
+      }
+      entries.sort((a, b) => b.deletedAt.localeCompare(a.deletedAt));
+      return { entries };
+    },
+
+    async trashRestore(id): Promise<FileOpResult> {
+      if (!TRASH_ID.test(id)) {
+        throw new PreconditionError('Id voce cestino non valido.');
+      }
+      for (const root of roots()) {
+        const entryDir = join(root, TRASH_DIR, id);
+        const info = await readTrashInfo(entryDir);
+        if (!info) {
+          continue;
+        }
+        const moved = join(entryDir, info.name);
+        // Il percorso originale deve essere ancora dentro una root configurata.
+        const dest = assertInside(info.originalPath);
+        if (await pathExists(dest)) {
+          throw new PreconditionError(
+            'Esiste già un elemento al percorso originale: rinominalo o spostalo prima di ripristinare.',
+          );
+        }
+        await atomicMove(moved, dest, logger);
+        await rm(entryDir, { recursive: true, force: true }).catch(() => {});
+        return { ok: true, path: dest };
+      }
+      throw new NotFoundError('Voce del cestino non trovata.');
+    },
+
+    async trashEmpty(): Promise<FileOpResult> {
+      let count = 0;
+      for (const root of roots()) {
+        const trashRoot = join(root, TRASH_DIR);
+        const dirents = await readdir(trashRoot, { withFileTypes: true }).catch(() => []);
+        for (const d of dirents) {
+          if (!d.isDirectory()) {
+            continue;
+          }
+          await rm(join(trashRoot, d.name), { recursive: true, force: true }).catch(() => {});
+          count += 1;
+        }
+      }
+      return { ok: true, count };
+    },
+
+    async pruneTrash(retentionDays): Promise<number> {
+      const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
+      let removed = 0;
+      for (const root of roots()) {
+        const trashRoot = join(root, TRASH_DIR);
+        const dirents = await readdir(trashRoot, { withFileTypes: true }).catch(() => []);
+        for (const d of dirents) {
+          if (!d.isDirectory()) {
+            continue;
+          }
+          const entryDir = join(trashRoot, d.name);
+          const info = await readTrashInfo(entryDir);
+          const deletedAtMs = info ? new Date(info.deletedAt).getTime() : 0;
+          // Senza metadati validi o oltre la retention: elimina definitivamente.
+          if (!info || Number.isNaN(deletedAtMs) || deletedAtMs < cutoff) {
+            await rm(entryDir, { recursive: true, force: true }).catch(() => {});
+            removed += 1;
+          }
+        }
+      }
+      return removed;
     },
   };
 }

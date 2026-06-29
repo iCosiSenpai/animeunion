@@ -179,6 +179,60 @@ describe('FileManagerService', () => {
     await expect(service.rename(root, 'X')).rejects.toThrow();
   });
 
+  it('cestino: remove sposta in .trash, trashList elenca, trashRestore ripristina', async () => {
+    // trashEnabled è true di default.
+    await writeFile(join(root, 'film.mp4'), 'video');
+    await service.remove(join(root, 'film.mp4'));
+    // Sparito dalla posizione originale ma recuperabile.
+    await expect(stat(join(root, 'film.mp4'))).rejects.toBeTruthy();
+
+    const trash = await service.trashList();
+    expect(trash.entries).toHaveLength(1);
+    const entry = trash.entries[0];
+    if (!entry) {
+      throw new Error('voce cestino mancante');
+    }
+    expect(entry.name).toBe('film.mp4');
+    expect(entry.originalPath).toBe(resolve(join(root, 'film.mp4')));
+
+    await service.trashRestore(entry.id);
+    expect((await stat(join(root, 'film.mp4'))).isFile()).toBe(true);
+    expect((await service.trashList()).entries).toHaveLength(0);
+  });
+
+  it('cestino: trashEmpty e pruneTrash eliminano definitivamente', async () => {
+    await writeFile(join(root, 'a.mp4'), 'x');
+    await service.remove(join(root, 'a.mp4'));
+    expect((await service.trashList()).entries).toHaveLength(1);
+
+    // pruneTrash con retention futura non tocca nulla (voce appena creata).
+    expect(await service.pruneTrash(30)).toBe(0);
+    // retention 0 giorni: tutto scaduto.
+    expect(await service.pruneTrash(0)).toBe(1);
+    expect((await service.trashList()).entries).toHaveLength(0);
+
+    await writeFile(join(root, 'b.mp4'), 'x');
+    await service.remove(join(root, 'b.mp4'));
+    const emptied = await service.trashEmpty();
+    expect(emptied.count).toBe(1);
+    expect((await service.trashList()).entries).toHaveLength(0);
+  });
+
+  it('cestino disattivato: remove cancella definitivamente', async () => {
+    const config = createConfigService({ db });
+    config.set('trashEnabled', false);
+    const svc = createFileManagerService({
+      db,
+      config,
+      renamer: createRenamerService({ db, config }),
+      logger: testLogger,
+    });
+    await writeFile(join(root, 'c.mp4'), 'x');
+    await svc.remove(join(root, 'c.mp4'));
+    await expect(stat(join(root, 'c.mp4'))).rejects.toBeTruthy();
+    expect((await svc.trashList()).entries).toHaveLength(0);
+  });
+
   it('remove rifiuta cartelle e file collegati come esterni (anti-perdita-dati)', async () => {
     const season = join(root, 'Show', 'Season 01');
     await mkdir(season, { recursive: true });

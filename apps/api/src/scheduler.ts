@@ -9,6 +9,7 @@ export interface Scheduler {
 
 const DOWNLOAD_AUTODOWNLOAD_MINUTES = 30;
 const QUEUE_PURGE_HOURS = 6;
+const TRASH_PRUNE_HOURS = 12;
 const DISK_CHECK_HOURS = 6;
 const SEASON_CHECK_HOURS = 12;
 const SEASON_CHECK_STARTUP_MS = 2 * 60 * 1000; // prima passata ~2 min dopo l'avvio
@@ -79,6 +80,27 @@ export function createScheduler(ctx: Context): Scheduler {
       const purgeTimer = setInterval(purge, QUEUE_PURGE_HOURS * 60 * 60 * 1000);
       purgeTimer.unref?.();
       timers.push(purgeTimer);
+
+      // Pulizia cestino: elimina definitivamente le voci oltre trashRetentionDays.
+      const pruneTrash = () => {
+        if (!services.config.get('trashEnabled')) {
+          return;
+        }
+        void services.files
+          .pruneTrash(services.config.get('trashRetentionDays'))
+          .then((removed) => {
+            if (removed > 0) {
+              logger.info({ removed }, 'Cestino: voci scadute eliminate');
+            }
+          })
+          .catch((error) => {
+            logger.debug({ err: error }, 'Tick pulizia cestino fallito');
+          });
+      };
+      pruneTrash();
+      const trashTimer = setInterval(pruneTrash, TRASH_PRUNE_HOURS * 60 * 60 * 1000);
+      trashTimer.unref?.();
+      timers.push(trashTimer);
 
       // Avviso spazio disco basso: debounced (notifica solo alla transizione ok->low per cartella).
       const lowRoots = new Set<string>();

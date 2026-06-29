@@ -458,6 +458,85 @@ function FolderActionsDialog({
   );
 }
 
+function TrashDialog({ onClose, onChanged }: { onClose: () => void; onChanged: () => void }) {
+  const utils = trpc.useUtils();
+  const trash = trpc.files.trashList.useQuery();
+  const restore = trpc.files.trashRestore.useMutation({
+    onSuccess: () => {
+      toast.success('Ripristinato. Usa "Controlla la libreria" se non risulta subito scaricato.');
+      void utils.files.trashList.invalidate();
+      onChanged();
+    },
+    onError: (e) => toast.error(e.message || 'Ripristino non riuscito'),
+  });
+  const empty = trpc.files.trashEmpty.useMutation({
+    onSuccess: (r) => {
+      toast.success(r.count ? `Cestino svuotato (${r.count}).` : 'Cestino già vuoto.');
+      void utils.files.trashList.invalidate();
+      onChanged();
+    },
+    onError: (e) => toast.error(e.message || 'Operazione non riuscita'),
+  });
+  const entries = trash.data?.entries ?? [];
+  return (
+    <Dialog open onOpenChange={(o) => (o ? null : onClose())}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Cestino</DialogTitle>
+          <DialogDescription>
+            Gli elementi eliminati dal gestore file restano qui e sono recuperabili finché non li
+            svuoti o scadono.
+          </DialogDescription>
+        </DialogHeader>
+        {trash.isLoading ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">Caricamento…</p>
+        ) : entries.length === 0 ? (
+          <EmptyState icon={Trash2} title="Cestino vuoto" description="Niente da ripristinare." />
+        ) : (
+          <ul className="max-h-[50vh] divide-y overflow-y-auto rounded-lg border">
+            {entries.map((e) => (
+              <li key={e.id} className="flex items-center justify-between gap-2 p-2 text-sm">
+                <div className="min-w-0">
+                  <p className="truncate font-medium">{e.name}</p>
+                  <p className="truncate font-mono text-xs text-muted-foreground">
+                    {e.originalPath}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {new Date(e.deletedAt).toLocaleString('it-IT')}
+                    {e.size != null ? ` · ${formatSize(e.size)}` : ''}
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0 gap-1.5"
+                  disabled={restore.isPending}
+                  onClick={() => restore.mutate({ id: e.id })}
+                >
+                  <RefreshCw className="h-4 w-4" /> Ripristina
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <DialogFooter className="gap-2 sm:justify-between">
+          <Button
+            variant="ghost"
+            className="text-destructive"
+            disabled={empty.isPending || entries.length === 0}
+            onClick={() => empty.mutate()}
+          >
+            <Trash2 className="mr-2 h-4 w-4" /> Svuota cestino
+          </Button>
+          <Button variant="ghost" onClick={onClose}>
+            Chiudi
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function FileManager() {
   const utils = trpc.useUtils();
   const [path, setPath] = useState('');
@@ -496,6 +575,7 @@ export function FileManager() {
   // (riuso del catalogo) per scegliere e classificare ogni stagione/correlato.
   const [franchise, setFranchise] = useState<{ slug: string } | null>(null);
   const [toolsAction, setToolsAction] = useState<'rename-scheme' | 'prune' | null>(null);
+  const [trashOpen, setTrashOpen] = useState(false);
 
   const refresh = () => {
     void utils.files.list.invalidate();
@@ -617,36 +697,48 @@ export function FileManager() {
             {atRootsLevel ? 'Le tue cartelle' : data?.path}
           </p>
         </div>
-        {!atRootsLevel ? (
-          <div className="flex shrink-0 items-center gap-2">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-1.5">
-                  <Wrench className="h-4 w-4" /> Strumenti
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-64">
-                <DropdownMenuItem onClick={() => setToolsAction('rename-scheme')}>
-                  <Wand2 className="mr-2 h-4 w-4" />
-                  Rinomina file secondo lo schema
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setToolsAction('prune')}>
-                  <FolderX className="mr-2 h-4 w-4" />
-                  Elimina cartelle vuote
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1.5"
-              onClick={() => setMkdirOpen(true)}
-            >
-              <FolderPlus className="h-4 w-4" /> Nuova cartella
-            </Button>
-          </div>
-        ) : null}
+        <div className="flex shrink-0 items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            onClick={() => setTrashOpen(true)}
+          >
+            <Trash2 className="h-4 w-4" /> Cestino
+          </Button>
+          {!atRootsLevel ? (
+            <>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="gap-1.5">
+                    <Wrench className="h-4 w-4" /> Strumenti
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-64">
+                  <DropdownMenuItem onClick={() => setToolsAction('rename-scheme')}>
+                    <Wand2 className="mr-2 h-4 w-4" />
+                    Rinomina file secondo lo schema
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setToolsAction('prune')}>
+                    <FolderX className="mr-2 h-4 w-4" />
+                    Elimina cartelle vuote
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                onClick={() => setMkdirOpen(true)}
+              >
+                <FolderPlus className="h-4 w-4" /> Nuova cartella
+              </Button>
+            </>
+          ) : null}
+        </div>
       </div>
+
+      {trashOpen ? <TrashDialog onClose={() => setTrashOpen(false)} onChanged={refresh} /> : null}
 
       {list.isLoading ? (
         <div className="space-y-2">

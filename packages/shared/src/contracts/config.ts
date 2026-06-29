@@ -45,6 +45,10 @@ export const appConfigSchema = z.object({
   // Verifica l'integrità di ogni file scaricato con ffmpeg (decodifica completa) prima di
   // finalizzarlo: cattura le corruzioni a metà file. Opt-in: costa CPU/tempo per file.
   verifyDownloads: z.boolean().default(false),
+  // Cestino: le eliminazioni dal gestore file spostano in `.trash/` invece di cancellare subito,
+  // così sono recuperabili. Pulizia automatica oltre `trashRetentionDays`.
+  trashEnabled: z.boolean().default(true),
+  trashRetentionDays: z.number().int().positive().default(30),
   notifyOnComplete: z.boolean().default(true),
   // Inoltro delle notifiche a Telegram. Credenziali configurabili dall'app (qui sotto);
   // in alternativa via env TELEGRAM_BOT_TOKEN/CHAT_ID (fallback).

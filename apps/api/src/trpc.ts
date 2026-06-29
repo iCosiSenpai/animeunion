@@ -8,6 +8,7 @@ import type { Logger } from './lib/logger';
 import type { AuthService } from './services/auth-service';
 import type { CatalogService } from './services/catalog-service';
 import type { ConfigService } from './services/config-service';
+import type { DbBackupService } from './services/db-backup-service';
 import type { DownloadService } from './services/download-service';
 import type { FavoritesService } from './services/favorites-service';
 import type { FileManagerService } from './services/file-manager-service';
@@ -44,6 +45,7 @@ export interface Context {
     requestAuth: RequestAuthService;
     requests: RequestService;
     jellyfin: JellyfinService;
+    backup: DbBackupService;
   };
   /** Token di sessione del blocco web UI, dall'header x-app-session (per richiesta). */
   sessionToken?: string;

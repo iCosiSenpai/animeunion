@@ -7,6 +7,7 @@ import { schema } from '../db';
 import { createAuthService } from '../services/auth-service';
 import { createCatalogService } from '../services/catalog-service';
 import { createConfigService } from '../services/config-service';
+import { createDbBackupService } from '../services/db-backup-service';
 import { createDownloadService } from '../services/download-service';
 import { createFavoritesService } from '../services/favorites-service';
 import { createFileManagerService } from '../services/file-manager-service';
@@ -50,6 +51,7 @@ function makeCaller() {
   const requestAuth = createRequestAuthService({ db });
   const push = createPushService({ db, logger: testLogger });
   const jellyfin = createJellyfinService({ config, logger: testLogger });
+  const backup = createDbBackupService({ db, dbPath: ':memory:', logger: testLogger });
   const download = createDownloadService({
     db,
     worker: {
@@ -85,6 +87,7 @@ function makeCaller() {
       requestAuth,
       requests,
       jellyfin,
+      backup,
     },
     logger: testLogger,
   };

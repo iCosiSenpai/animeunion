@@ -1,5 +1,6 @@
 import { router } from '../trpc';
 import { authRouter } from './auth';
+import { backupRouter } from './backup';
 import { calendarRouter } from './calendar';
 import { catalogRouter } from './catalog';
 import { configRouter } from './config';
@@ -43,6 +44,7 @@ export const appRouter = router({
   requests: requestsRouter,
   stats: statsRouter,
   jellyfin: jellyfinRouter,
+  backup: backupRouter,
 });
 
 export type AppRouter = typeof appRouter;

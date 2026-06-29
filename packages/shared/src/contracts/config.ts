@@ -49,6 +49,11 @@ export const appConfigSchema = z.object({
   // così sono recuperabili. Pulizia automatica oltre `trashRetentionDays`.
   trashEnabled: z.boolean().default(true),
   trashRetentionDays: z.number().int().positive().default(30),
+  // Backup automatico del database SQLite (seguiti, coda, libreria, override): copia consistente
+  // schedulata, con retention a N copie. Opt-in.
+  dbBackupEnabled: z.boolean().default(false),
+  dbBackupIntervalHours: z.number().int().positive().default(24),
+  dbBackupRetention: z.number().int().positive().default(7),
   notifyOnComplete: z.boolean().default(true),
   // Inoltro delle notifiche a Telegram. Credenziali configurabili dall'app (qui sotto);
   // in alternativa via env TELEGRAM_BOT_TOKEN/CHAT_ID (fallback).

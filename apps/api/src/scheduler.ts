@@ -102,6 +102,36 @@ export function createScheduler(ctx: Context): Scheduler {
       trashTimer.unref?.();
       timers.push(trashTimer);
 
+      // Backup automatico del DB (opt-in): crea una copia consistente e pota oltre la retention.
+      // Tick orario; esegue il backup solo se è passato l'intervallo dall'ultimo (best-effort:
+      // la cadenza è guidata dal numero di backup recenti, vedi db-backup-service).
+      let lastBackupMs = 0;
+      const backupTick = () => {
+        if (!services.config.get('dbBackupEnabled')) {
+          return;
+        }
+        const intervalMs = services.config.get('dbBackupIntervalHours') * 60 * 60 * 1000;
+        if (Date.now() - lastBackupMs < intervalMs) {
+          return;
+        }
+        lastBackupMs = Date.now();
+        void services.backup
+          .runBackup()
+          .then(() => services.backup.pruneBackups(services.config.get('dbBackupRetention')))
+          .then((removed) => {
+            if (removed > 0) {
+              logger.debug({ removed }, 'Backup DB: copie vecchie eliminate');
+            }
+          })
+          .catch((error) => {
+            logger.warn({ err: error }, 'Backup DB automatico fallito');
+          });
+      };
+      backupTick();
+      const backupTimer = setInterval(backupTick, 60 * 60 * 1000);
+      backupTimer.unref?.();
+      timers.push(backupTimer);
+
       // Avviso spazio disco basso: debounced (notifica solo alla transizione ok->low per cartella).
       const lowRoots = new Set<string>();
       const checkDisk = async () => {

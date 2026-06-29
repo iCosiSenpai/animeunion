@@ -9,6 +9,7 @@ import { createTelegramNotifier } from './lib/telegram';
 import { createAuthService } from './services/auth-service';
 import { createCatalogService } from './services/catalog-service';
 import { createConfigService } from './services/config-service';
+import { applyPendingRestore, createDbBackupService } from './services/db-backup-service';
 import { createDownloadService } from './services/download-service';
 import { createFavoritesService } from './services/favorites-service';
 import { createFileManagerService } from './services/file-manager-service';
@@ -33,7 +34,10 @@ const migrationsFolder = resolve(dirname(fileURLToPath(import.meta.url)), '../dr
 
 export function createAppContext(options: { env?: Env; databasePath?: string } = {}): Context {
   const resolvedEnv = options.env ?? env;
-  const db = createDb(options.databasePath ?? resolvedEnv.DATABASE_PATH);
+  const dbPath = options.databasePath ?? resolvedEnv.DATABASE_PATH;
+  // Applica un eventuale ripristino DB in attesa PRIMA di aprire il database.
+  applyPendingRestore(dbPath, logger);
+  const db = createDb(dbPath);
   runMigrations(db, migrationsFolder);
   const auth = createAuthService({
     db,
@@ -87,6 +91,7 @@ export function createAppContext(options: { env?: Env; databasePath?: string } =
   const series = createSeriesService({ db, resolver, catalog, renamer, config });
   const nfo = createNfoService({ db, config, logger });
   const jellyfin = createJellyfinService({ config, logger });
+  const backup = createDbBackupService({ db, dbPath, logger });
 
   function animeTitleOf(animeId: string): string {
     const row = db
@@ -196,6 +201,7 @@ export function createAppContext(options: { env?: Env; databasePath?: string } =
       requestAuth,
       requests,
       jellyfin,
+      backup,
     },
     logger,
   };

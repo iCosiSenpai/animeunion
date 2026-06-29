@@ -96,6 +96,31 @@ function makeDetail(
   };
 }
 
+/** Inserisce una riga anime nel DB (fa scattare i trigger FTS) per i test di ricerca. */
+function seedAnime(
+  db: ReturnType<typeof createTestDb>,
+  id: string,
+  title: string,
+  opts: { slug?: string; titleIta?: string; titleEng?: string; titleJpn?: string } = {},
+): void {
+  const ts = new Date().toISOString();
+  db.insert(schema.anime)
+    .values({
+      id,
+      slug: opts.slug ?? id,
+      title,
+      titleIta: opts.titleIta ?? null,
+      titleEng: opts.titleEng ?? null,
+      titleJpn: opts.titleJpn ?? null,
+      type: 'TV',
+      status: 'ONGOING',
+      episodeCount: 0,
+      createdAt: ts,
+      updatedAt: ts,
+    })
+    .run();
+}
+
 describe('CatalogService', () => {
   it('getBySlug scarica dal source, salva anime, generi ed episodi', async () => {
     const { db, service } = makeService();
@@ -493,6 +518,44 @@ describe('CatalogService', () => {
     const file = await downService.getEpisodeFile(episode.id, { forceResolve: true });
     // Fallback: usa l'URL in cache invece di fallire.
     expect(file.downloadUrl).toBe('https://cache.example/buono.mp4');
+  });
+
+  it('ricerca FTS: accento-insensibile (naruto trova Narutò)', async () => {
+    const { db, service } = makeService();
+    seedAnime(db, 'a1', 'Narutò', { slug: 'naruto' });
+    seedAnime(db, 'a2', 'One Piece', { slug: 'one-piece' });
+
+    const res = await service.browse({ query: 'naruto', page: 1 });
+    const ids = res.data.map((a) => a.id);
+    expect(ids).toContain('a1');
+    expect(ids).not.toContain('a2');
+  });
+
+  it('ricerca FTS: trova anche per titolo inglese', async () => {
+    const { db, service } = makeService();
+    seedAnime(db, 'a1', 'Shingeki no Kyojin', { slug: 'aot', titleEng: 'Attack on Titan' });
+    seedAnime(db, 'a2', 'One Piece', { slug: 'one-piece' });
+
+    const res = await service.browse({ query: 'attack', page: 1 });
+    const ids = res.data.map((a) => a.id);
+    expect(ids).toContain('a1');
+    expect(ids).not.toContain('a2');
+  });
+
+  it('ricerca FTS: il match più rilevante viene prima (ranking bm25)', async () => {
+    const { db, service } = makeService();
+    seedAnime(db, 'a1', 'Boruto: Naruto Next Generations', { slug: 'boruto' });
+    seedAnime(db, 'a2', 'Naruto', { slug: 'naruto' });
+    // Cache fresca → search() usa il DB locale (FTS) invece della source.
+    const nowIso = new Date().toISOString();
+    db.insert(schema.stats)
+      .values({ key: 'catalog_synced_at', value: JSON.stringify(nowIso), updatedAt: nowIso })
+      .run();
+
+    const res = await service.search({ query: 'naruto', page: 1 });
+    const ids = res.data.map((a) => a.id);
+    expect(ids[0]).toBe('a2'); // "Naruto" più rilevante di "Boruto: Naruto..."
+    expect(ids).toContain('a1');
   });
 
   it('listEpisodes ritorna gli episodi con id coerenti col DB', async () => {

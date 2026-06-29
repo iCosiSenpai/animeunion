@@ -495,25 +495,81 @@ export function createCatalogService(options: CatalogServiceOptions): CatalogSer
     return paginateRows(rows, totalRow?.n ?? 0, page);
   }
 
+  // Trasforma la query utente in un'espressione FTS5 sicura: token alfanumerici (accenti già
+  // normalizzati dal tokenizer) con prefisso `*` per il match parziale e in AND implicito.
+  // I token sono già ripuliti da quote/operatori, quindi non c'è rischio di iniezione FTS.
+  function toFtsQuery(needle: string): string | null {
+    const tokens = needle.toLowerCase().match(/[\p{L}\p{N}]+/gu);
+    if (!tokens || tokens.length === 0) {
+      return null;
+    }
+    return tokens.map((token) => `${token}*`).join(' ');
+  }
+
+  // Id anime che matchano `needle` via FTS5, ordinati per rilevanza (bm25). Ritorna null se la
+  // ricerca FTS non è utilizzabile (query degenere o FTS non disponibile) → il chiamante ricade su LIKE.
+  function ftsMatchIds(needle: string): string[] | null {
+    const ftsQuery = toFtsQuery(needle);
+    if (!ftsQuery) {
+      return null;
+    }
+    try {
+      const rows = db.all<{ id: string }>(
+        sql`SELECT anime_id AS id FROM anime_fts WHERE anime_fts MATCH ${ftsQuery} ORDER BY bm25(anime_fts)`,
+      );
+      return rows.map((row) => row.id);
+    } catch (error) {
+      logger.warn({ err: error }, 'Ricerca FTS non disponibile, fallback a LIKE');
+      return null;
+    }
+  }
+
+  function likeNeedle(needle: string): SQL {
+    return or(
+      like(schema.anime.title, `%${needle}%`),
+      like(schema.anime.titleIta, `%${needle}%`),
+    ) as SQL;
+  }
+
   function searchDb(query: string, page: number): PaginatedAnime {
     const needle = query.trim();
-    const where =
-      needle.length > 0
-        ? or(like(schema.anime.title, `%${needle}%`), like(schema.anime.titleIta, `%${needle}%`))
-        : undefined;
-    return queryAnime(where, page);
+    if (needle.length === 0) {
+      return queryAnime(undefined, page);
+    }
+    const ids = ftsMatchIds(needle);
+    if (ids === null) {
+      // Fallback LIKE (FTS non disponibile o query senza token).
+      return queryAnime(likeNeedle(needle), page);
+    }
+    // Paginazione preservando l'ordine di rilevanza bm25 (perso da una query SQL con inArray).
+    const total = ids.length;
+    const pageIds = ids.slice((page - 1) * PER_PAGE, page * PER_PAGE);
+    if (pageIds.length === 0) {
+      return {
+        data: [],
+        meta: { page, perPage: PER_PAGE, total, hasMore: page * PER_PAGE < total },
+      };
+    }
+    const rows = db.select().from(schema.anime).where(inArray(schema.anime.id, pageIds)).all();
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    const ordered = pageIds.map((id) => byId.get(id)).filter((row): row is AnimeRow => row != null);
+    return paginateRows(ordered, total, page);
   }
 
   function buildBrowseWhere(input: CatalogBrowseInput): SQL | undefined {
     const conditions: SQL[] = [];
     const needle = input.query?.trim();
     if (needle) {
-      conditions.push(
-        or(
-          like(schema.anime.title, `%${needle}%`),
-          like(schema.anime.titleIta, `%${needle}%`),
-        ) as SQL,
-      );
+      // Filtro accento-insensibile via FTS (la pagina catalogo mantiene il suo ordinamento);
+      // fallback a LIKE se FTS non è disponibile.
+      const ids = ftsMatchIds(needle);
+      if (ids === null) {
+        conditions.push(likeNeedle(needle));
+      } else if (ids.length === 0) {
+        conditions.push(sql`1 = 0`);
+      } else {
+        conditions.push(inArray(schema.anime.id, ids));
+      }
     }
     if (input.genre) {
       const matching = db

@@ -422,6 +422,79 @@ describe('CatalogService', () => {
     await expect(service.getEpisodeFile('non-esiste')).rejects.toBeInstanceOf(NotFoundError);
   });
 
+  it('getEpisodeFile con forceResolve ri-risolve l URL anche se gia in cache', async () => {
+    const { db, service } = makeService();
+    const slug = await firstSlug(service);
+    const detail = await service.getBySlug(slug);
+    const episode = detail.episodes[0];
+    if (!episode) {
+      throw new Error('nessun episodio');
+    }
+    // Sporca la cache con un URL "scaduto".
+    db.update(schema.episodeFile)
+      .set({ downloadUrl: 'https://stale.example/scaduto.mp4' })
+      .where(eq(schema.episodeFile.id, episode.id))
+      .run();
+
+    const file = await service.getEpisodeFile(episode.id, { forceResolve: true });
+    expect(file.downloadUrl).not.toBe('https://stale.example/scaduto.mp4');
+    expect(file.downloadUrl).toMatch(/^https?:\/\//);
+    const row = db
+      .select()
+      .from(schema.episodeFile)
+      .where(eq(schema.episodeFile.id, episode.id))
+      .get();
+    expect(row?.downloadUrl).toBe(file.downloadUrl);
+  });
+
+  it('getEpisodeFile con forceResolve ma source giu fa fallback all URL in cache', async () => {
+    const db = createTestDb();
+    const config = createConfigService({ db });
+    // Popola catalogo + episodi con un mock funzionante.
+    const okService = createCatalogService({
+      db,
+      source: createMockSource(),
+      config,
+      logger: testLogger,
+    });
+    const slug = (await okService.search({ query: '', page: 1 })).data[0]?.slug;
+    if (!slug) {
+      throw new Error('catalogo vuoto');
+    }
+    const detail = await okService.getBySlug(slug);
+    const episode = detail.episodes[0];
+    if (!episode) {
+      throw new Error('nessun episodio');
+    }
+    db.update(schema.episodeFile)
+      .set({ downloadUrl: 'https://cache.example/buono.mp4' })
+      .where(eq(schema.episodeFile.id, episode.id))
+      .run();
+
+    // Source con getEpisodes che fallisce (offline).
+    const downSource = new Proxy(createMockSource(), {
+      get(target, prop, receiver) {
+        if (prop === 'getEpisodes') {
+          return async () => {
+            throw new Error('source giu');
+          };
+        }
+        const value = Reflect.get(target, prop, receiver);
+        return typeof value === 'function' ? value.bind(target) : value;
+      },
+    }) as AnimeSource;
+    const downService = createCatalogService({
+      db,
+      source: downSource,
+      config,
+      logger: testLogger,
+    });
+
+    const file = await downService.getEpisodeFile(episode.id, { forceResolve: true });
+    // Fallback: usa l'URL in cache invece di fallire.
+    expect(file.downloadUrl).toBe('https://cache.example/buono.mp4');
+  });
+
   it('listEpisodes ritorna gli episodi con id coerenti col DB', async () => {
     const { service } = makeService();
     const slug = await firstSlug(service);

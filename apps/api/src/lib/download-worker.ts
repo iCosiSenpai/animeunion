@@ -234,7 +234,9 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
     inFlight.set(queueId, { controller });
 
     try {
-      const detail = await catalog.getEpisodeFile(item.episodeFileId);
+      // forceResolve: ri-risolvi sempre l'URL prima di scaricare (gli URL AnimeUnion scadono;
+      // uno cached da un fetch precedente farebbe fallire il job con "link scaduto").
+      const detail = await catalog.getEpisodeFile(item.episodeFileId, { forceResolve: true });
       const url = detail.downloadUrl;
       if (!url) {
         throw new Error(`URL download mancante per ${item.episodeFileId}`);

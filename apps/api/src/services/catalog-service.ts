@@ -67,7 +67,12 @@ export interface CatalogService {
   syncCatalog(): Promise<{ synced: number }>;
   syncStatus(): SyncStatus;
   listEpisodes(animeSlug: string): Promise<EpisodeSummary[]>;
-  getEpisodeFile(episodeFileId: string): Promise<EpisodeDetail>;
+  /**
+   * Risolve il file episodio + URL di download. `forceResolve` (usato dal worker prima di
+   * scaricare) ri-risolve sempre l'URL dalla source: gli URL AnimeUnion sono a tempo e uno salvato
+   * ore prima durante un fetch del catalogo farebbe fallire il download con "link scaduto".
+   */
+  getEpisodeFile(episodeFileId: string, opts?: { forceResolve?: boolean }): Promise<EpisodeDetail>;
   getCalendar(): Promise<CalendarWeek>;
   getCalendarDay(day: WeekDay): Promise<CalendarEntry>;
   /** Banner ad alta risoluzione (`anime.banner_image`) per slug, dalla cache locale. */
@@ -724,7 +729,7 @@ export function createCatalogService(options: CatalogServiceOptions): CatalogSer
       return detail.episodes;
     },
 
-    async getEpisodeFile(episodeFileId): Promise<EpisodeDetail> {
+    async getEpisodeFile(episodeFileId, opts): Promise<EpisodeDetail> {
       const fileRow = db
         .select()
         .from(schema.episodeFile)
@@ -746,20 +751,44 @@ export function createCatalogService(options: CatalogServiceOptions): CatalogSer
       }
       let downloadUrl = fileRow.downloadUrl;
       let expiresAt = fileRow.urlExpiresAt;
-      if (!downloadUrl) {
-        const episodes = await source.getEpisodes(animeRow.slug);
-        const match = episodes.find(
-          (entry) => entry.number === epRow.number && entry.language === fileRow.language,
-        );
-        if (!match) {
-          throw new NotFoundError(`URL di download non disponibile per ${episodeFileId}`);
+      // Ri-risolvi l'URL quando: lo chiede il worker (forceResolve, prima di scaricare), manca del
+      // tutto, o è scaduto (urlExpiresAt nel passato — oggi la source non lo espone, ma è
+      // forward-compat). Per la sola visualizzazione (episode.byId) si serve la cache.
+      const expired = expiresAt != null && new Date(expiresAt).getTime() <= now().getTime();
+      const needsResolve = opts?.forceResolve === true || !downloadUrl || expired;
+      if (needsResolve) {
+        try {
+          const episodes = await source.getEpisodes(animeRow.slug);
+          const match = episodes.find(
+            (entry) => entry.number === epRow.number && entry.language === fileRow.language,
+          );
+          if (match?.downloadUrl) {
+            downloadUrl = match.downloadUrl;
+            expiresAt = match.expiresAt;
+            db.update(schema.episodeFile)
+              .set({ downloadUrl, urlExpiresAt: expiresAt, updatedAt: now().toISOString() })
+              .where(eq(schema.episodeFile.id, episodeFileId))
+              .run();
+          } else if (!downloadUrl) {
+            // Nessun match e nessun URL in cache: davvero non disponibile.
+            throw new NotFoundError(`URL di download non disponibile per ${episodeFileId}`);
+          }
+        } catch (error) {
+          if (error instanceof NotFoundError) {
+            throw error;
+          }
+          // Source non raggiungibile: se c'è un URL in cache lo usiamo (best-effort), altrimenti rilancia.
+          if (!downloadUrl) {
+            throw error;
+          }
+          logger.warn(
+            { err: error, episodeFileId },
+            'Re-risoluzione URL fallita, uso quello in cache',
+          );
         }
-        downloadUrl = match.downloadUrl;
-        expiresAt = match.expiresAt;
-        db.update(schema.episodeFile)
-          .set({ downloadUrl, urlExpiresAt: expiresAt, updatedAt: now().toISOString() })
-          .where(eq(schema.episodeFile.id, episodeFileId))
-          .run();
+      }
+      if (!downloadUrl) {
+        throw new NotFoundError(`URL di download non disponibile per ${episodeFileId}`);
       }
       return {
         ...toEpisodeSummary(epRow, fileRow),

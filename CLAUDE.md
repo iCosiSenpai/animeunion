@@ -27,23 +27,25 @@ Shared: `packages/shared` (zod + interfaccia `AnimeSource`). Video: ffmpeg-stati
 Scheduler: setInterval (node-cron non usato). Lint: Biome. Test: Vitest (+ Playwright in futuro).
 Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
 
-## Roadmap verso v0.12.0 — "Super rinforzo" (IN CORSO)
+## Roadmap verso v0.12.0 — "Super rinforzo" (COMPLETO)
 
-> **Batch ATTIVO.** Piano vivo (durevole, canonico): **[plan/super-rinforzo.md](plan/super-rinforzo.md)**
-> (gitignored). Branch: `feat/super-rinforzo` da `main`. Rinforzo trasversale post-v0.11.0:
-> robustezza/sicurezza dati/qualità, **non** nuove feature di scoperta. **Per ogni step si entra in
-> plan mode, si approfondisce nel piano, si esce e si implementa** (Regola #14/#15). L'AVANZAMENTO
-> nel piano dice il prossimo step.
+> **Batch COMPLETO (Step 0-11), versione bumpata a 0.12.0.** Piano vivo (durevole, canonico):
+> **[plan/super-rinforzo.md](plan/super-rinforzo.md)** (gitignored). Branch: `feat/super-rinforzo` da
+> `main`. **Restano solo:** merge in `main`, tag `v0.12.0` (GHCR multi-arch), deploy NAS e le
+> verifiche manuali a runtime. **Nessun lavoro di sviluppo aperto.**
 >
-> **Fasi (12 step):** A — fondamenta backend (pragmas SQLite, error mapping; guardia
-> anti-sovrascrittura gestore file). B — download robustezza, **resta a 1** (verifica integrità video
-> ffmpeg-static; re-risoluzione URL scaduti). C — ricerca FTS5 (accenti + ranking + title eng/jpn).
-> D — sicurezza dati (cestino/undo eliminazioni; backup automatico DB). E — Premium upsell (tag
-> cliccabile → animeunion.tv/premium + vetrina, **no gating**). F — frontend perf/polish. G —
-> coerenza Impostazioni + release v0.12.0. Nuovi comportamenti **settabili in Impostazioni** dove
-> possibile (`verifyDownloads`, `trashEnabled`/`trashRetentionDays`, `dbBackupEnabled`/`dbBackupRetention`).
->
-> **Stato batch:** Step 0 (governance) fatto — branch creato, piano in `plan/`, puntatori CLAUDE.md.
+> **Cosa è stato fatto (Step 0-11):** **0** governance (branch, piano in `plan/`, puntatori).
+> **1** pragmas SQLite (`busy_timeout`+`synchronous=NORMAL`; error mapping già coerente). **2** guardia
+> anti-sovrascrittura su rinomina/sposta del gestore file. **3** verifica integrità video
+> post-download con ffmpeg-static (`lib/video-verify.ts`, config `verifyDownloads`). **4** worker che
+> ri-risolve l'URL prima di scaricare (anti "link scaduto", fallback alla cache). **5** ricerca **FTS5**
+> (migrazione 0015 `anime_fts`, accenti + ranking bm25 + title eng/jpn, fallback LIKE). **6** **cestino**
+> recuperabile (`files.remove`→`.trash`, restore/empty/prune, config `trashEnabled`/`trashRetentionDays`).
+> **7** **backup automatico DB** (`db-backup-service`, `.backup()` online + retention, ripristino via
+> riavvio `applyPendingRestore`, router `backup.*`). **8** Premium upsell (tag cliccabile +
+> `PremiumUpsell`, no gating). **9** toast errori coerenti (`toastError`) + wallpaper via var CSS.
+> **10** Impostazioni: toggle verifica/cestino + sezione Backup. **11** release v0.12.0
+> (CHANGELOG, bump, questa sezione). **342 test (+26 nel batch)**, lint/typecheck/build web verdi.
 > _Aggiornare qui a ogni step._
 
 ## Roadmap verso v0.10.0 — "Potenziamenti diffusi" (COMPLETO)
@@ -226,7 +228,35 @@ notifiche); **17.8** `nfo-service` sidecar `.nfo`+poster/fanart (config `writeNf
 scaffolding E2E Playwright (job CI non bloccante); **17.11** release v0.10.0. **316 test** (+25 nel
 batch), lint/typecheck/build web verdi. Batch COMPLETO. _Aggiornare qui a ogni step._
 
-## Stato attuale (2026-06-28)
+## Stato attuale (2026-06-29)
+
+**Batch "Super rinforzo" → v0.12.0 (branch `feat/super-rinforzo`, COMPLETO Step 0-11, versione
+bumpata; restano merge `main` + tag `v0.12.0` + deploy NAS):** rinforzo trasversale di robustezza,
+sicurezza dei dati e qualità su download/ricerca/gestore file/backend/frontend, su richiesta
+dell'utente ("andiamo pesante"). Piano vivo in [plan/super-rinforzo.md](plan/super-rinforzo.md)
+(gitignored). Decisioni utente (plan mode): versione **0.12.0**; download **resta a 1** (Regola #13)
++ tag Premium cliccabile/vetrina; inclusi tutti e 4 i rinforzi di punta, settabili in Impostazioni.
+
+- **Fondamenta (Step 1-2):** pragmas SQLite `busy_timeout`+`synchronous=NORMAL` (anti `SQLITE_BUSY`
+  con WAL); error mapping tRPC verificato già coerente (nessun cambio). Guardia anti-sovrascrittura
+  su `files.rename`/`files.move` (niente clobber silenzioso).
+- **Download (Step 3-4):** verifica integrità video post-download con ffmpeg-static
+  ([lib/video-verify.ts](apps/api/src/lib/video-verify.ts), config `verifyDownloads` opt-in: file
+  corrotto → riscaricato, non in libreria); il worker ri-risolve sempre l'URL prima di scaricare
+  (`getEpisodeFile({forceResolve})` con fallback alla cache) — l'API non espone `expiresAt`.
+- **Ricerca (Step 5):** motore **FTS5** (migrazione 0015 `anime_fts`, tokenizer `remove_diacritics`,
+  ranking bm25, match su titolo eng/jpn, fallback LIKE). "naruto" trova "Narutò".
+- **Sicurezza dati (Step 6-7):** **cestino** recuperabile (`files.remove`→`.trash/`, restore/empty +
+  pulizia oltre `trashRetentionDays`); **backup automatico DB** (`db-backup-service` `.backup()`
+  online + retention; ripristino via riavvio `applyPendingRestore`; router `backup.list/runNow/restore`).
+- **Premium + frontend (Step 8-10):** tag "Premium" cliccabile (→ animeunion.tv/premium) + sezione
+  vetrina `PremiumUpsell` (no gating); helper `toastError` coerente; wallpaper via var CSS;
+  Impostazioni con toggle verifica/cestino + nuova sezione **Backup**.
+
+**342 test (+26 nel batch)**, lint/typecheck/build web verdi. **Resta:** merge `main` + tag `v0.12.0`
+(GHCR) + deploy NAS + verifiche manuali a runtime. _Aggiornare a ogni step._
+
+## Stato precedente (2026-06-28)
 
 **Batch "Auto-download affidabile + fix gestore file" (branch
 `feat/auto-download-affidabile-e-fix-gestore-file`, post-v0.10.0, non ancora merge/tag):** raccolto

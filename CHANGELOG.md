@@ -11,6 +11,43 @@ e il progetto aderisce al [Semantic Versioning](https://semver.org/lang/it/).
 - Setup wizard migliorato (Step F, rimandato).
 - GitHub Pages (landing pubblica + spazio mascotte).
 - Esecuzione degli E2E Playwright in CI (scaffolding già presente).
+- Gating reale del Premium (collegamento all'account del sito, da definire con l'admin).
+- Update ottimistici e routing del cestino anche per `library.deleteSeries` (rimandati).
+
+## [0.12.0] - 2026-06-29
+
+Batch "Super rinforzo": rinforzo trasversale di robustezza, sicurezza dei dati e qualità su
+download, ricerca, gestore file, backend e frontend. Nessuna nuova feature di scoperta.
+
+### Added
+- **Ricerca FTS5:** nuovo motore di ricerca insensibile agli accenti ("naruto" trova "Narutò"),
+  con ranking per rilevanza (bm25) e match anche su titolo inglese/giapponese (migrazione 0015,
+  con fallback a LIKE se FTS5 non è disponibile).
+- **Verifica integrità download:** opzione `verifyDownloads` che, dopo ogni download, valida il file
+  con ffmpeg (decodifica completa) prima di finalizzarlo: i file corrotti vengono riscaricati invece
+  di entrare in libreria.
+- **Cestino del gestore file:** le eliminazioni finiscono in `.trash/` (recuperabili) invece di
+  essere cancellate subito, con ripristino, "Svuota cestino" e pulizia automatica oltre
+  `trashRetentionDays` (default 30 giorni). Attivo di default.
+- **Backup automatico del database:** copia consistente schedulata (opt-in) di seguiti, coda,
+  libreria e organizzazione file, con retention a N copie. Sezione Impostazioni → Backup con
+  "Esegui backup ora", elenco copie e ripristino (applicato al riavvio del server).
+- **Premium:** il tag "Premium" è ora cliccabile (→ animeunion.tv/premium) e una nuova sezione
+  Impostazioni mostra le funzioni Premium proposte (vetrina, nessun blocco delle funzioni gratuite).
+
+### Changed
+- **Download URL sempre freschi:** prima di scaricare, l'URL viene ri-risolto dalla source (con
+  fallback alla cache se irraggiungibile), evitando i fallimenti da "link scaduto".
+- **Affidabilità SQLite:** aggiunti i pragma `busy_timeout` (5s) e `synchronous = NORMAL` (oltre al
+  WAL già attivo) per evitare errori `SQLITE_BUSY` quando il worker scrive mentre la UI legge.
+- **Gestore file più sicuro:** rinomina e spostamento rifiutano la sovrascrittura di un elemento
+  già esistente (niente più clobber silenzioso).
+- Toast d'errore più coerenti nel gestore file; sfondo wallpaper gestito via variabile CSS.
+
+### Notes
+- I nuovi comportamenti sono configurabili in Impostazioni dove ha senso
+  (`verifyDownloads`, `trashEnabled`/`trashRetentionDays`, backup DB).
+- 342 test verdi (+26 nel batch); lint/typecheck/build web verdi.
 
 ## [0.11.0] - 2026-06-28
 

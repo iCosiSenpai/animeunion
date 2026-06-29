@@ -42,6 +42,9 @@ export const appConfigSchema = z.object({
   favoritesSyncMinutes: z.number().int().positive().default(10),
   languageFallback: z.boolean().default(false),
   queueRetentionDays: z.number().int().positive().default(7),
+  // Verifica l'integrità di ogni file scaricato con ffmpeg (decodifica completa) prima di
+  // finalizzarlo: cattura le corruzioni a metà file. Opt-in: costa CPU/tempo per file.
+  verifyDownloads: z.boolean().default(false),
   notifyOnComplete: z.boolean().default(true),
   // Inoltro delle notifiche a Telegram. Credenziali configurabili dall'app (qui sotto);
   // in alternativa via env TELEGRAM_BOT_TOKEN/CHAT_ID (fallback).

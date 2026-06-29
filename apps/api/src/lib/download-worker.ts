@@ -16,6 +16,7 @@ import {
   downloadToFile,
 } from './http-downloader';
 import type { Logger } from './logger';
+import { verifyVideoFile } from './video-verify';
 
 /**
  * Download eseguiti in parallelo. Bloccato a 1 di proposito: il download simultaneo e' una
@@ -325,6 +326,19 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
         onProgress,
         resumeFrom,
       });
+
+      // Verifica integrità opt-in: decodifica il file con ffmpeg prima di finalizzarlo. Se fallisce,
+      // il .part e' inutilizzabile (un resume vi appenderebbe sopra) → lo rimuoviamo e lanciamo un
+      // errore TRANSITORIO: il worker riprova da zero (un troncamento puo' essere un glitch di rete).
+      if (config.get('verifyDownloads')) {
+        const verify = await verifyVideoFile(partial, { logger });
+        if (!verify.ok) {
+          await rm(partial).catch(() => {});
+          throw new Error(
+            `Verifica integrità fallita: ${verify.reason ?? 'file non riproducibile'}`,
+          );
+        }
+      }
 
       updateQueue(queueId, { status: 'processing', progress: 1, speedBps: null });
       await atomicMove(partial, finalPath, logger);

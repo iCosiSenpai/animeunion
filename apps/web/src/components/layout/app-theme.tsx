@@ -23,8 +23,16 @@ export function AppTheme() {
   // Sfondo: classe su <html> (rende il body trasparente, vedi globals.css).
   useEffect(() => {
     const root = document.documentElement;
+    if (backgroundUrl) {
+      root.style.setProperty('--theme-bg-image', `url(${backgroundUrl})`);
+    } else {
+      root.style.removeProperty('--theme-bg-image');
+    }
     root.classList.toggle('theme-has-bg', Boolean(backgroundUrl));
-    return () => root.classList.remove('theme-has-bg');
+    return () => {
+      root.classList.remove('theme-has-bg');
+      root.style.removeProperty('--theme-bg-image');
+    };
   }, [backgroundUrl]);
 
   if (!backgroundUrl) {
@@ -32,10 +40,7 @@ export function AppTheme() {
   }
   return (
     <div aria-hidden="true" className="pointer-events-none fixed inset-0 -z-10">
-      <div
-        className="absolute inset-0 bg-cover bg-center"
-        style={{ backgroundImage: `url(${backgroundUrl})` }}
-      />
+      <div className="absolute inset-0 bg-[image:var(--theme-bg-image)] bg-cover bg-center" />
       {/* Velo theme-aware: su tema chiaro --background e' quasi bianco, all'80% slaverebbe il
           wallpaper; su scuro resta denso. Le card usano --card opaco -> il testo resta leggibile. */}
       <div className="absolute inset-0 bg-background/55 backdrop-blur-sm dark:bg-background/80" />

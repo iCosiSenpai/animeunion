@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
+import { toastError } from '@/lib/toast-error';
 import { trpc } from '@/lib/trpc';
 import { cn } from '@/lib/utils';
 import type { FileEntry } from '@animeunion/shared';
@@ -116,7 +117,7 @@ function RelinkDialog({
       toast.success('File collegato all’episodio.');
       onDone();
     },
-    onError: (e) => toast.error(e.message || 'Collegamento non riuscito'),
+    onError: (e) => toastError(e, 'Collegamento non riuscito'),
   });
 
   return (
@@ -266,7 +267,7 @@ function FolderActionsDialog({
         );
       }
     },
-    onError: (e) => toast.error(e.message || 'Collegamento non riuscito'),
+    onError: (e) => toastError(e, 'Collegamento non riuscito'),
   });
   const busy = addAll.isPending;
   const externalBusy = linkExternal.isPending || episodesQ.isFetching;
@@ -287,7 +288,7 @@ function FolderActionsDialog({
           );
           onChanged();
         },
-        onError: (e) => toast.error(e.message || 'Accodamento non riuscito'),
+        onError: (e) => toastError(e, 'Accodamento non riuscito'),
       },
     );
   }
@@ -467,7 +468,7 @@ function TrashDialog({ onClose, onChanged }: { onClose: () => void; onChanged: (
       void utils.files.trashList.invalidate();
       onChanged();
     },
-    onError: (e) => toast.error(e.message || 'Ripristino non riuscito'),
+    onError: (e) => toastError(e, 'Ripristino non riuscito'),
   });
   const empty = trpc.files.trashEmpty.useMutation({
     onSuccess: (r) => {
@@ -475,7 +476,7 @@ function TrashDialog({ onClose, onChanged }: { onClose: () => void; onChanged: (
       void utils.files.trashList.invalidate();
       onChanged();
     },
-    onError: (e) => toast.error(e.message || 'Operazione non riuscita'),
+    onError: (e) => toastError(e, 'Operazione non riuscita'),
   });
   const entries = trash.data?.entries ?? [];
   return (
@@ -595,14 +596,14 @@ export function FileManager() {
       setRenameTarget(null);
       refresh();
     },
-    onError: (e) => toast.error(e.message || 'Operazione non riuscita'),
+    onError: (e) => toastError(e, 'Operazione non riuscita'),
   });
   const moveMut = trpc.files.move.useMutation({
     onSuccess: () => {
       toast.success('Spostato.');
       refresh();
     },
-    onError: (e) => toast.error(e.message || 'Spostamento non riuscito'),
+    onError: (e) => toastError(e, 'Spostamento non riuscito'),
   });
   const removeMut = trpc.files.remove.useMutation({
     onSuccess: () => {
@@ -610,7 +611,7 @@ export function FileManager() {
       setDeleteTarget(null);
       refresh();
     },
-    onError: (e) => toast.error(e.message || 'Eliminazione non riuscita'),
+    onError: (e) => toastError(e, 'Eliminazione non riuscita'),
   });
   const mkdirMut = trpc.files.mkdir.useMutation({
     onSuccess: () => {
@@ -619,7 +620,7 @@ export function FileManager() {
       setMkdirName('');
       refresh();
     },
-    onError: (e) => toast.error(e.message || 'Creazione non riuscita'),
+    onError: (e) => toastError(e, 'Creazione non riuscita'),
   });
   const renameSchemeMut = trpc.files.renameToScheme.useMutation({
     onSuccess: (r) => {
@@ -629,7 +630,7 @@ export function FileManager() {
       setToolsAction(null);
       refresh();
     },
-    onError: (e) => toast.error(e.message || 'Operazione non riuscita'),
+    onError: (e) => toastError(e, 'Operazione non riuscita'),
   });
   const pruneMut = trpc.files.pruneEmpty.useMutation({
     onSuccess: (r) => {
@@ -637,7 +638,7 @@ export function FileManager() {
       setToolsAction(null);
       refresh();
     },
-    onError: (e) => toast.error(e.message || 'Operazione non riuscita'),
+    onError: (e) => toastError(e, 'Operazione non riuscita'),
   });
 
   const data = list.data;

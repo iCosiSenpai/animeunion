@@ -14,6 +14,12 @@ export function createDb(path: string) {
   const sqlite = new Database(path);
   sqlite.pragma('journal_mode = WAL');
   sqlite.pragma('foreign_keys = ON');
+  // Con WAL + worker che scrive mentre la UI legge, una scrittura concorrente puo' incrociare un
+  // lock: attendi fino a 5s invece di fallire subito con SQLITE_BUSY.
+  sqlite.pragma('busy_timeout = 5000');
+  // NORMAL e' il livello consigliato con WAL: durabilita' adeguata (nessuna perdita per crash
+  // dell'app, solo per crash dell'OS sull'ultimo commit) con molti meno fsync di FULL.
+  sqlite.pragma('synchronous = NORMAL');
   return drizzle(sqlite, { schema });
 }
 

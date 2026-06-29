@@ -10,6 +10,7 @@ import {
   Calendar,
   CalendarClock,
   Compass,
+  Crown,
   Download,
   Film,
   FolderCog,
@@ -250,6 +251,12 @@ export function CommandPalette() {
       label: 'Impostazioni: Integrazioni',
       icon: <Webhook className="h-4 w-4" />,
       onSelect: () => go('/settings?section=integrazioni'),
+    },
+    {
+      id: 'settings-premium',
+      label: 'Impostazioni: Premium',
+      icon: <Crown className="h-4 w-4" />,
+      onSelect: () => go('/settings?section=premium'),
     },
     {
       id: 'settings-avanzate',

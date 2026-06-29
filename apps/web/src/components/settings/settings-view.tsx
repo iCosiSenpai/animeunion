@@ -4,6 +4,7 @@ import { AccentPicker } from '@/components/settings/accent-picker';
 import { FolderInput } from '@/components/settings/folder-picker';
 import { HomeLayoutSection } from '@/components/settings/home-layout-section';
 import { InstallButton } from '@/components/settings/install-button';
+import { PREMIUM_URL, PremiumUpsell } from '@/components/settings/premium-upsell';
 import { PushToggle } from '@/components/settings/push-toggle';
 import { RequestsSection } from '@/components/settings/requests-section';
 import { SecuritySection } from '@/components/settings/security-section';
@@ -35,6 +36,7 @@ import {
   Bell,
   CalendarClock,
   Compass,
+  Crown,
   ExternalLink,
   FolderDown,
   Languages,
@@ -128,6 +130,7 @@ type SectionId =
   | 'home'
   | 'sicurezza'
   | 'integrazioni'
+  | 'premium'
   | 'avanzate';
 
 const SECTIONS: { id: SectionId; label: string; icon: LucideIcon }[] = [
@@ -140,6 +143,7 @@ const SECTIONS: { id: SectionId; label: string; icon: LucideIcon }[] = [
   { id: 'home', label: 'Home', icon: LayoutGrid },
   { id: 'sicurezza', label: 'Sicurezza', icon: Shield },
   { id: 'integrazioni', label: 'Integrazioni', icon: Webhook },
+  { id: 'premium', label: 'Premium', icon: Crown },
   { id: 'avanzate', label: 'Avanzate', icon: SlidersHorizontal },
 ];
 
@@ -511,9 +515,14 @@ export function SettingsView() {
               <div className="inline-flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
                 <Lock className="h-4 w-4" aria-hidden="true" />
                 <span>1 alla volta</span>
-                <span className="ml-1 rounded-full border border-primary/40 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-primary">
+                <a
+                  href={PREMIUM_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="ml-1 rounded-full border border-primary/40 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-primary transition-colors hover:bg-primary/10"
+                >
                   Premium
-                </span>
+                </a>
               </div>
             </Field>
           </Section>
@@ -860,6 +869,10 @@ export function SettingsView() {
 
           <div className={cn(active !== 'sicurezza' && 'hidden')}>
             <SecuritySection />
+          </div>
+
+          <div className={cn(active !== 'premium' && 'hidden')}>
+            <PremiumUpsell />
           </div>
 
           <Section id="integrazioni" hidden={active !== 'integrazioni'} title="Jellyfin / Plex">

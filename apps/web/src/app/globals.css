@@ -70,4 +70,11 @@
   html.theme-has-bg body {
     background-color: transparent;
   }
+
+  /* Toast safe-area fix: forza il posizionamento rispetto alla status bar mobile.
+     env(safe-area-inset-top) è > 0 solo con viewport-fit=cover (già configurato in layout.tsx).
+     !important necessario per sovrascrivere l'inline style applicato da sonner. */
+  [data-sonner-toaster][data-y-position="top"] {
+    top: calc(env(safe-area-inset-top, 0px) + 16px) !important;
+  }
 }

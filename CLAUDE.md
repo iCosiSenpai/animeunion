@@ -39,8 +39,8 @@ Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
 
 - [x] **Step 0** — Governance: branch, piano in `plan/`, Regola #16 aggiunta, CLAUDE.md trimmed
 - [x] **Step 1** — CLAUDE.md trimming: archivio in `docs/history/`, file ridotto da 94k a ~18k
-- [ ] **Step 2** — Toast mobile fix (status bar overlap, safe-area CSS definitivo)
-- [ ] **Step 3** — Bottom sheet mobile (`<ResponsiveDialog>` wrapper per i dialog principali)
+- [x] **Step 2** — Toast mobile fix (status bar overlap, safe-area CSS definitivo)
+- [x] **Step 3** — Bottom sheet mobile (`<ResponsiveDialog>` wrapper per i dialog principali)
 - [ ] **Step 4** — Polling condizionale + error states + `useDownloadSummary` hook + `100dvh`
 - [ ] **Step 5** — Hardening P0: password cifratura, VAPID guard, `FALLBACK_TOKEN_TTL` 1h, uncaught handler
 - [ ] **Step 6** — Hardening P1: `enqueueForAutoFollows` batch, `addMissing` inArray, `scan` p-limit, `likeNeedle`
@@ -58,12 +58,12 @@ Step pianificati: GPU service Windows (Python FastAPI + real-esrgan-ncnn-vulkan)
 backend bridge NAS↔GPU (ibrido locale/cloud) → quality nel download engine (XQ/XQ+) → UI quality
 + upscale per-serie → premium gate → release v0.14.0.
 
-## Stato attuale (2026-06-30)
+## Stato attuale (2026-07-01)
 
 **Versione corrente: v0.12.0 "Super rinforzo" — deployato e funzionante sul NAS.**
 - api Up (healthy), web HTTP 200 su :7979, migrazioni ok
-- 342 test verdi, lint/typecheck/build web verdi
-- **Batch attivo:** `feat/mobile-first-rinforzo` (Step 0-1 completati, Step 2+ in attesa)
+- 342 test verdi, lint/typecheck verdi
+- **Batch attivo:** `feat/mobile-first-rinforzo` (Step 0-3 completati, Step 4+ in attesa)
 
 Funzioni principali operative: download automatico (1 episodio alla volta), FTS5 search, cestino
 recuperabile, backup automatico DB, verifica integrità video, Jellyfin integration, nfo sidecar,

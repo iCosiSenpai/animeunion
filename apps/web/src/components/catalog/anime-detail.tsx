@@ -8,15 +8,6 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
-import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -24,6 +15,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { EmptyState } from '@/components/ui/empty-state';
+import { ResponsiveDialog } from '@/components/ui/responsive-dialog';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useCommandPalette } from '@/lib/command-palette-store';
@@ -580,49 +572,50 @@ function SeriesOrganizationPanel({ animeId }: { animeId: string }) {
   const pending = setOverride.isPending || clearOverride.isPending;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogTrigger asChild>
-        <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground">
-          <FolderTree className="h-4 w-4" />
-          {organizationLabel(data)}
-          {data.hasOverride ? (
-            <Badge variant="outline" className="ml-1">
-              manuale
-            </Badge>
-          ) : null}
-        </Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Organizzazione file</DialogTitle>
-          <DialogDescription>
-            Come questo titolo viene salvato: tipo, stagione e serie a cui appartiene. Correggi qui
-            se il rilevamento automatico sbaglia (l'API a volte non collega i sequel o scambia un
-            film per una stagione).
-          </DialogDescription>
-        </DialogHeader>
-
-        <ClassifyFields animeId={animeId} value={value} onChange={setValue} />
-
-        <DialogFooter className="gap-2 sm:justify-between">
-          {data.hasOverride ? (
-            <Button
-              variant="ghost"
-              onClick={() => clearOverride.mutate({ animeId })}
-              disabled={pending}
-            >
-              Ripristina automatico
+    <>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="gap-1.5 text-muted-foreground"
+        onClick={() => onOpenChange(true)}
+      >
+        <FolderTree className="h-4 w-4" />
+        {organizationLabel(data)}
+        {data.hasOverride ? (
+          <Badge variant="outline" className="ml-1">
+            manuale
+          </Badge>
+        ) : null}
+      </Button>
+      <ResponsiveDialog
+        open={open}
+        onOpenChange={onOpenChange}
+        title="Organizzazione file"
+        description="Come questo titolo viene salvato: tipo, stagione e serie a cui appartiene. Correggi qui se il rilevamento automatico sbaglia (l'API a volte non collega i sequel o scambia un film per una stagione)."
+        footerClassName="gap-2 sm:justify-between"
+        footer={
+          <>
+            {data.hasOverride ? (
+              <Button
+                variant="ghost"
+                onClick={() => clearOverride.mutate({ animeId })}
+                disabled={pending}
+              >
+                Ripristina automatico
+              </Button>
+            ) : (
+              <span />
+            )}
+            <Button onClick={onSave} disabled={pending}>
+              {pending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Salva
             </Button>
-          ) : (
-            <span />
-          )}
-          <Button onClick={onSave} disabled={pending}>
-            {pending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            Salva
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          </>
+        }
+      >
+        <ClassifyFields animeId={animeId} value={value} onChange={setValue} />
+      </ResponsiveDialog>
+    </>
   );
 }
 

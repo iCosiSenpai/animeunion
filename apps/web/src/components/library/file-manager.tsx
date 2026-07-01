@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
+import { ResponsiveDialog } from '@/components/ui/responsive-dialog';
 import { toastError } from '@/lib/toast-error';
 import { trpc } from '@/lib/trpc';
 import { cn } from '@/lib/utils';
@@ -121,93 +122,92 @@ function RelinkDialog({
   });
 
   return (
-    <Dialog open onOpenChange={(o) => (o ? null : onClose())}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Collega a un episodio</DialogTitle>
-          <DialogDescription>
-            Scegli a quale episodio appartiene <strong>{file.name}</strong>. Il file verrà spostato
-            nella posizione corretta e segnato come scaricato.
-          </DialogDescription>
-        </DialogHeader>
-
-        {!slug ? (
-          <div className="space-y-2">
-            <Input
-              placeholder="Cerca la serie (min. 2 caratteri)…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-            {searchQ.isFetching ? (
-              <div className="flex items-center gap-2 p-2 text-xs text-muted-foreground">
-                <Loader2 className="h-3 w-3 animate-spin" /> Cerco…
-              </div>
-            ) : null}
-            {search.trim().length >= 2 && searchQ.data ? (
-              <ul className="max-h-56 divide-y overflow-y-auto rounded-md border text-sm">
-                {searchQ.data.data.slice(0, 10).map((a) => (
-                  <li key={a.id}>
-                    <button
-                      type="button"
-                      className="block w-full whitespace-normal break-words p-2 text-left hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
-                      onClick={() => setSlug(a.slug)}
-                    >
-                      {a.titleIta ?? a.title}
-                    </button>
-                  </li>
-                ))}
-                {searchQ.data.data.length === 0 ? (
-                  <li className="p-2 text-xs text-muted-foreground">Nessun risultato.</li>
-                ) : null}
-              </ul>
-            ) : null}
-          </div>
-        ) : (
-          <div className="space-y-2">
-            <Button variant="ghost" size="sm" className="gap-1" onClick={() => setSlug(null)}>
-              <ChevronLeft className="h-4 w-4" /> Cambia serie
-            </Button>
-            {episodesQ.isFetching ? (
-              <div className="flex items-center gap-2 p-2 text-xs text-muted-foreground">
-                <Loader2 className="h-3 w-3 animate-spin" /> Carico gli episodi…
-              </div>
-            ) : (
-              <ul className="max-h-56 divide-y overflow-y-auto rounded-md border text-sm">
-                {(episodesQ.data ?? []).map((ep) => (
-                  <li key={ep.id}>
-                    <button
-                      type="button"
-                      className="flex w-full items-center justify-between gap-2 p-2 text-left hover:bg-muted focus-visible:bg-muted focus-visible:outline-none disabled:opacity-50"
-                      disabled={relink.isPending}
-                      onClick={() => relink.mutate({ path: file.path, episodeFileId: ep.id })}
-                    >
-                      <span className="min-w-0 flex-1 truncate">
-                        Episodio {ep.number}
-                        {(ep.titleIta ?? ep.title) ? ` — ${ep.titleIta ?? ep.title}` : ''}
-                      </span>
-                      <Badge variant="secondary" className="shrink-0">
-                        {ep.language === 'DUB_ITA' ? 'DUB' : 'SUB'}
-                      </Badge>
-                    </button>
-                  </li>
-                ))}
-                {(episodesQ.data ?? []).length === 0 && !episodesQ.isFetching ? (
-                  <li className="p-2 text-xs text-muted-foreground">
-                    Nessun episodio per questa serie.
-                  </li>
-                ) : null}
-              </ul>
-            )}
-          </div>
-        )}
-
-        <DialogFooter>
-          <Button variant="ghost" onClick={onClose} disabled={relink.isPending}>
-            Annulla
+    <ResponsiveDialog
+      open
+      onOpenChange={(o) => (o ? null : onClose())}
+      title="Collega a un episodio"
+      description={
+        <>
+          Scegli a quale episodio appartiene <strong>{file.name}</strong>. Il file verrà spostato
+          nella posizione corretta e segnato come scaricato.
+        </>
+      }
+      footer={
+        <Button variant="ghost" onClick={onClose} disabled={relink.isPending}>
+          Annulla
+        </Button>
+      }
+    >
+      {!slug ? (
+        <div className="space-y-2">
+          <Input
+            placeholder="Cerca la serie (min. 2 caratteri)…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          {searchQ.isFetching ? (
+            <div className="flex items-center gap-2 p-2 text-xs text-muted-foreground">
+              <Loader2 className="h-3 w-3 animate-spin" /> Cerco…
+            </div>
+          ) : null}
+          {search.trim().length >= 2 && searchQ.data ? (
+            <ul className="max-h-56 divide-y overflow-y-auto rounded-md border text-sm">
+              {searchQ.data.data.slice(0, 10).map((a) => (
+                <li key={a.id}>
+                  <button
+                    type="button"
+                    className="block w-full whitespace-normal break-words p-2 text-left hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
+                    onClick={() => setSlug(a.slug)}
+                  >
+                    {a.titleIta ?? a.title}
+                  </button>
+                </li>
+              ))}
+              {searchQ.data.data.length === 0 ? (
+                <li className="p-2 text-xs text-muted-foreground">Nessun risultato.</li>
+              ) : null}
+            </ul>
+          ) : null}
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <Button variant="ghost" size="sm" className="gap-1" onClick={() => setSlug(null)}>
+            <ChevronLeft className="h-4 w-4" /> Cambia serie
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          {episodesQ.isFetching ? (
+            <div className="flex items-center gap-2 p-2 text-xs text-muted-foreground">
+              <Loader2 className="h-3 w-3 animate-spin" /> Carico gli episodi…
+            </div>
+          ) : (
+            <ul className="max-h-56 divide-y overflow-y-auto rounded-md border text-sm">
+              {(episodesQ.data ?? []).map((ep) => (
+                <li key={ep.id}>
+                  <button
+                    type="button"
+                    className="flex w-full items-center justify-between gap-2 p-2 text-left hover:bg-muted focus-visible:bg-muted focus-visible:outline-none disabled:opacity-50"
+                    disabled={relink.isPending}
+                    onClick={() => relink.mutate({ path: file.path, episodeFileId: ep.id })}
+                  >
+                    <span className="min-w-0 flex-1 truncate">
+                      Episodio {ep.number}
+                      {(ep.titleIta ?? ep.title) ? ` — ${ep.titleIta ?? ep.title}` : ''}
+                    </span>
+                    <Badge variant="secondary" className="shrink-0">
+                      {ep.language === 'DUB_ITA' ? 'DUB' : 'SUB'}
+                    </Badge>
+                  </button>
+                </li>
+              ))}
+              {(episodesQ.data ?? []).length === 0 && !episodesQ.isFetching ? (
+                <li className="p-2 text-xs text-muted-foreground">
+                  Nessun episodio per questa serie.
+                </li>
+              ) : null}
+            </ul>
+          )}
+        </div>
+      )}
+    </ResponsiveDialog>
   );
 }
 
@@ -303,159 +303,154 @@ function FolderActionsDialog({
   }
 
   return (
-    <Dialog open onOpenChange={(o) => (o ? null : onClose())}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Collega “{folder.name}” a AnimeUnion</DialogTitle>
-          <DialogDescription>
-            Trova l’anime a cui appartiene questa cartella: potrai aprirne la scheda, collegarne i
-            file come esterni o rimettere in coda gli episodi (i file vengono sovrascritti, non
-            cancellati).
-          </DialogDescription>
-        </DialogHeader>
-
-        {!picked ? (
-          <div className="space-y-2">
-            <Input
-              placeholder="Cerca la serie (min. 2 caratteri)…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-            {searchQ.isFetching ? (
-              <div className="flex items-center gap-2 p-2 text-xs text-muted-foreground">
-                <Loader2 className="h-3 w-3 animate-spin" /> Cerco…
-              </div>
-            ) : null}
-            {search.trim().length >= 2 && searchQ.data ? (
-              <ul className="max-h-56 divide-y overflow-y-auto rounded-md border text-sm">
-                {searchQ.data.data.slice(0, 10).map((a) => (
-                  <li key={a.id}>
-                    <button
-                      type="button"
-                      className="block w-full whitespace-normal break-words p-2 text-left hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
-                      onClick={() =>
-                        setPicked({ id: a.id, slug: a.slug, title: a.titleIta ?? a.title })
-                      }
-                    >
-                      {a.titleIta ?? a.title}
-                    </button>
-                  </li>
-                ))}
-                {searchQ.data.data.length === 0 ? (
-                  <li className="p-2 text-xs text-muted-foreground">Nessun risultato.</li>
-                ) : null}
-              </ul>
-            ) : null}
-          </div>
-        ) : externalMode ? (
-          <div className="space-y-3">
-            <div className="rounded-md border p-3 text-sm">
-              <p className="break-words font-medium">{picked.title}</p>
-              <p className="break-all text-xs text-muted-foreground">{folder.path}</p>
+    <ResponsiveDialog
+      open
+      onOpenChange={(o) => (o ? null : onClose())}
+      title={`Collega “${folder.name}” a AnimeUnion`}
+      description={
+        'Trova l’anime a cui appartiene questa cartella: potrai aprirne la scheda, collegarne i file come esterni o rimettere in coda gli episodi (i file vengono sovrascritti, non cancellati).'
+      }
+      footer={
+        <Button variant="ghost" onClick={onClose} disabled={busy}>
+          Chiudi
+        </Button>
+      }
+    >
+      {!picked ? (
+        <div className="space-y-2">
+          <Input
+            placeholder="Cerca la serie (min. 2 caratteri)…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          {searchQ.isFetching ? (
+            <div className="flex items-center gap-2 p-2 text-xs text-muted-foreground">
+              <Loader2 className="h-3 w-3 animate-spin" /> Cerco…
             </div>
+          ) : null}
+          {search.trim().length >= 2 && searchQ.data ? (
+            <ul className="max-h-56 divide-y overflow-y-auto rounded-md border text-sm">
+              {searchQ.data.data.slice(0, 10).map((a) => (
+                <li key={a.id}>
+                  <button
+                    type="button"
+                    className="block w-full whitespace-normal break-words p-2 text-left hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
+                    onClick={() =>
+                      setPicked({ id: a.id, slug: a.slug, title: a.titleIta ?? a.title })
+                    }
+                  >
+                    {a.titleIta ?? a.title}
+                  </button>
+                </li>
+              ))}
+              {searchQ.data.data.length === 0 ? (
+                <li className="p-2 text-xs text-muted-foreground">Nessun risultato.</li>
+              ) : null}
+            </ul>
+          ) : null}
+        </div>
+      ) : externalMode ? (
+        <div className="space-y-3">
+          <div className="rounded-md border p-3 text-sm">
+            <p className="break-words font-medium">{picked.title}</p>
+            <p className="break-all text-xs text-muted-foreground">{folder.path}</p>
+          </div>
+          <div className="flex items-start gap-2 rounded-md border border-primary/30 bg-primary/5 p-2.5 text-xs text-muted-foreground">
+            <FileSymlink className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+            <span className="min-w-0 break-words">
+              Colleghiamo i file video <strong>direttamente in questa cartella</strong> agli
+              episodi, ricavando il numero dal nome. I file restano dove sono (non spostati, non
+              scaricati) e compaiono in libreria. Scegli la lingua dei file.
+            </span>
+          </div>
+          {multiSeason ? (
+            <p className="text-xs text-amber-300">
+              Questa cartella contiene sottocartelle di stagione: apri la singola stagione per
+              collegarne i file.
+            </p>
+          ) : null}
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Button
+              className="flex-1"
+              disabled={externalBusy}
+              onClick={() =>
+                linkExternal.mutate({
+                  path: folder.path,
+                  animeId: picked.id,
+                  language: 'SUB_ITA',
+                })
+              }
+            >
+              {externalBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Collega come SUB
+            </Button>
+            <Button
+              className="flex-1"
+              variant="outline"
+              disabled={externalBusy}
+              onClick={() =>
+                linkExternal.mutate({
+                  path: folder.path,
+                  animeId: picked.id,
+                  language: 'DUB_ITA',
+                })
+              }
+            >
+              {externalBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Collega come DUB
+            </Button>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-1"
+            disabled={linkExternal.isPending}
+            onClick={() => setExternalMode(false)}
+          >
+            <ChevronLeft className="h-4 w-4" /> Indietro
+          </Button>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <div className="rounded-md border p-3 text-sm">
+            <p className="break-words font-medium">{picked.title}</p>
+            <p className="break-all text-xs text-muted-foreground">{folder.path}</p>
+          </div>
+          {multiSeason ? (
             <div className="flex items-start gap-2 rounded-md border border-primary/30 bg-primary/5 p-2.5 text-xs text-muted-foreground">
-              <FileSymlink className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+              <Layers className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
               <span className="min-w-0 break-words">
-                Colleghiamo i file video <strong>direttamente in questa cartella</strong> agli
-                episodi, ricavando il numero dal nome. I file restano dove sono (non spostati, non
-                scaricati) e compaiono in libreria. Scegli la lingua dei file.
+                Questa cartella contiene {seasonFolders.length} stagioni: potrai ri-scaricarle tutte
+                (e i correlati) e classificare ognuna prima di accodarla.
               </span>
             </div>
-            {multiSeason ? (
-              <p className="text-xs text-amber-300">
-                Questa cartella contiene sottocartelle di stagione: apri la singola stagione per
-                collegarne i file.
-              </p>
-            ) : null}
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <Button
-                className="flex-1"
-                disabled={externalBusy}
-                onClick={() =>
-                  linkExternal.mutate({
-                    path: folder.path,
-                    animeId: picked.id,
-                    language: 'SUB_ITA',
-                  })
-                }
-              >
-                {externalBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Collega come SUB
-              </Button>
-              <Button
-                className="flex-1"
-                variant="outline"
-                disabled={externalBusy}
-                onClick={() =>
-                  linkExternal.mutate({
-                    path: folder.path,
-                    animeId: picked.id,
-                    language: 'DUB_ITA',
-                  })
-                }
-              >
-                {externalBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Collega come DUB
-              </Button>
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="gap-1"
-              disabled={linkExternal.isPending}
-              onClick={() => setExternalMode(false)}
-            >
-              <ChevronLeft className="h-4 w-4" /> Indietro
+          ) : null}
+          <div className="flex flex-col gap-2">
+            <Button asChild variant="outline">
+              <Link href={`/catalog/${picked.slug}`} onClick={onClose}>
+                <ExternalLink className="mr-2 h-4 w-4" />
+                Apri la scheda dell’anime
+              </Link>
+            </Button>
+            <Button variant="outline" onClick={() => setExternalMode(true)}>
+              <FileSymlink className="mr-2 h-4 w-4" />
+              Collega senza scaricare (esterno)
+            </Button>
+            <Button onClick={multiSeason ? onRedownloadMulti : onRedownload} disabled={busy}>
+              {busy ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="mr-2 h-4 w-4" />
+              )}
+              {multiSeason ? 'Ri-scarica tutte le stagioni' : 'Ri-scarica episodi'}
             </Button>
           </div>
-        ) : (
-          <div className="space-y-3">
-            <div className="rounded-md border p-3 text-sm">
-              <p className="break-words font-medium">{picked.title}</p>
-              <p className="break-all text-xs text-muted-foreground">{folder.path}</p>
-            </div>
-            {multiSeason ? (
-              <div className="flex items-start gap-2 rounded-md border border-primary/30 bg-primary/5 p-2.5 text-xs text-muted-foreground">
-                <Layers className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
-                <span className="min-w-0 break-words">
-                  Questa cartella contiene {seasonFolders.length} stagioni: potrai ri-scaricarle
-                  tutte (e i correlati) e classificare ognuna prima di accodarla.
-                </span>
-              </div>
-            ) : null}
-            <div className="flex flex-col gap-2">
-              <Button asChild variant="outline">
-                <Link href={`/catalog/${picked.slug}`} onClick={onClose}>
-                  <ExternalLink className="mr-2 h-4 w-4" />
-                  Apri la scheda dell’anime
-                </Link>
-              </Button>
-              <Button variant="outline" onClick={() => setExternalMode(true)}>
-                <FileSymlink className="mr-2 h-4 w-4" />
-                Collega senza scaricare (esterno)
-              </Button>
-              <Button onClick={multiSeason ? onRedownloadMulti : onRedownload} disabled={busy}>
-                {busy ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <RefreshCw className="mr-2 h-4 w-4" />
-                )}
-                {multiSeason ? 'Ri-scarica tutte le stagioni' : 'Ri-scarica episodi'}
-              </Button>
-            </div>
-            <Button variant="ghost" size="sm" className="gap-1" onClick={() => setPicked(null)}>
-              <ChevronLeft className="h-4 w-4" /> Cambia anime
-            </Button>
-          </div>
-        )}
-
-        <DialogFooter>
-          <Button variant="ghost" onClick={onClose} disabled={busy}>
-            Chiudi
+          <Button variant="ghost" size="sm" className="gap-1" onClick={() => setPicked(null)}>
+            <ChevronLeft className="h-4 w-4" /> Cambia anime
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </div>
+      )}
+    </ResponsiveDialog>
   );
 }
 
@@ -897,26 +892,17 @@ export function FileManager() {
       )}
 
       {/* Rinomina */}
-      <Dialog open={!!renameTarget} onOpenChange={(o) => (o ? null : setRenameTarget(null))}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {renameTarget?.type === 'dir' && renameTarget.managed
-                ? 'Rinomina la serie'
-                : 'Rinomina'}
-            </DialogTitle>
-            <DialogDescription className="break-words">
-              Nuovo nome per “{renameTarget?.name}”.
-            </DialogDescription>
-          </DialogHeader>
-          <Input value={renameName} onChange={(e) => setRenameName(e.target.value)} />
-          {renameTarget?.type === 'dir' && renameTarget.managed ? (
-            <p className="rounded-md border border-primary/30 bg-primary/5 p-2.5 text-xs text-muted-foreground">
-              I collegamenti agli episodi di questa serie verranno aggiornati automaticamente: i
-              file restano scaricati e nella libreria.
-            </p>
-          ) : null}
-          <DialogFooter>
+      <ResponsiveDialog
+        open={!!renameTarget}
+        onOpenChange={(o) => (o ? null : setRenameTarget(null))}
+        title={
+          renameTarget?.type === 'dir' && renameTarget.managed ? 'Rinomina la serie' : 'Rinomina'
+        }
+        description={
+          <span className="break-words">Nuovo nome per &quot;{renameTarget?.name}&quot;.</span>
+        }
+        footer={
+          <>
             <Button
               variant="ghost"
               onClick={() => setRenameTarget(null)}
@@ -935,23 +921,26 @@ export function FileManager() {
               {renameMut.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Rinomina
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </>
+        }
+      >
+        <Input value={renameName} onChange={(e) => setRenameName(e.target.value)} />
+        {renameTarget?.type === 'dir' && renameTarget.managed ? (
+          <p className="rounded-md border border-primary/30 bg-primary/5 p-2.5 text-xs text-muted-foreground">
+            I collegamenti agli episodi di questa serie verranno aggiornati automaticamente: i file
+            restano scaricati e nella libreria.
+          </p>
+        ) : null}
+      </ResponsiveDialog>
 
       {/* Nuova cartella */}
-      <Dialog open={mkdirOpen} onOpenChange={setMkdirOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Nuova cartella</DialogTitle>
-            <DialogDescription>Creala dentro la cartella corrente.</DialogDescription>
-          </DialogHeader>
-          <Input
-            placeholder="Nome cartella"
-            value={mkdirName}
-            onChange={(e) => setMkdirName(e.target.value)}
-          />
-          <DialogFooter>
+      <ResponsiveDialog
+        open={mkdirOpen}
+        onOpenChange={setMkdirOpen}
+        title="Nuova cartella"
+        description="Creala dentro la cartella corrente."
+        footer={
+          <>
             <Button
               variant="ghost"
               onClick={() => setMkdirOpen(false)}
@@ -966,9 +955,15 @@ export function FileManager() {
               {mkdirMut.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Crea
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </>
+        }
+      >
+        <Input
+          placeholder="Nome cartella"
+          value={mkdirName}
+          onChange={(e) => setMkdirName(e.target.value)}
+        />
+      </ResponsiveDialog>
 
       {/* Elimina */}
       <Dialog open={!!deleteTarget} onOpenChange={(o) => (o ? null : setDeleteTarget(null))}>

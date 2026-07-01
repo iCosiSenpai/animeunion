@@ -315,28 +315,40 @@ export function createDownloadService(deps: DownloadServiceDeps): DownloadServic
       .all()
       .filter((f) => (language ? f.language === language : true));
     const nowMs = now().getTime();
-    let count = 0;
-    for (const file of files) {
-      // Forward-only (solo auto): salta il backlog gia' uscito al momento del follow. Le azioni
-      // manuali (addMissing/addAll/addAllBySlug) passano minEpisodeNumber undefined = nessun limite.
-      if (minEpisodeNumber != null && file.number <= minEpisodeNumber) {
-        continue;
-      }
-      // Self-healing: se il file e' sparito dal disco lo riaccodiamo invece di saltarlo.
+
+    // Filtra prima i file candidati (forward-only + self-healing + external).
+    const candidates = files.filter((file) => {
+      if (minEpisodeNumber != null && file.number <= minEpisodeNumber) return false;
       const healed = healMissing(file);
-      // `external` = file dell'utente gia' presente (collegato senza scaricare): non si ri-scarica.
-      if (!healed && (file.status === 'downloaded' || file.status === 'external')) {
-        continue;
-      }
-      const existing = db
-        .select({
-          id: schema.downloadQueue.id,
-          status: schema.downloadQueue.status,
-          completedAt: schema.downloadQueue.completedAt,
-        })
-        .from(schema.downloadQueue)
-        .where(eq(schema.downloadQueue.episodeFileId, file.id))
-        .get();
+      if (!healed && (file.status === 'downloaded' || file.status === 'external')) return false;
+      return true;
+    });
+
+    // Una sola query per recuperare tutti i job esistenti in coda per i file candidati,
+    // invece di N query .get() separate. Map per lookup O(1) nel loop seguente.
+    const queueRows =
+      candidates.length > 0
+        ? db
+            .select({
+              episodeFileId: schema.downloadQueue.episodeFileId,
+              id: schema.downloadQueue.id,
+              status: schema.downloadQueue.status,
+              completedAt: schema.downloadQueue.completedAt,
+            })
+            .from(schema.downloadQueue)
+            .where(
+              inArray(
+                schema.downloadQueue.episodeFileId,
+                candidates.map((f) => f.id),
+              ),
+            )
+            .all()
+        : [];
+    const queueByFileId = new Map(queueRows.map((r) => [r.episodeFileId, r]));
+
+    let count = 0;
+    for (const file of candidates) {
+      const existing = queueByFileId.get(file.id);
       if (!existing) {
         worker.enqueue(file.id);
         count += 1;
@@ -744,32 +756,64 @@ export function createDownloadService(deps: DownloadServiceDeps): DownloadServic
         .from(schema.follow)
         .innerJoin(schema.anime, eq(schema.follow.animeId, schema.anime.id))
         .all();
+
+      // Eligibilita' dallo stato del SEGUITO, non dallo stato d'onda dell'anime.
+      const eligible = follows.filter((f) => {
+        if (f.status === 'dropped') return false;
+        return f.autoDownload != null ? f.autoDownload === 1 : f.status === 'watching';
+      });
+
       let count = 0;
-      for (const f of follows) {
-        // Eligibilita' dallo stato del SEGUITO, non dallo stato d'onda dell'anime (che dalla source
-        // puo' essere errato: un anime in corso marcato COMPLETED veniva escluso per sempre).
-        if (f.status === 'dropped') {
-          continue; // droppato = mai
+      let timedOut = false;
+      // Timeout globale: evita che un blocco su getBySlug congeli il ciclo per ore.
+      const TIMEOUT_MS = 120_000;
+      const timer = new Promise<void>((resolve) =>
+        setTimeout(() => {
+          timedOut = true;
+          logger.warn(
+            { total: eligible.length },
+            'enqueueForAutoFollows: timeout 120s — ciclo interrotto (follow parzialmente processati)',
+          );
+          resolve();
+        }, TIMEOUT_MS),
+      );
+
+      const processAll = async (): Promise<void> => {
+        // Batch da 5: N getBySlug paralleli invece che seriali.
+        const BATCH = 5;
+        for (let i = 0; i < eligible.length; i += BATCH) {
+          if (timedOut) break;
+          const batch = eligible.slice(i, i + BATCH);
+          const results = await Promise.allSettled(
+            batch.map(async (f) => {
+              // Rinfresca SEMPRE il catalogo: i nuovi episodi emergono anche quando il sito non
+              // aggiorna `?updatedSince`, e un anime COMPLETED si auto-corregge. Best-effort.
+              try {
+                await catalog.getBySlug(f.slug, { forceRefresh: true });
+              } catch (error) {
+                logger.debug(
+                  { err: error, slug: f.slug },
+                  'Refresh auto-download fallito (best-effort)',
+                );
+              }
+              // Forward-only: solo gli episodi oltre la soglia all'attivazione dell'auto-download.
+              return addMissingImpl(f.animeId, undefined, true, f.autoDownloadFromEp ?? undefined);
+            }),
+          );
+          results.forEach((r, j) => {
+            if (r.status === 'fulfilled' && r.value > 0) {
+              count += r.value;
+              const follow = batch[j];
+              if (follow) {
+                deps.onAutoEnqueued?.(follow.animeId, r.value);
+              }
+            }
+          });
         }
-        const wanted = f.autoDownload != null ? f.autoDownload === 1 : f.status === 'watching';
-        if (!wanted) {
-          continue;
-        }
-        // Rinfresca SEMPRE il catalogo dei seguiti voluti: i nuovi episodi emergono anche quando il
-        // sito non aggiorna `?updatedSince`, e un anime in corso marcato COMPLETED si auto-corregge.
-        // Best-effort: se il refresh fallisce si prosegue con la cache locale.
-        try {
-          await catalog.getBySlug(f.slug, { forceRefresh: true });
-        } catch (error) {
-          logger.debug({ err: error, slug: f.slug }, 'Refresh auto-download fallito (best-effort)');
-        }
-        // Forward-only: solo gli episodi oltre la soglia catturata all'attivazione dell'auto-download.
-        const added = addMissingImpl(f.animeId, undefined, true, f.autoDownloadFromEp ?? undefined);
-        if (added > 0) {
-          count += added;
-          deps.onAutoEnqueued?.(f.animeId, added);
-        }
-      }
+      };
+
+      await Promise.race([processAll(), timer]);
+
       if (count > 0) {
         logger.info({ count }, 'Auto-enqueue follow: nuovi episodi accodati');
       }

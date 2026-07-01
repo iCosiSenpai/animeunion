@@ -319,12 +319,16 @@ export function createLibraryService(deps: LibraryServiceDeps): LibraryService {
       const foundPaths = new Set(allFiles);
 
       const sizeByPath = new Map<string, number>();
-      await Promise.all(
-        allFiles.map(async (file) => {
-          const info = await stat(file);
-          sizeByPath.set(file, Number(info.size));
-        }),
-      );
+      // Batch da 32: evita di saturare i file descriptor su librerie con centinaia di file.
+      const STAT_BATCH = 32;
+      for (let i = 0; i < allFiles.length; i += STAT_BATCH) {
+        await Promise.all(
+          allFiles.slice(i, i + STAT_BATCH).map(async (file) => {
+            const info = await stat(file);
+            sizeByPath.set(file, Number(info.size));
+          }),
+        );
+      }
 
       let found = 0;
       let updated = 0;

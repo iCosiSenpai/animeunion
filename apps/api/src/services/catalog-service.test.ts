@@ -695,4 +695,31 @@ describe('CatalogService', () => {
     expect(map.has('inesistente')).toBe(false);
     expect(service.bannersBySlugs([]).size).toBe(0);
   });
+
+  // --- Step 6: Hardening P1 ---
+
+  it('ricerca LIKE (P1d): wildcard % e _ nel needle vengono escapati', async () => {
+    // FTS non è attiva: forziamo il fallback LIKE disabilitando la cache del catalogo.
+    // seedAnime non triggera catalog_synced_at → browse() usa likeNeedle come fallback.
+    const { db, service } = makeService();
+    seedAnime(db, 'a1', 'Re:Zero kara Hajimeru Isekai Seikatsu', { slug: 're-zero' });
+    seedAnime(db, 'a2', 'Black Clover', { slug: 'black-clover' });
+    seedAnime(db, 'a3', 'Titolo con % percentuale', { slug: 'test-percent' });
+    seedAnime(db, 'a4', 'Titolo con _ underscore', { slug: 'test-underscore' });
+
+    // Ricerca con % nel needle: senza escape matcherebbe QUALSIASI titolo.
+    // Con escape deve trovare solo l'anime con '%' letterale nel titolo.
+    const resPercent = await service.browse({ query: '%', page: 1 });
+    const idsPercent = resPercent.data.map((a) => a.id);
+    expect(idsPercent).toContain('a3');
+    expect(idsPercent).not.toContain('a1');
+    expect(idsPercent).not.toContain('a2');
+
+    // Ricerca con _ nel needle: senza escape matcherebbe qualsiasi singolo carattere.
+    const resUnderscore = await service.browse({ query: '_', page: 1 });
+    const idsUnderscore = resUnderscore.data.map((a) => a.id);
+    expect(idsUnderscore).toContain('a4');
+    expect(idsUnderscore).not.toContain('a1');
+    expect(idsUnderscore).not.toContain('a2');
+  });
 });

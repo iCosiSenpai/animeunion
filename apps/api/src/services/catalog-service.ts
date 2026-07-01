@@ -525,9 +525,12 @@ export function createCatalogService(options: CatalogServiceOptions): CatalogSer
   }
 
   function likeNeedle(needle: string): SQL {
+    // Escapa i caratteri wildcard SQL LIKE (% e _) prima di interpolare. SQLite richiede la clausola
+    // ESCAPE per riconoscere il carattere di escape: usiamo sql`` raw per includerla.
+    const pattern = `%${needle.replace(/%/g, '\\%').replace(/_/g, '\\_')}%`;
     return or(
-      like(schema.anime.title, `%${needle}%`),
-      like(schema.anime.titleIta, `%${needle}%`),
+      sql`${schema.anime.title} LIKE ${pattern} ESCAPE '\\'`,
+      sql`${schema.anime.titleIta} LIKE ${pattern} ESCAPE '\\'`,
     ) as SQL;
   }
 

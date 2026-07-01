@@ -1,11 +1,11 @@
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto'
+import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 
-const ALGO = 'aes-256-gcm'
-const PREFIX = 'aes256gcm:'
+const ALGO = 'aes-256-gcm';
+const PREFIX = 'aes256gcm:';
 
 /** Deriva una chiave a 32 byte (AES-256) dalla stringa grezza via SHA-256. */
 function deriveKey(raw: string): Buffer {
-  return createHash('sha256').update(raw, 'utf8').digest()
+  return createHash('sha256').update(raw, 'utf8').digest();
 }
 
 /**
@@ -14,12 +14,12 @@ function deriveKey(raw: string): Buffer {
  * Il prefisso permette di distinguere valori cifrati da plaintext legacy.
  */
 export function encryptPassword(plain: string, key: string): string {
-  const iv = randomBytes(12)
-  const derived = deriveKey(key)
-  const cipher = createCipheriv(ALGO, derived, iv)
-  const ct = Buffer.concat([cipher.update(plain, 'utf8'), cipher.final()])
-  const tag = cipher.getAuthTag()
-  return `${PREFIX}${iv.toString('base64')}:${ct.toString('base64')}:${tag.toString('base64')}`
+  const iv = randomBytes(12);
+  const derived = deriveKey(key);
+  const cipher = createCipheriv(ALGO, derived, iv);
+  const ct = Buffer.concat([cipher.update(plain, 'utf8'), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return `${PREFIX}${iv.toString('base64')}:${ct.toString('base64')}:${tag.toString('base64')}`;
 }
 
 /**
@@ -29,21 +29,21 @@ export function encryptPassword(plain: string, key: string): string {
  */
 export function decryptPassword(stored: string, key: string): string {
   if (!stored.startsWith(PREFIX)) {
-    return stored
+    return stored;
   }
-  const parts = stored.split(':')
+  const parts = stored.split(':');
   // parts: ['aes256gcm', iv_b64, ct_b64, tag_b64]
-  const ivB64 = parts[1]
-  const ctB64 = parts[2]
-  const tagB64 = parts[3]
+  const ivB64 = parts[1];
+  const ctB64 = parts[2];
+  const tagB64 = parts[3];
   if (!ivB64 || !ctB64 || !tagB64) {
-    throw new Error('Valore cifrato malformato: segmenti mancanti')
+    throw new Error('Valore cifrato malformato: segmenti mancanti');
   }
-  const iv = Buffer.from(ivB64, 'base64')
-  const ct = Buffer.from(ctB64, 'base64')
-  const tag = Buffer.from(tagB64, 'base64')
-  const derived = deriveKey(key)
-  const decipher = createDecipheriv(ALGO, derived, iv)
-  decipher.setAuthTag(tag)
-  return decipher.update(ct).toString('utf8') + decipher.final('utf8')
+  const iv = Buffer.from(ivB64, 'base64');
+  const ct = Buffer.from(ctB64, 'base64');
+  const tag = Buffer.from(tagB64, 'base64');
+  const derived = deriveKey(key);
+  const decipher = createDecipheriv(ALGO, derived, iv);
+  decipher.setAuthTag(tag);
+  return decipher.update(ct).toString('utf8') + decipher.final('utf8');
 }

@@ -1022,4 +1022,51 @@ describe('DownloadService', () => {
     ).rejects.toThrow(/non disponibile/);
     expect(enqueueSpy).not.toHaveBeenCalled();
   });
+
+  // --- Step 6: Hardening P1 ---
+
+  it('addMissing (P1b): controlla più file in coda con batch inArray', () => {
+    // Verifica che la logica inArray funzioni correttamente con N file,
+    // alcuni già in coda (queued/completed) e altri da accodare.
+    const { service } = makeService();
+    insertAnime(db, 'a-1');
+    for (let i = 1; i <= 6; i++) {
+      insertEpisode(db, `e-${i}`, 'a-1', i);
+      insertFile(db, `ef-${i}`, `e-${i}`, 'SUB_ITA');
+    }
+    // ef-1: queued → salta (non terminale)
+    insertQueue(db, 'q-1', 'ef-1', 'queued');
+    // ef-2: completed → salta (già scaricato via queue; episodeFile non è 'downloaded' quindi
+    // passa il filtro candidati ma viene escluso dal check completed nel loop)
+    insertQueue(db, 'q-2', 'ef-2', 'completed');
+    // ef-3: cancelled → non riaccodato automaticamente da addMissing
+    insertQueue(db, 'q-3', 'ef-3', 'cancelled');
+    // ef-4, ef-5, ef-6: nessuna riga in coda → devono essere accodati
+    const n = service.addMissing({ animeId: 'a-1' });
+    expect(n).toBe(3);
+    expect(enqueueSpy).toHaveBeenCalledWith('ef-4');
+    expect(enqueueSpy).toHaveBeenCalledWith('ef-5');
+    expect(enqueueSpy).toHaveBeenCalledWith('ef-6');
+    expect(enqueueSpy).not.toHaveBeenCalledWith('ef-1');
+  });
+
+  it('enqueueForAutoFollows (P1a): processa >5 follow in batch paralleli', async () => {
+    // Con 7 follow idonei, getBySlug deve essere chiamato per tutti e 7 (batch: 5+2).
+    const getBySlug = vi.fn().mockResolvedValue(undefined);
+    const catalog = { getBySlug } as unknown as CatalogService;
+    const { service } = makeService(catalog);
+    for (let i = 1; i <= 7; i++) {
+      insertAnime(db, `a-${i}`);
+      insertEpisode(db, `e-${i}`, `a-${i}`, 1);
+      insertFile(db, `ef-${i}`, `e-${i}`, 'SUB_ITA');
+      insertWatching(db, `f-${i}`, `a-${i}`);
+    }
+    const n = await service.enqueueForAutoFollows();
+    expect(n).toBe(7);
+    expect(getBySlug).toHaveBeenCalledTimes(7);
+    // Ogni follow ha il proprio slug (= animeId per come insertAnime costruisce il record).
+    for (let i = 1; i <= 7; i++) {
+      expect(getBySlug).toHaveBeenCalledWith(`a-${i}`, { forceRefresh: true });
+    }
+  });
 });

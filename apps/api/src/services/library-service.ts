@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { readdir, rm, stat } from 'node:fs/promises';
+import { readdir, realpath, rm, stat } from 'node:fs/promises';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import type {
   Language,
@@ -66,14 +66,17 @@ function isVideoFile(filePath: string): boolean {
   return !filePath.includes('.part.');
 }
 
-async function walk(dir: string, logger: Logger): Promise<string[]> {
+async function walk(dir: string, logger: Logger, maxDepth = 20): Promise<string[]> {
+  if (maxDepth <= 0) {
+    return [];
+  }
   const files: string[] = [];
   try {
     const entries = await readdir(dir, { withFileTypes: true });
     for (const entry of entries) {
       const fullPath = join(dir, entry.name);
       if (entry.isDirectory()) {
-        files.push(...(await walk(fullPath, logger)));
+        files.push(...(await walk(fullPath, logger, maxDepth - 1)));
       } else if (entry.isFile()) {
         files.push(fullPath);
       }
@@ -237,12 +240,16 @@ export function createLibraryService(deps: LibraryServiceDeps): LibraryService {
     return { deletedFiles, freedBytes, failedFiles };
   }
 
-  /** Cartelle "serie" (root + primo segmento) dei localPath dati, confinate sotto una root. */
-  function seriesFoldersOf(paths: string[]): string[] {
-    const roots = config.distinctDownloadRoots().map((r) => resolve(r));
+  /** Cartelle "serie" (root + primo segmento) dei localPath dati, confinate sotto una root.
+   *  Usa realpath() per risolvere i symlink prima del confronto di confinamento, così un link
+   *  che punta fuori dalla root non supera il check. Se realpath fallisce (path inesistente)
+   *  si ricade su resolve() (compatibilità con path già rimossi). */
+  async function seriesFoldersOf(paths: string[]): Promise<string[]> {
+    const rawRoots = config.distinctDownloadRoots().map((r) => resolve(r));
+    const roots = await Promise.all(rawRoots.map((r) => realpath(r).catch(() => r)));
     const folders = new Set<string>();
     for (const p of paths) {
-      const abs = resolve(p);
+      const abs = await realpath(p).catch(() => resolve(p));
       for (const root of roots) {
         if (abs === root || !abs.startsWith(root + sep)) {
           continue;
@@ -265,7 +272,7 @@ export function createLibraryService(deps: LibraryServiceDeps): LibraryService {
   ): Promise<{ deletedFiles: number; freedBytes: number }> {
     let deletedFiles = 0;
     let freedBytes = 0;
-    for (const folder of seriesFoldersOf(paths)) {
+    for (const folder of await seriesFoldersOf(paths)) {
       try {
         const files = await walk(folder, logger);
         for (const f of files) {

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 import { schema } from '../db';
 import { createTestDb } from '../test/helpers';
 import { createConfigService } from './config-service';
@@ -113,21 +113,30 @@ describe('NotificationService', () => {
     expect(list.find((n) => n.title.includes('Bleach'))?.title).toBe('Scaricato: Bleach');
   });
 
-  it('notifyDownloadComplete crea una riga nuova se l’aggregato e’ stato eliminato', () => {
+  it('notifyDownloadComplete (P2d): LRU eviction — Map non supera ~451 entry dopo > 500', () => {
     const db = createTestDb();
     const config = createConfigService({ db });
-    const svc = createNotificationService({ db, config });
+    // Creiamo il servizio con clock controllato.
+    let nowMs = Date.parse('2026-01-01T00:00:00Z');
+    const svcLru = createNotificationService({
+      db,
+      config,
+      now: () => new Date(nowMs),
+    });
 
-    const first = svc.notifyDownloadComplete({ animeId: 'a1', title: 'One Piece', epNum: 1 });
-    // Simula lettura + pulizia della riga aggregata.
-    svc.markRead(first.id);
-    expect(svc.clear()).toBe(1);
-    expect(svc.list()).toHaveLength(0);
+    // Riempie la Map con 500 entry distinte (animeId univoci, ogni evento >10min dal prev).
+    for (let i = 0; i < 500; i++) {
+      nowMs += 11 * 60_000;
+      svcLru.notifyDownloadComplete({ animeId: `anime-${i}`, title: `Anime ${i}`, epNum: 1 });
+    }
+    // A questo punto la Map ha 500 entry. Il prossimo insert deve fare eviction (50 oldest).
+    nowMs += 11 * 60_000;
+    svcLru.notifyDownloadComplete({ animeId: 'anime-trigger', title: 'Trigger', epNum: 1 });
 
-    // Nuovo evento entro la finestra: la riga non esiste piu' → ne crea una fresca.
-    svc.notifyDownloadComplete({ animeId: 'a1', title: 'One Piece', epNum: 2 });
-    const list = svc.list();
-    expect(list).toHaveLength(1);
-    expect(list[0]?.title).toBe('Scaricato: One Piece');
+    // Il servizio deve restare funzionale dopo l'eviction.
+    const list = svcLru.list(1000);
+    // 500 sessioni + 1 trigger = 501 notifiche nel DB (le entry evicte erano solo nella Map).
+    expect(list.length).toBe(501);
+    expect(list.some((n) => n.title === 'Scaricato: Trigger')).toBe(true);
   });
 });

@@ -28,6 +28,7 @@ import { type AnimeRow, loadGenresByAnimeIds, toAnimeSummary, toEpisodeSummary }
 const PER_PAGE = 24;
 const SYNC_TIMESTAMP_KEY = 'catalog_synced_at';
 const CALENDAR_TTL_MS = 30 * 60 * 1000;
+const EPISODES_CACHE_TTL_MS = 5 * 60 * 1_000;
 // Gli ONGOING ricevono episodi nuovi spesso: cap di freschezza piu' corto per il dettaglio, cosi'
 // la cache non nasconde l'ultimo episodio (gia' presente nel feed globale "ultimi episodi").
 const ONGOING_DETAIL_TTL_MS = 60 * 60 * 1000;
@@ -84,6 +85,9 @@ export function createCatalogService(options: CatalogServiceOptions): CatalogSer
   const now = options.now ?? (() => new Date());
   let syncRunning = false;
   let calendarCache: { fetchedAt: number; week: CalendarWeek } | null = null;
+  // Cache in-memory degli episodi per slug: evita di scaricare l'intera lista ad ogni
+  // pre-download (getEpisodeFile con forceResolve). TTL 5min; invalidata su syncCatalog.
+  const episodesCache = new Map<string, { episodes: SourceEpisode[]; ts: number }>();
 
   function getLastSyncedAt(): string | null {
     const row = db
@@ -771,6 +775,7 @@ export function createCatalogService(options: CatalogServiceOptions): CatalogSer
           page++;
         }
         setLastSyncedAt(now().toISOString());
+        episodesCache.clear();
         logger.info({ synced }, 'Sync catalogo completato');
         options.onSyncComplete?.(synced);
         return { synced };
@@ -817,13 +822,22 @@ export function createCatalogService(options: CatalogServiceOptions): CatalogSer
       const needsResolve = opts?.forceResolve === true || !downloadUrl || expired;
       if (needsResolve) {
         try {
-          const episodes = await source.getEpisodes(animeRow.slug);
+          // Usa la cache episodi per slug (TTL 5min) per evitare di scaricare l'intera lista
+          // ad ogni pre-download. La cache viene invalidata da syncCatalog.
+          const cached = episodesCache.get(animeRow.slug);
+          const episodes: SourceEpisode[] =
+            cached && now().getTime() - cached.ts < EPISODES_CACHE_TTL_MS
+              ? cached.episodes
+              : await source.getEpisodes(animeRow.slug).then((eps) => {
+                  episodesCache.set(animeRow.slug, { episodes: eps, ts: now().getTime() });
+                  return eps;
+                });
           const match = episodes.find(
             (entry) => entry.number === epRow.number && entry.language === fileRow.language,
           );
           if (match?.downloadUrl) {
             downloadUrl = match.downloadUrl;
-            expiresAt = match.expiresAt;
+            expiresAt = match.expiresAt ?? null;
             db.update(schema.episodeFile)
               .set({ downloadUrl, urlExpiresAt: expiresAt, updatedAt: now().toISOString() })
               .where(eq(schema.episodeFile.id, episodeFileId))

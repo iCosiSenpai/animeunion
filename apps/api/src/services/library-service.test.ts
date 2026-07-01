@@ -509,4 +509,22 @@ describe('LibraryService', () => {
     expect(groups.find((g) => g.category === 'film')?.anime.id).toBe('movie-x');
     expect(groups.find((g) => g.category === 'tv')?.anime.id).toBe('tv-y');
   });
+
+  // --- Step 7: Hardening P2 ---
+
+  it('scan() trova file video in sottocartelle annidate (walk ricorsivo)', async () => {
+    // Verifica che walk() scenda correttamente nelle sottocartelle. Crea una struttura
+    // a 3 livelli di profondità con un file video in fondo, al di fuori dei path attesi
+    // dal renamer — il file sarà rilevato come orfano (orphan), ma walk() lo trova.
+    const db = createTestDb();
+    const { service } = makeService(db, tmpDir);
+
+    const deep = join(tmpDir, 'stagione1', 'sub', 'extra');
+    await mkdir(deep, { recursive: true });
+    await writeFile(join(deep, 'orphan.mp4'), 'fake-video');
+
+    const result = await service.scan();
+    // Il file viene trovato da walk() e classificato come orfano (non tracciato nel DB).
+    expect(result.orphans).toBe(1);
+  });
 });

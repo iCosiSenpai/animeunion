@@ -696,6 +696,110 @@ describe('CatalogService', () => {
     expect(service.bannersBySlugs([]).size).toBe(0);
   });
 
+  // --- Step 7: Hardening P2 ---
+
+  it('getEpisodeFile (P2b): episodesCache — getEpisodes chiamato una volta sola per slug entro TTL', async () => {
+    let getEpisodesCalls = 0;
+    const inner = createMockSource();
+    const trackingSource = new Proxy(inner, {
+      get(target, prop, receiver) {
+        const value = Reflect.get(target, prop, receiver);
+        if (prop === 'getEpisodes') {
+          return async (...args: unknown[]) => {
+            getEpisodesCalls++;
+            return (value as (...a: unknown[]) => unknown).apply(target, args);
+          };
+        }
+        return typeof value === 'function'
+          ? (value as (...a: unknown[]) => unknown).bind(target)
+          : value;
+      },
+    }) as AnimeSource;
+
+    const db = createTestDb();
+    const config = createConfigService({ db });
+    let nowMs = Date.now();
+    const service = createCatalogService({
+      db,
+      source: trackingSource,
+      config,
+      logger: testLogger,
+      now: () => new Date(nowMs),
+    });
+
+    const slug = (await service.search({ query: '', page: 1 })).data[0]?.slug;
+    if (!slug) {
+      throw new Error('catalogo mock vuoto');
+    }
+    const detail = await service.getBySlug(slug);
+    const ep1 = detail.episodes[0];
+    const ep2 = detail.episodes[1];
+    if (!ep1 || !ep2) {
+      throw new Error('la mock source deve avere almeno 2 episodi');
+    }
+    // Azzera il contatore dopo getBySlug (che non chiama getEpisodes normalmente).
+    getEpisodesCalls = 0;
+
+    // Prima chiamata: forceResolve → chiama getEpisodes, salva in cache.
+    await service.getEpisodeFile(ep1.id, { forceResolve: true });
+    expect(getEpisodesCalls).toBe(1);
+
+    // Seconda chiamata su episodio diverso dello stesso slug: usa la cache.
+    await service.getEpisodeFile(ep2.id, { forceResolve: true });
+    expect(getEpisodesCalls).toBe(1);
+
+    // Avanza oltre il TTL (5min + 1ms) → la cache è scaduta → richiama getEpisodes.
+    nowMs += 5 * 60_000 + 1;
+    await service.getEpisodeFile(ep1.id, { forceResolve: true });
+    expect(getEpisodesCalls).toBe(2);
+  });
+
+  it('getEpisodeFile (P2b): syncCatalog invalida la episodesCache', async () => {
+    let getEpisodesCalls = 0;
+    const inner = createMockSource();
+    const trackingSource = new Proxy(inner, {
+      get(target, prop, receiver) {
+        const value = Reflect.get(target, prop, receiver);
+        if (prop === 'getEpisodes') {
+          return async (...args: unknown[]) => {
+            getEpisodesCalls++;
+            return (value as (...a: unknown[]) => unknown).apply(target, args);
+          };
+        }
+        return typeof value === 'function'
+          ? (value as (...a: unknown[]) => unknown).bind(target)
+          : value;
+      },
+    }) as AnimeSource;
+
+    const db = createTestDb();
+    const config = createConfigService({ db });
+    const service = createCatalogService({
+      db,
+      source: trackingSource,
+      config,
+      logger: testLogger,
+    });
+
+    const slug = (await service.search({ query: '', page: 1 })).data[0]?.slug;
+    if (!slug) throw new Error('catalogo mock vuoto');
+    const detail = await service.getBySlug(slug);
+    const ep = detail.episodes[0];
+    if (!ep) throw new Error('nessun episodio');
+
+    getEpisodesCalls = 0;
+    // Prima chiamata: popola la cache.
+    await service.getEpisodeFile(ep.id, { forceResolve: true });
+    expect(getEpisodesCalls).toBe(1);
+    // Seconda chiamata: usa la cache.
+    await service.getEpisodeFile(ep.id, { forceResolve: true });
+    expect(getEpisodesCalls).toBe(1);
+    // Sync invalida la cache.
+    await service.syncCatalog();
+    await service.getEpisodeFile(ep.id, { forceResolve: true });
+    expect(getEpisodesCalls).toBe(2);
+  });
+
   // --- Step 6: Hardening P1 ---
 
   it('ricerca LIKE (P1d): wildcard % e _ nel needle vengono escapati', async () => {

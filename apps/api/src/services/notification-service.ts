@@ -1,5 +1,5 @@
 import type { Notification, NotificationType } from '@animeunion/shared';
-import { desc, eq, inArray } from 'drizzle-orm';
+import { count, desc, eq, inArray } from 'drizzle-orm';
 import type { Db } from '../db';
 import { schema } from '../db';
 import type { Logger } from '../lib/logger';
@@ -174,6 +174,14 @@ export function createNotificationService(deps: NotificationServiceDeps): Notifi
         // La riga e' sparita (es. clear): apri una sessione nuova qui sotto.
       }
 
+      // LRU: se la Map supera 500 entry, rimuovi le 50 più vecchie per evitare crescita illimitata.
+      if (downloadAggregates.size >= 500) {
+        const sorted = [...downloadAggregates.entries()].sort((a, b) => a[1].lastAt - b[1].lastAt);
+        for (const [k] of sorted.slice(0, 50)) {
+          downloadAggregates.delete(k);
+        }
+      }
+
       // Nuova sessione: notifica singola (inoltra a Telegram/Push una volta sola).
       const created = createNotification({
         type: 'download_complete',
@@ -212,11 +220,13 @@ export function createNotificationService(deps: NotificationServiceDeps): Notifi
     },
 
     unreadCount() {
-      return db
-        .select({ id: schema.notification.id })
-        .from(schema.notification)
-        .where(eq(schema.notification.read, 0))
-        .all().length;
+      return (
+        db
+          .select({ cnt: count() })
+          .from(schema.notification)
+          .where(eq(schema.notification.read, 0))
+          .get()?.cnt ?? 0
+      );
     },
 
     markRead(id) {

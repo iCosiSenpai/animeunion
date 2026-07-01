@@ -1,16 +1,19 @@
 'use client';
 
 import { AnimeGridSkeleton } from '@/components/anime/anime-grid';
+import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/ui/page-header';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FOLLOW_STATUSES } from '@/lib/follow';
 import { trpc } from '@/lib/trpc';
+import { AlertCircle } from 'lucide-react';
 import { FollowCard } from './follow-card';
 
 const GRID_CLASS = 'grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6';
 
 export function FollowsView() {
-  const { data, isLoading } = trpc.follow.list.useQuery();
+  const { data, isLoading, isError, refetch } = trpc.follow.list.useQuery();
   const follows = data ?? [];
 
   return (
@@ -23,6 +26,17 @@ export function FollowsView() {
 
       {isLoading ? (
         <AnimeGridSkeleton />
+      ) : isError ? (
+        <EmptyState
+          icon={AlertCircle}
+          title="Impossibile caricare i seguiti"
+          description="Controlla la connessione e riprova."
+          action={
+            <Button variant="outline" onClick={() => refetch()}>
+              Riprova
+            </Button>
+          }
+        />
       ) : (
         <Tabs defaultValue="watching">
           <TabsList className="flex-wrap">

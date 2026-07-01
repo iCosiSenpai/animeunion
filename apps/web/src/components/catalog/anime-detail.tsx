@@ -343,7 +343,22 @@ function EpisodeList({ anime }: { anime: AnimeDetailType }) {
   const hasSub = availableLangs.has('SUB_ITA');
   const hasDub = availableLangs.has('DUB_ITA');
   const utils = trpc.useUtils();
-  const queue = trpc.download.queue.useQuery(undefined, { refetchInterval: 2000 });
+  // Polla ogni 2s solo se c'è un download attivo per QUESTO anime: evita richieste continue
+  // sulla pagina dettaglio quando la coda riguarda altre serie. Un enqueue locale invalida la
+  // query (vedi mutation sotto), riattivando il polling finché il job non termina.
+  const queue = trpc.download.queue.useQuery(undefined, {
+    refetchInterval: (q) => {
+      const items = q.state.data ?? [];
+      const activeForThis = items.some(
+        (item) =>
+          item.animeId === anime.id &&
+          (item.status === 'queued' ||
+            item.status === 'downloading' ||
+            item.status === 'processing'),
+      );
+      return activeForThis ? 2000 : false;
+    },
+  });
   const queueMap = new Map<string, DownloadStatus>(
     (queue.data ?? []).map((item) => [item.episodeFileId, item.status]),
   );

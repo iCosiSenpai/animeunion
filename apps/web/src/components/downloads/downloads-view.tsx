@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { trpc } from '@/lib/trpc';
+import { useDownloadSummary } from '@/lib/use-download-summary';
 import type { DownloadFilter, DownloadGroupSummary } from '@animeunion/shared';
 import { AnimatePresence, motion } from 'framer-motion';
 import { AlertCircle, Download, Pause, Play, RefreshCw, Trash2 } from 'lucide-react';
@@ -31,14 +32,7 @@ export function DownloadsView() {
   const animationsOn = useAnimationsOn();
   const [filter, setFilter] = useState<DownloadFilter>('all');
 
-  const summaryQuery = trpc.download.summary.useQuery(undefined, {
-    refetchInterval: (query) => {
-      const data = query.state.data;
-      if (!data) return 5000;
-      const active = data.counts.downloading + data.counts.processing > 0;
-      return active ? 1500 : 5000;
-    },
-  });
+  const { query: summaryQuery, counts, activeCount, hasFailed } = useDownloadSummary();
 
   const pausedQuery = trpc.download.isPaused.useQuery();
 
@@ -102,9 +96,6 @@ export function DownloadsView() {
   });
 
   const summary = summaryQuery.data;
-  const counts = summary?.counts;
-  const activeCount = counts ? counts.queued + counts.downloading + counts.processing : 0;
-  const hasFailed = (counts?.failed ?? 0) > 0;
   const completedCount = counts?.completed ?? 0;
   const totalCount = counts?.all ?? 0;
   const isPaused = pausedQuery.data?.paused === true;
@@ -251,7 +242,7 @@ export function DownloadsView() {
           Nessun download in questa categoria.
         </Card>
       ) : (
-        <ScrollArea className="h-[calc(100vh-16rem)]">
+        <ScrollArea className="h-[calc(100dvh-16rem)]">
           <div className="space-y-3 pr-3">
             <AnimatePresence initial={false}>
               {groups.map((group) => (

@@ -1,11 +1,21 @@
 'use client';
 
+import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/ui/page-header';
 import { trpc } from '@/lib/trpc';
 import { formatBytes } from '@/lib/utils';
 import type { DashboardStats } from '@animeunion/shared';
-import { CheckCircle2, Clapperboard, Download, HardDrive, Heart, ListVideo } from 'lucide-react';
+import {
+  AlertCircle,
+  CheckCircle2,
+  Clapperboard,
+  Download,
+  HardDrive,
+  Heart,
+  ListVideo,
+} from 'lucide-react';
 import type { ReactNode } from 'react';
 
 function StatCard({
@@ -116,7 +126,18 @@ export function StatsView() {
         description="Una panoramica di catalogo, download e spazio occupato."
       />
 
-      {stats.isLoading || !stats.data ? (
+      {stats.isError ? (
+        <EmptyState
+          icon={AlertCircle}
+          title="Impossibile caricare le statistiche"
+          description="Controlla la connessione e riprova."
+          action={
+            <Button variant="outline" onClick={() => stats.refetch()}>
+              Riprova
+            </Button>
+          }
+        />
+      ) : stats.isLoading || !stats.data ? (
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
           {['s1', 's2', 's3', 's4', 's5', 's6'].map((k) => (
             <Card key={k} className="h-24 animate-pulse bg-muted" />

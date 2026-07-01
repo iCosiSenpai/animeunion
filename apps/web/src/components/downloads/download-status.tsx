@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { trpc } from '@/lib/trpc';
+import { useDownloadSummary } from '@/lib/use-download-summary';
 import { cn, formatSpeed } from '@/lib/utils';
 import { CheckCircle2, Download, Loader2, Pause, Play, Trash2 } from 'lucide-react';
 import Link from 'next/link';
@@ -24,14 +25,7 @@ function ProgressBar({ progress }: { progress: number }) {
 export function DownloadStatus() {
   const utils = trpc.useUtils();
   const [open, setOpen] = useState(false);
-  const summary = trpc.download.summary.useQuery(undefined, {
-    refetchInterval: (query) => {
-      const data = query.state.data;
-      if (!data) return 5000;
-      const active = data.counts.downloading + data.counts.processing > 0;
-      return active ? 1500 : 5000;
-    },
-  });
+  const { query: summary, counts, activeCount } = useDownloadSummary();
   const pausedQuery = trpc.download.isPaused.useQuery(undefined, {
     refetchInterval: 5000,
   });
@@ -60,13 +54,11 @@ export function DownloadStatus() {
     },
   });
 
-  const counts = summary.data?.counts;
   // Item in volo (downloading/processing) da tutti i gruppi: bastano per la barra live.
   const inflight = (summary.data?.groups ?? []).flatMap((g) => g.activeItems);
   const queuedCount = counts?.queued ?? 0;
   const completedCount = counts?.completed ?? 0;
   const failedCount = counts?.failed ?? 0;
-  const activeCount = counts ? counts.queued + counts.downloading + counts.processing : 0;
   // Badge: lavori non terminali + falliti (esclude i cancellati, come prima).
   const badge = activeCount + failedCount;
   const isPaused = pausedQuery.data?.paused ?? false;

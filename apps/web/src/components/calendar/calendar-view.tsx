@@ -3,13 +3,14 @@
 import { AnimeGrid, AnimeGridSkeleton } from '@/components/anime/anime-grid';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/ui/page-header';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { trpc } from '@/lib/trpc';
 import { useFollowedIds } from '@/lib/use-followed';
 import { cn } from '@/lib/utils';
 import type { AnimeSummary, WeekDay } from '@animeunion/shared';
-import { CalendarDays, Check, Rows3 } from 'lucide-react';
+import { AlertCircle, CalendarDays, Check, Rows3 } from 'lucide-react';
 import { useState } from 'react';
 
 const DAYS: { value: WeekDay; short: string; long: string }[] = [
@@ -51,7 +52,7 @@ function weekDates(reference: Date): Map<WeekDay, string> {
 }
 
 export function CalendarView() {
-  const { data, isLoading } = trpc.calendar.week.useQuery();
+  const { data, isLoading, isError, refetch } = trpc.calendar.week.useQuery();
   const followedIds = useFollowedIds();
   const [view, setView] = useState<'day' | 'week'>('day');
   const [onlyFollowed, setOnlyFollowed] = useState(false);
@@ -116,6 +117,17 @@ export function CalendarView() {
 
       {isLoading ? (
         <AnimeGridSkeleton />
+      ) : isError ? (
+        <EmptyState
+          icon={AlertCircle}
+          title="Impossibile caricare il calendario"
+          description="Controlla la connessione e riprova."
+          action={
+            <Button variant="outline" onClick={() => refetch()}>
+              Riprova
+            </Button>
+          }
+        />
       ) : view === 'day' ? (
         <Tabs defaultValue={today}>
           <TabsList className="h-auto flex-wrap gap-1">

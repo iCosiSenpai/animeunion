@@ -31,11 +31,10 @@ Shared: `packages/shared` (zod + interfaccia `AnimeSource`). Video: ffmpeg-stati
 Scheduler: setInterval (node-cron non usato). Lint: Biome. Test: Vitest (+ Playwright in futuro).
 Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
 
-## Roadmap verso v0.13.0 — "Mobile First + Rinforzo" (IN CORSO)
+## Roadmap verso v0.13.0 — "Mobile First + Rinforzo" (COMPLETO)
 
-> Piano vivo (durevole, canonico): **[plan/mobile-first-rinforzo.md](plan/mobile-first-rinforzo.md)**
-> Branch: `feat/mobile-first-rinforzo` — partito da `main` a `0be20c1`.
-> **Leggi il piano per lo stato aggiornato degli step.**
+> Piano archivio: **[plan/mobile-first-rinforzo.md](plan/mobile-first-rinforzo.md)**
+> Branch: `feat/mobile-first-rinforzo` — ff-merged in `main` come `v0.13.0`.
 
 - [x] **Step 0** — Governance: branch, piano in `plan/`, Regola #16 aggiunta, CLAUDE.md trimmed
 - [x] **Step 1** — CLAUDE.md trimming: archivio in `docs/history/`, file ridotto da 94k a ~18k
@@ -44,10 +43,8 @@ Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
 - [x] **Step 4** — Polling condizionale + error states + `useDownloadSummary` hook + `100dvh`
 - [x] **Step 5** — Hardening P0: password cifratura, VAPID guard, `FALLBACK_TOKEN_TTL` 1h, uncaught handler
 - [x] **Step 6** — Hardening P1: `enqueueForAutoFollows` batch, `addMissing` inArray, `scan` concorrenza, `likeNeedle` escape
-- [ ] **Step 7** — Hardening P2: `removeSeriesFolders` realpath, `walk()` depth limit, episodi cache, Map LRU
-- [ ] **Step 8** — Release v0.13.0
-
-_Aggiornare qui a ogni step completato._
+- [x] **Step 7** — Hardening P2: `removeSeriesFolders` realpath, `walk()` depth limit, episodi cache, Map LRU
+- [x] **Step 8** — Release v0.13.0
 
 ## Batch successivo pianificato: v0.14.0 — "Quality + GPU Upscaling Bridge"
 
@@ -60,10 +57,10 @@ backend bridge NAS↔GPU (ibrido locale/cloud) → quality nel download engine (
 
 ## Stato attuale (2026-07-01)
 
-**Versione corrente: v0.12.0 "Super rinforzo" — deployato e funzionante sul NAS.**
+**Versione corrente: v0.13.0 "Mobile First + Rinforzo" — rilasciata, deploy NAS in corso.**
 - api Up (healthy), web HTTP 200 su :7979, migrazioni ok
-- 352 test verdi, lint/typecheck verdi
-- **Batch attivo:** `feat/mobile-first-rinforzo` (Step 0-6 completati, Step 7+ in attesa)
+- 355 test verdi, lint/typecheck verdi
+- **Batch attivo:** nessuno — v0.13.0 completata. Prossimo: `v0.14.0 "Quality + GPU Upscaling Bridge"`
 
 Funzioni principali operative: download automatico (1 episodio alla volta), FTS5 search, cestino
 recuperabile, backup automatico DB, verifica integrità video, Jellyfin integration, nfo sidecar,
@@ -75,6 +72,7 @@ gestore file con collega-senza-scaricare, home personalizzabile, calendario, wal
 
 | Versione | Batch | Data |
 |---|---|---|
+| v0.13.0 | Mobile First + Rinforzo | 2026-07-01 |
 | v0.12.0 | [Super rinforzo](docs/history/batch-super-rinforzo-v0.12.0.md) | 2026-06-29 |
 | v0.10.0 | [Potenziamenti diffusi](docs/history/batch-potenziamenti-diffusi-v0.10.0.md) | 2026-06|
 | v0.11.x | [Auto-download affidabile + fix gestore file](docs/history/batch-auto-download-v0.11.x.md) | 2026-06 |

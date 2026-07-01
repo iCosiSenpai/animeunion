@@ -14,6 +14,44 @@ e il progetto aderisce al [Semantic Versioning](https://semver.org/lang/it/).
 - Gating reale del Premium (collegamento all'account del sito, da definire con l'admin).
 - Update ottimistici e routing del cestino anche per `library.deleteSeries` (rimandati).
 
+## [0.13.0] - 2026-07-01
+
+Batch "Mobile First + Rinforzo": UX mobile-first e rinforzo di robustezza/sicurezza trasversale.
+
+### Added
+- **Bottom sheet mobile:** nuovo wrapper `<ResponsiveDialog>` che usa `Sheet` (dal basso) su
+  mobile < 640px e `Dialog` su desktop; applicato a SeriesOrganizationPanel, RelinkDialog,
+  FolderActionsDialog, rinomina e nuova cartella.
+- **Hook `useDownloadSummary`:** polling adattivo (1500ms se download attivi, 5000ms idle)
+  centralizzato e riusato da `downloads-view` e `download-status`.
+- **Error states:** `follows-view`, `calendar-view`, `stats-view` mostrano `EmptyState` con
+  bottone "Riprova" in caso di errore query.
+- **Cifratura password DB:** la password viene cifrata con AES-256-GCM se `AUTH_ENCRYPT_KEY`
+  è in env; backward-compatible (senza chiave resta in chiaro con log warning).
+- **VAPID guard:** se una chiave manca, il push service si disabilita con log critico
+  invece di rigenerare le chiavi silenziosamente.
+
+### Changed
+- **Toast mobile:** CSS override con `env(safe-area-inset-top)` per eliminare l'overlap
+  con la status bar su iOS/Android.
+- **Polling condizionale in `anime-detail`:** la coda viene pollata solo se ci sono download
+  attivi per quella serie.
+- **`100dvh` su `downloads-view`:** altezza viewport corretta su mobile.
+- **`FALLBACK_TOKEN_TTL`:** abbassato da 59 giorni a 1 ora.
+- **`enqueueForAutoFollows` in batch:** batch da 5 con `Promise.allSettled` + timeout 120s.
+- **`addMissing` con `inArray`:** controllo esistenza in coda in una sola query.
+- **`scan()` concorrenza limitata:** `stat()` sui file con `p-limit(32)`.
+- **`likeNeedle` escape wildcard:** i caratteri `%` e `_` vengono escapati correttamente.
+- **`removeSeriesFolders` con `realpath`:** risoluzione symlink prima del path-confinement check.
+- **`walk()` con `maxDepth = 20`:** limite di profondità per prevenire loop su symlink circolari.
+- **Cache episodi in `getEpisodeFile`:** TTL 5 min; invalidata da `syncCatalog`.
+- **LRU per `downloadAggregates`:** la Map è limitata a 500 entry (eviction delle 50 più vecchie).
+- **`unreadCount()` SQL aggregato:** usa `COUNT(*)` invece di caricare tutti gli ID in memoria.
+
+### Notes
+- CLAUDE.md ridotto da 94k a ~18k con archivio in `docs/history/`.
+- 355 test verdi; lint/typecheck/build web verdi.
+
 ## [0.12.0] - 2026-06-29
 
 Batch "Super rinforzo": rinforzo trasversale di robustezza, sicurezza dei dati e qualità su

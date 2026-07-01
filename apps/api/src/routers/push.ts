@@ -3,14 +3,22 @@ import {
   pushSubscriptionInputSchema,
   pushUnsubscribeInputSchema,
 } from '@animeunion/shared';
+import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 import { publicProcedure, router } from '../trpc';
 
 /** Web Push del browser: chiave pubblica VAPID + gestione sottoscrizioni. */
 export const pushRouter = router({
-  publicKey: publicProcedure
-    .output(pushPublicKeySchema)
-    .query(({ ctx }) => ({ publicKey: ctx.services.push.getPublicKey() })),
+  publicKey: publicProcedure.output(pushPublicKeySchema).query(({ ctx }) => {
+    const publicKey = ctx.services.push.getPublicKey();
+    if (!publicKey) {
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: "VAPID keys inconsistenti: push disabilitato. Contatta l'amministratore.",
+      });
+    }
+    return { publicKey };
+  }),
 
   subscribe: publicProcedure.input(pushSubscriptionInputSchema).mutation(({ ctx, input }) => {
     ctx.services.push.subscribe(input);

@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Db } from '../db';
 import { schema } from '../db';
+import { decryptPassword, encryptPassword } from '../lib/crypto';
 import { AuthError, createHttpClient } from '../lib/http-client';
 import type { Logger } from '../lib/logger';
 import {
@@ -13,7 +14,7 @@ import {
 
 const AUTH_ROW_ID = 'default';
 const EXPIRY_MARGIN_MS = 24 * 60 * 60 * 1000;
-const FALLBACK_TOKEN_TTL_MS = 59 * 24 * 60 * 60 * 1000;
+const FALLBACK_TOKEN_TTL_MS = 3_600_000;
 
 const loginUserSchema = z.object({
   email: z.string().optional(),
@@ -33,6 +34,8 @@ export interface AuthServiceOptions {
   logger: Logger;
   rateLimitMs?: number;
   now?: () => Date;
+  // Chiave per cifrare la password nel DB (AES-256-GCM). Se assente → plaintext + warning.
+  encryptKey?: string;
 }
 
 export interface AuthStatus {
@@ -93,7 +96,10 @@ export function createAuthService(options: AuthServiceOptions): AuthService {
   function resolveCredentials(): Credentials | null {
     const row = readRow();
     if (row?.userEmail && row?.password) {
-      return { email: row.userEmail, password: row.password };
+      const plain = options.encryptKey
+        ? decryptPassword(row.password, options.encryptKey)
+        : row.password;
+      return { email: row.userEmail, password: plain };
     }
     if (options.email && options.password) {
       return { email: options.email, password: options.password };
@@ -114,8 +120,18 @@ export function createAuthService(options: AuthServiceOptions): AuthService {
       userName,
       updatedAt: timestamp,
     };
+    let storedPassword: string | null = password ?? null;
+    if (password !== undefined && password !== null) {
+      if (!options.encryptKey) {
+        options.logger.warn(
+          'AUTH_ENCRYPT_KEY non configurata: la password AnimeUnion è salvata in chiaro nel DB',
+        );
+      } else {
+        storedPassword = encryptPassword(password, options.encryptKey);
+      }
+    }
     if (password !== undefined) {
-      set.password = password;
+      set.password = storedPassword;
     }
     options.db
       .insert(schema.auth)
@@ -126,7 +142,7 @@ export function createAuthService(options: AuthServiceOptions): AuthService {
         tokenExpires: expires.toISOString(),
         userEmail,
         userName,
-        password: password ?? null,
+        password: storedPassword,
         createdAt: timestamp,
         updatedAt: timestamp,
       })

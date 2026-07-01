@@ -57,6 +57,17 @@ async function main(): Promise<void> {
   scheduler.start();
 }
 
+// Handler globali: cattura promise rejection e eccezioni non gestite per evitare
+// crash silenziosi o crash non loggati. uncaughtException esce con codice 1
+// (irrecuperabile); unhandledRejection è solo un warning (la promise è già terminata).
+process.on('unhandledRejection', (reason) => {
+  logger.warn({ reason }, 'Promise rejection non gestita');
+});
+process.on('uncaughtException', (error) => {
+  logger.error({ err: error }, 'Eccezione non catturata — uscita forzata');
+  process.exit(1);
+});
+
 main().catch((error) => {
   logger.error(error, 'Avvio del server fallito');
   process.exit(1);

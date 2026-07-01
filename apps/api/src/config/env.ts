@@ -16,6 +16,9 @@ const envSchema = z.object({
   TELEGRAM_CHAT_ID: z.string().optional(),
   // Escape hatch: 'true' disabilita il blocco passcode della web UI (recupero).
   WEB_LOCK_DISABLED: z.string().optional(),
+  // Chiave per cifrare la password AnimeUnion salvata nel DB (AES-256-GCM).
+  // Se assente, la password è salvata in chiaro con un warning nel log.
+  AUTH_ENCRYPT_KEY: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

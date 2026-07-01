@@ -72,4 +72,55 @@ describe('PushService', () => {
     expect(res).toEqual({ ok: true, sent: 1 });
     expect(lib.sendNotification).toHaveBeenCalledTimes(1);
   });
+
+  it('getPublicKey restituisce null se pubKey presente ma privKey mancante (stato inconsistente)', () => {
+    const db = createTestDb();
+    // Inserisce solo la chiave pubblica in tabella config.
+    db.insert(schema.config)
+      .values({
+        key: 'webpush_vapid_public',
+        value: JSON.stringify('PUBKEY-ORFANA'),
+        updatedAt: new Date().toISOString(),
+      })
+      .run();
+
+    const result = createPushService({ db }).getPublicKey();
+
+    expect(result).toBeNull();
+    expect(lib.generate).not.toHaveBeenCalled();
+  });
+
+  it('getPublicKey restituisce null se privKey presente ma pubKey mancante (stato inconsistente)', () => {
+    const db = createTestDb();
+    // Inserisce solo la chiave privata in tabella config.
+    db.insert(schema.config)
+      .values({
+        key: 'webpush_vapid_private',
+        value: JSON.stringify('PRIVKEY-ORFANA'),
+        updatedAt: new Date().toISOString(),
+      })
+      .run();
+
+    const result = createPushService({ db }).getPublicKey();
+
+    expect(result).toBeNull();
+    expect(lib.generate).not.toHaveBeenCalled();
+  });
+
+  it('send non invia nulla se le VAPID keys sono inconsistenti', async () => {
+    const db = createTestDb();
+    db.insert(schema.config)
+      .values({
+        key: 'webpush_vapid_public',
+        value: JSON.stringify('PUBKEY-ORFANA'),
+        updatedAt: new Date().toISOString(),
+      })
+      .run();
+    const push = createPushService({ db });
+    push.subscribe({ endpoint: 'https://e/ok', keys: { p256dh: 'p', auth: 'a' } });
+
+    await push.send({ title: 'T', body: 'B', url: '/' });
+
+    expect(lib.sendNotification).not.toHaveBeenCalled();
+  });
 });

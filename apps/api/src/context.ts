@@ -46,6 +46,7 @@ export function createAppContext(options: { env?: Env; databasePath?: string } =
     password: resolvedEnv.ANIMEUNION_PASSWORD,
     logger,
     rateLimitMs: resolvedEnv.RATE_LIMIT_MS,
+    encryptKey: resolvedEnv.AUTH_ENCRYPT_KEY,
   });
   const source = createSource({
     env: resolvedEnv,

@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm';
 import { MockAgent, setGlobalDispatcher } from 'undici';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { schema } from '../db';
+import { decryptPassword, encryptPassword } from '../lib/crypto';
 import { createTestDb, testLogger } from '../test/helpers';
 import { createAuthService } from './auth-service';
 
@@ -111,7 +112,7 @@ describe('AuthService', () => {
     expect(token).toBe(jwt);
   });
 
-  it('usa il fallback di 59 giorni se il token non e un JWT decodificabile', async () => {
+  it('usa il fallback di 1 ora se il token non e un JWT decodificabile', async () => {
     const db = createTestDb();
     const fixedNow = new Date('2026-06-10T12:00:00.000Z');
     interceptLogin('token-opaco');
@@ -128,7 +129,7 @@ describe('AuthService', () => {
     await service.getToken();
 
     const row = db.select().from(schema.auth).where(eq(schema.auth.id, 'default')).get();
-    const expected = new Date(fixedNow.getTime() + 59 * 24 * 60 * 60 * 1000);
+    const expected = new Date(fixedNow.getTime() + 3_600_000);
     expect(row?.tokenExpires).toBe(expected.toISOString());
   });
 
@@ -265,5 +266,67 @@ describe('AuthService', () => {
     const status = service.status();
     expect(status.authenticated).toBe(true);
     expect(status.userEmail).toBe('user@test.it');
+  });
+});
+
+describe('cifratura password (AES-256-GCM)', () => {
+  it('encryptPassword + decryptPassword round-trip con chiave', () => {
+    const key = 'chiave-test-sicura';
+    const plain = 'password-originale';
+    const enc = encryptPassword(plain, key);
+    expect(enc).toMatch(/^aes256gcm:/);
+    expect(enc).not.toContain(plain);
+    expect(decryptPassword(enc, key)).toBe(plain);
+  });
+
+  it('decryptPassword su valore senza prefisso restituisce il plaintext invariato (backward compat)', () => {
+    expect(decryptPassword('vecchia-password-chiara', 'qualsiasi-chiave')).toBe(
+      'vecchia-password-chiara',
+    );
+  });
+
+  it('loginWithCredentials con encryptKey salva la password cifrata nel DB', async () => {
+    const db = createTestDb();
+    const jwt = makeJwt(new Date(Date.now() + 60 * 24 * 60 * 60 * 1000));
+    interceptLogin(jwt);
+
+    const service = createAuthService({
+      db,
+      baseUrl: BASE,
+      email: undefined,
+      password: undefined,
+      logger: testLogger,
+      rateLimitMs: 1,
+      encryptKey: 'chiave-test',
+    });
+    await service.loginWithCredentials('mario@test.it', 'pw-segreta');
+
+    const row = db.select().from(schema.auth).where(eq(schema.auth.id, 'default')).get();
+    // La password nel DB deve essere cifrata (non in chiaro).
+    expect(row?.password).toMatch(/^aes256gcm:/);
+    expect(row?.password).not.toContain('pw-segreta');
+  });
+
+  it('re-login funziona con password cifrata nel DB (resolveCredentials decifra)', async () => {
+    const db = createTestDb();
+    const firstJwt = makeJwt(new Date(Date.now() + 60 * 24 * 60 * 60 * 1000));
+    interceptLogin(firstJwt);
+
+    const service = createAuthService({
+      db,
+      baseUrl: BASE,
+      email: undefined,
+      password: undefined,
+      logger: testLogger,
+      rateLimitMs: 1,
+      encryptKey: 'chiave-test',
+    });
+    await service.loginWithCredentials('mario@test.it', 'pw-segreta');
+
+    const secondJwt = makeJwt(new Date(Date.now() + 61 * 24 * 60 * 60 * 1000));
+    interceptLogin(secondJwt);
+    await service.invalidateAndRelogin();
+
+    expect(await service.getToken()).toBe(secondJwt);
   });
 });

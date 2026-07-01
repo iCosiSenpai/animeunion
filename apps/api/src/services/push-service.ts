@@ -21,8 +21,8 @@ export interface PushSubscriptionData {
 }
 
 export interface PushService {
-  /** Chiave pubblica VAPID (generata+persistita al primo uso). */
-  getPublicKey(): string;
+  /** Chiave pubblica VAPID. Null se le chiavi sono in stato inconsistente (una sola presente). */
+  getPublicKey(): string | null;
   subscribe(sub: PushSubscriptionData): void;
   unsubscribe(endpoint: string): void;
   /** Invio best-effort a tutte le sottoscrizioni; rimuove quelle morte (404/410). */
@@ -67,12 +67,22 @@ export function createPushService(deps: {
       .run();
   }
 
-  function ensureKeys(): { publicKey: string; privateKey: string } {
+  function ensureKeys(): { publicKey: string; privateKey: string } | null {
     const pub = readConfig(PUB_KEY);
     const priv = readConfig(PRIV_KEY);
     if (pub && priv) {
       return { publicKey: pub, privateKey: priv };
     }
+    // Stato inconsistente: una chiave presente e l'altra no → non rigenerare per non
+    // invalidare le subscription push esistenti. L'utente deve risolvere manualmente.
+    if (pub || priv) {
+      logger?.error(
+        { hasPub: Boolean(pub), hasPriv: Boolean(priv) },
+        "VAPID keys inconsistenti: una chiave è presente e l'altra manca. Rigenera manualmente eliminando entrambe dalla tabella config.",
+      );
+      return null;
+    }
+    // Nessuna chiave → primo avvio, genera e persiste entrambe.
     const keys = webpush.generateVAPIDKeys();
     writeConfig(PUB_KEY, keys.publicKey);
     writeConfig(PRIV_KEY, keys.privateKey);
@@ -85,6 +95,10 @@ export function createPushService(deps: {
       return 0;
     }
     const keys = ensureKeys();
+    if (!keys) {
+      logger?.error('Push disabilitato: VAPID keys inconsistenti, invio saltato');
+      return 0;
+    }
     webpush.setVapidDetails(SUBJECT, keys.publicKey, keys.privateKey);
     const data = JSON.stringify({
       title: payload.title,
@@ -116,7 +130,7 @@ export function createPushService(deps: {
 
   return {
     getPublicKey() {
-      return ensureKeys().publicKey;
+      return ensureKeys()?.publicKey ?? null;
     },
 
     subscribe(sub) {

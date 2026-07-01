@@ -42,8 +42,8 @@ Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
 - [x] **Step 2** — Toast mobile fix (status bar overlap, safe-area CSS definitivo)
 - [x] **Step 3** — Bottom sheet mobile (`<ResponsiveDialog>` wrapper per i dialog principali)
 - [x] **Step 4** — Polling condizionale + error states + `useDownloadSummary` hook + `100dvh`
-- [ ] **Step 5** — Hardening P0: password cifratura, VAPID guard, `FALLBACK_TOKEN_TTL` 1h, uncaught handler
-- [ ] **Step 6** — Hardening P1: `enqueueForAutoFollows` batch, `addMissing` inArray, `scan` p-limit, `likeNeedle`
+- [x] **Step 5** — Hardening P0: password cifratura, VAPID guard, `FALLBACK_TOKEN_TTL` 1h, uncaught handler
+- [x] **Step 6** — Hardening P1: `enqueueForAutoFollows` batch, `addMissing` inArray, `scan` concorrenza, `likeNeedle` escape
 - [ ] **Step 7** — Hardening P2: `removeSeriesFolders` realpath, `walk()` depth limit, episodi cache, Map LRU
 - [ ] **Step 8** — Release v0.13.0
 
@@ -62,8 +62,8 @@ backend bridge NAS↔GPU (ibrido locale/cloud) → quality nel download engine (
 
 **Versione corrente: v0.12.0 "Super rinforzo" — deployato e funzionante sul NAS.**
 - api Up (healthy), web HTTP 200 su :7979, migrazioni ok
-- 342 test verdi, lint/typecheck verdi
-- **Batch attivo:** `feat/mobile-first-rinforzo` (Step 0-4 completati, Step 5+ in attesa)
+- 352 test verdi, lint/typecheck verdi
+- **Batch attivo:** `feat/mobile-first-rinforzo` (Step 0-6 completati, Step 7+ in attesa)
 
 Funzioni principali operative: download automatico (1 episodio alla volta), FTS5 search, cestino
 recuperabile, backup automatico DB, verifica integrità video, Jellyfin integration, nfo sidecar,

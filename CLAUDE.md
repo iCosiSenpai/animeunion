@@ -55,12 +55,14 @@ Step pianificati: GPU service Windows (Python FastAPI + real-esrgan-ncnn-vulkan)
 backend bridge NAS↔GPU (ibrido locale/cloud) → quality nel download engine (XQ/XQ+) → UI quality
 + upscale per-serie → premium gate → release v0.14.0.
 
-## Stato attuale (2026-07-01)
+## Stato attuale (2026-07-02)
 
-**Versione corrente: v0.13.0 "Mobile First + Rinforzo" — rilasciata, deploy NAS in corso.**
-- api Up (healthy), web HTTP 200 su :7979, migrazioni ok
-- 355 test verdi, lint/typecheck verdi
-- **Batch attivo:** nessuno — v0.13.0 completata. Prossimo: `v0.14.0 "Quality + GPU Upscaling Bridge"`
+**Versione corrente: v0.13.1 — patch di fix UX mobile + calendario potenziato + refresh Jellyfin mirato.**
+- 357 test verdi, lint/typecheck verdi, build web ok
+- Diagnosi download lento: contesa I/O sull'HDD pool2 condiviso con Jellyfin, NON un bug (vedi
+  memoria `download-slow-jellyfin-io-contention`); mitigato col refresh Jellyfin per-libreria.
+- Premium: `GET /me` ancora `role: USER`, nessun endpoint premium lato API (`/me/subscription` 404).
+- **Batch attivo:** nessuno. Prossimo: `v0.14.0 "Quality + GPU Upscaling Bridge"`
 
 Funzioni principali operative: download automatico (1 episodio alla volta), FTS5 search, cestino
 recuperabile, backup automatico DB, verifica integrità video, Jellyfin integration, nfo sidecar,

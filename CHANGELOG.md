@@ -14,6 +14,33 @@ e il progetto aderisce al [Semantic Versioning](https://semver.org/lang/it/).
 - Gating reale del Premium (collegamento all'account del sito, da definire con l'admin).
 - Update ottimistici e routing del cestino anche per `library.deleteSeries` (rimandati).
 
+## [0.13.1] - 2026-07-02
+
+Batch di fix UX mobile + calendario potenziato, più una miglioria di performance sul refresh Jellyfin.
+
+### Added
+- **Calendario potenziato:** l'app mostra ora l'orario di uscita (`airTime`) e il numero
+  dell'episodio in arrivo per ogni voce del calendario, esposti dall'API dopo il potenziamento
+  admin. Le voci sono ordinate per orario di uscita.
+- **"Ultimi episodi" espandibile:** nuovo pulsante "Mostra di più/meno" nella sezione home
+  (carosello compresso a 10, poi griglia con tutti gli episodi caricati).
+
+### Changed
+- **Refresh Jellyfin mirato:** a fine download l'app rinfresca solo la libreria Jellyfin che
+  contiene il file (`POST /Items/{id}/Refresh`) invece dell'intera libreria (`/Library/Refresh`).
+  Evita la scansione completa dell'HDD ad ogni download, che sull'HDD meccanico condiviso satura
+  l'I/O e rallenta drasticamente i download in corso. Debounce ora per-libreria.
+
+### Fixed
+- **Toast iOS/status bar:** i toast non si sovrappongono più alla status bar/notch su iPhone e
+  PWA (override della variabile `--mobile-offset-top` di sonner con `env(safe-area-inset-top)`).
+- **Anteprime sfondi accavallate:** nel selettore wallpaper le anteprime non collassano più su
+  iOS Safari (è l'`<img>` a dare l'altezza della cella, non più il box con soli figli assoluti).
+- **Titoli lunghi troncati:** i titoli lunghi in coda download, popover download e dettaglio
+  anime ora vengono troncati con ellipsis invece di uscire dal riquadro (`min-w-0` mancante).
+- **Numeri statistiche:** i numeri nella pagina Statistiche non vengono più tagliati con "…";
+  rimpiccioliscono e al limite vanno a capo, senza perdere cifre.
+
 ## [0.13.0] - 2026-07-01
 
 Batch "Mobile First + Rinforzo": UX mobile-first e rinforzo di robustezza/sicurezza trasversale.

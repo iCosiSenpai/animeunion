@@ -83,7 +83,7 @@ describe('JellyfinService', () => {
     expect(res.ok).toBe(false);
   });
 
-  it('refresh: chiama Library/Refresh e applica il debounce', async () => {
+  it('refresh: senza targetPath fa la scansione globale e applica il debounce', async () => {
     const s = await startServer(() => ({ status: 204 }));
     server = s.server;
     let t = 0;
@@ -105,6 +105,65 @@ describe('JellyfinService', () => {
     t = 61_000;
     await service.refresh();
     expect(s.hits).toHaveLength(2);
+  });
+
+  it('refresh: con targetPath rinfresca solo la libreria che contiene il path', async () => {
+    const s = await startServer((rec) => {
+      if (rec.url.startsWith('/Library/VirtualFolders')) {
+        return {
+          status: 200,
+          body: [
+            { Name: 'Anime TV', ItemId: 'lib-tv', Locations: ['/media/Media/Video/Anime'] },
+            {
+              Name: 'Anime Movie',
+              ItemId: 'lib-movie',
+              Locations: ['/media/Media/Video/Anime Movie'],
+            },
+          ],
+        };
+      }
+      return { status: 204 };
+    });
+    server = s.server;
+    let t = 0;
+    const { service, config } = makeService(() => t);
+    config.set('jellyfinServerUrl', s.base);
+    config.set('jellyfinApiKey', 'k-1');
+
+    // Path lato container diverso dal path Jellyfin, ma stesso basename "Anime": deve mappare a lib-tv.
+    await service.refresh({ targetPath: '/media/Anime/MyShow/Season 01/S01E01.mp4' });
+    const refresh = s.hits.find((h) => h.method === 'POST');
+    expect(refresh?.url).toContain('/Items/lib-tv/Refresh');
+
+    // Debounce per-libreria: stessa libreria entro la finestra → nessun nuovo POST di refresh.
+    t = 30_000;
+    const before = s.hits.filter((h) => h.url.includes('/Refresh')).length;
+    await service.refresh({ targetPath: '/media/Anime/Other/Season 01/S01E02.mp4' });
+    expect(s.hits.filter((h) => h.url.includes('/Refresh')).length).toBe(before);
+
+    // Libreria diversa (Anime Movie) entro la stessa finestra: refresh consentito (debounce separato).
+    await service.refresh({ targetPath: '/media/Anime Movie/Film/Film.mp4' });
+    expect(s.hits.some((h) => h.url.includes('/Items/lib-movie/Refresh'))).toBe(true);
+  });
+
+  it('refresh: path non coperto da alcuna libreria → nessun refresh', async () => {
+    const s = await startServer((rec) => {
+      if (rec.url.startsWith('/Library/VirtualFolders')) {
+        return {
+          status: 200,
+          body: [{ Name: 'Anime TV', ItemId: 'lib-tv', Locations: ['/media/Media/Video/Anime'] }],
+        };
+      }
+      return { status: 204 };
+    });
+    server = s.server;
+    const { service, config } = makeService();
+    config.set('jellyfinServerUrl', s.base);
+    config.set('jellyfinApiKey', 'k-1');
+
+    await service.refresh({ targetPath: '/media/Anime ITA/Show/S01E01.mp4' });
+    // Solo la GET VirtualFolders, nessun POST di refresh.
+    expect(s.hits.some((h) => h.method === 'POST')).toBe(false);
   });
 
   it('refresh: no-op se non configurato', async () => {

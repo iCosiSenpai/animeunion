@@ -144,12 +144,13 @@ export function createAppContext(options: { env?: Env; databasePath?: string } =
     return { title: row.titleIta ?? row.title, animeId: row.animeId, epNum: row.epNum };
   }
 
-  worker.on('complete', ({ episodeFileId }) => {
+  worker.on('complete', ({ episodeFileId, localPath }) => {
     // Sidecar NFO + artwork per Jellyfin/Plex (best-effort, gated da config writeNfo).
     void nfo.writeForEpisodeFile(episodeFileId);
     // Refresh Jellyfin a fine download (best-effort + debounce, gated da config jellyfinAutoRefresh).
+    // Passa il path del file: il servizio rinfresca solo la libreria che lo contiene, non tutto l'HDD.
     if (config.get('jellyfinAutoRefresh')) {
-      void jellyfin.refresh();
+      void jellyfin.refresh({ targetPath: localPath });
     }
     if (!config.get('notifyOnComplete')) {
       return;

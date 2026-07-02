@@ -238,7 +238,10 @@ function Hero({
   const [coverFailed, setCoverFailed] = useState(false);
   return (
     <div className="grid gap-6 md:grid-cols-[200px_1fr]">
-      <div className="aspect-[2/3] overflow-hidden rounded-lg bg-muted">
+      {/* Su mobile la locandina non va a tutta larghezza: una cover a risoluzione modesta stirata
+          apparirebbe sgranata. La vincoliamo a una larghezza vicina alla nativa (centrata), mentre
+          da md riempie la colonna 200px della griglia. */}
+      <div className="mx-auto aspect-[2/3] w-44 overflow-hidden rounded-lg bg-muted sm:w-52 md:mx-0 md:w-full">
         {anime.coverImage && !coverFailed ? (
           <img
             src={anime.coverImage}
@@ -447,8 +450,8 @@ function EpisodeList({ anime }: { anime: AnimeDetailType }) {
           );
           const aggregate = aggregateDlState(langStates);
           return (
-            <div key={episode.number} className="flex items-center gap-3 p-3">
-              <span className="w-10 shrink-0 text-sm font-medium text-muted-foreground">
+            <div key={episode.number} className="flex items-center gap-2 p-3 sm:gap-3">
+              <span className="w-7 shrink-0 text-sm font-medium text-muted-foreground sm:w-10">
                 {episode.number}
               </span>
               <span className="min-w-0 flex-1 truncate text-sm">
@@ -469,12 +472,13 @@ function EpisodeList({ anime }: { anime: AnimeDetailType }) {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="shrink-0 gap-1"
+                    className="shrink-0 gap-1 px-2 sm:px-3"
                     disabled={addEpisodeMutation.isPending}
+                    aria-label="Scarica episodio"
                   >
                     <Download className="h-4 w-4" />
-                    Scarica
-                    <ChevronDown className="h-3 w-3 opacity-60" />
+                    <span className="hidden sm:inline">Scarica</span>
+                    <ChevronDown className="hidden h-3 w-3 opacity-60 sm:inline" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">

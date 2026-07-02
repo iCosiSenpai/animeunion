@@ -57,8 +57,9 @@ backend bridge NAS↔GPU (ibrido locale/cloud) → quality nel download engine (
 
 ## Stato attuale (2026-07-02)
 
-**Versione corrente: v0.13.4 — chiude la 2a via di ri-download (sync preferiti), controllo attivo libreria, fix UI mobile.**
+**Versione corrente: v0.13.5 — rifiniture UI mobile (lista episodi, locandina, ricerca iOS) + conteggio orfani.**
 - 363 test verdi, lint/typecheck verdi, build web ok
+- v0.13.4: chiude la 2a via di ri-download (sync preferiti import-only), `library.checkVanished`, UI download mobile.
 - Incidente 2026-07-02: accendere l'auto-download con DB desync (molti episode_file `not_downloaded`
   ma file già su disco) e soglie forward-only a 0/null ha ri-scaricato/sovrascritto il backlog (NON
   duplicati: sovrascritture in-place). Fix v0.13.3: `healPresent` in `download-service`. Fix v0.13.4:

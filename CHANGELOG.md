@@ -14,6 +14,22 @@ e il progetto aderisce al [Semantic Versioning](https://semver.org/lang/it/).
 - Gating reale del Premium (collegamento all'account del sito, da definire con l'admin).
 - Update ottimistici e routing del cestino anche per `library.deleteSeries` (rimandati).
 
+## [0.13.5] - 2026-07-02
+
+Rifiniture UI mobile e conteggio libreria.
+
+### Fixed
+- **Conteggio orfani corretto:** la scansione libreria non conta piu' come "orfani" gli asset di
+  metadati Jellyfin/Kometa (sigle/backdrop/theme nelle cartelle `backdrops/`, `theme-music/`,
+  `extrafanart/`, `trailers/`, `others/`): non sono episodi.
+- **Lista episodi (scheda anime) non sfora piu' su mobile:** numero piu' stretto, pulsante
+  "Scarica" solo-icona sotto `sm`, spaziature ridotte — la riga sta nella larghezza dello schermo.
+- **Locandina piu' nitida su mobile:** la cover (sorgente ~460px) non viene piu' stirata a tutta
+  larghezza (che su display retina la sgranava); e' vincolata a una larghezza vicina alla nativa e
+  centrata, mentre da desktop riempie la colonna.
+- **Ricerca su iOS:** la palette di ricerca e' ancorata in alto (sotto il notch) invece che a
+  `12vh`, così input e primi risultati restano sopra la tastiera senza dover richiudere/riaprire.
+
 ## [0.13.4] - 2026-07-02
 
 Chiude la seconda via di ri-download di massa, aggiunge il controllo attivo della libreria e

@@ -71,13 +71,21 @@ export interface LibraryServiceDeps {
 
 const VIDEO_EXTENSIONS = new Set(['.mp4', '.mkv', '.avi', '.mov', '.webm']);
 
+// Cartelle di metadati (sigle/backdrop/theme di Jellyfin/Kometa): NON sono episodi. Vanno escluse
+// dai file "libreria" altrimenti gonfiano il conteggio orfani (es. backdrops/*.webm delle sigle).
+const METADATA_DIRS = ['/backdrops/', '/theme-music/', '/extrafanart/', '/trailers/', '/others/'];
+
 function isVideoFile(filePath: string): boolean {
   const ext = filePath.slice(filePath.lastIndexOf('.')).toLowerCase();
   if (!VIDEO_EXTENSIONS.has(ext)) {
     return false;
   }
   // File parziali del download engine non sono libreria.
-  return !filePath.includes('.part.');
+  if (filePath.includes('.part.')) {
+    return false;
+  }
+  const norm = filePath.replace(/\\/g, '/').toLowerCase();
+  return !METADATA_DIRS.some((dir) => norm.includes(dir));
 }
 
 async function walk(dir: string, logger: Logger, maxDepth = 20): Promise<string[]> {

@@ -334,7 +334,7 @@ export function CommandPalette() {
   }
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-start justify-center p-4 pt-[12vh]">
+    <div className="fixed inset-0 z-[100] flex items-start justify-center p-4 pt-[calc(env(safe-area-inset-top,0px)+1rem)] sm:pt-[12vh]">
       <button
         type="button"
         aria-label="Chiudi"

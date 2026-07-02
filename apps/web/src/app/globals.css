@@ -71,10 +71,14 @@
     background-color: transparent;
   }
 
-  /* Toast safe-area fix: forza il posizionamento rispetto alla status bar mobile.
+  /* Toast safe-area fix: forza il posizionamento rispetto alla status bar / notch mobile.
      env(safe-area-inset-top) è > 0 solo con viewport-fit=cover (già configurato in layout.tsx).
-     !important necessario per sovrascrivere l'inline style applicato da sonner. */
-  [data-sonner-toaster][data-y-position="top"] {
-    top: calc(env(safe-area-inset-top, 0px) + 16px) !important;
+     Sonner posiziona il toaster con `top: var(--mobile-offset-top)` dentro `@media (max-width:600px)`
+     (default 16px, impostato inline): sovrascrivere direttamente il `top` non basta perché su mobile
+     conta quella variabile. Ridefiniamo la variabile stessa (con !important per battere lo stile
+     inline di sonner) così su iPhone/PWA il toast scende sotto la status bar. Su desktop la variabile
+     non viene usata: nessun effetto collaterale. */
+  [data-sonner-toaster] {
+    --mobile-offset-top: calc(env(safe-area-inset-top, 0px) + 16px) !important;
   }
 }

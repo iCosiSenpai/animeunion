@@ -14,6 +14,31 @@ e il progetto aderisce al [Semantic Versioning](https://semver.org/lang/it/).
 - Gating reale del Premium (collegamento all'account del sito, da definire con l'admin).
 - Update ottimistici e routing del cestino anche per `library.deleteSeries` (rimandati).
 
+## [0.13.4] - 2026-07-02
+
+Chiude la seconda via di ri-download di massa, aggiunge il controllo attivo della libreria e
+sistema diversi problemi di UI mobile.
+
+### Fixed
+- **Sync preferiti: niente piu' ri-download di massa.** `favorites-service` accodava tutti gli
+  episodi non-external ad ogni sync (avvio + ogni 10 min) bypassando soglia forward-only e
+  self-heal (con un bug: `status === 'completed'` non e' uno stato valido di `episode_file`,
+  quindi non saltava nemmeno i `downloaded`). Ora la sync preferiti importa SOLO i follow; a
+  scaricare i nuovi episodi pensa solo lo scheduler (`enqueueForAutoFollows`: forward-only +
+  `healPresent`).
+- **UI download mobile:** la riga episodio non sfora piu' in orizzontale (velocita'/ETA nascoste
+  su mobile, barra progresso piu' stretta, colonna `%` allargata cosi' il simbolo non viene
+  tagliato). La lista download non e' piu' in un contenitore a scroll dedicato: scorre col resto
+  della pagina (via la "finestra" annidata, la scrollbar custom che si scontrava col testo e gran
+  parte del jank/freeze su iOS Safari).
+- **Titoli episodio vuoti:** in scheda anime un titolo vuoto (stringa "") ora ricade su
+  "Episodio N" invece di lasciare la riga sbilanciata verso destra.
+
+### Added
+- **Controllo attivo integrita' libreria:** un tick periodico (`library.checkVanished`, ~ogni 15
+  min) rileva gli episodi scaricati il cui file e' sparito dal disco (con la root raggiungibile),
+  azzera lo stato e avvisa con una notifica in-app + push ("Episodi mancanti: ...").
+
 ## [0.13.3] - 2026-07-02
 
 Patch di sicurezza dell'auto-download: evita di ri-scaricare file già presenti su disco.

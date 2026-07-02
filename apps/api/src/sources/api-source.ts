@@ -3,6 +3,7 @@ import type {
   AnimeSource,
   AnimeSummary,
   CalendarEntry,
+  CalendarItem,
   EpisodeDetail,
   Favorite,
   FeaturedAnime,
@@ -230,7 +231,7 @@ export function createApiSource(options: ApiSourceOptions): AnimeSource {
     async getCalendar(): Promise<CalendarEntry[]> {
       const raw = await http.get<unknown>('/calendario');
       const parsed = apiCalendarResponseSchema.parse(raw);
-      const byDay = new Map<WeekDay, AnimeSummary[]>();
+      const byDay = new Map<WeekDay, CalendarItem[]>();
       for (const items of Object.values(parsed.data)) {
         for (const item of items) {
           const day = DAY_INDEX_TO_WEEKDAY[item.dayOfWeek];
@@ -253,6 +254,8 @@ export function createApiSource(options: ApiSourceOptions): AnimeSource {
             availableLanguages: [],
             seriesId: null,
             seasonNumber: null,
+            airTime: item.airTime,
+            episodeNumber: item.episodeNumber,
           });
           byDay.set(day, list);
         }

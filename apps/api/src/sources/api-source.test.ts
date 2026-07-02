@@ -267,6 +267,8 @@ describe('ApiSource', () => {
             '1': [
               {
                 dayOfWeek: 1,
+                airTime: '17:30',
+                episodeNumber: 12,
                 anime: {
                   id: 'a1',
                   slug: 'lunedi-anime',
@@ -298,7 +300,10 @@ describe('ApiSource', () => {
     const lunedi = week.find((entry) => entry.day === 'LUNEDI');
     const domenica = week.find((entry) => entry.day === 'DOMENICA');
     expect(lunedi?.anime[0]?.slug).toBe('lunedi-anime');
+    expect(lunedi?.anime[0]?.airTime).toBe('17:30');
+    expect(lunedi?.anime[0]?.episodeNumber).toBe(12);
     expect(domenica?.anime[0]?.slug).toBe('domenica-anime');
+    expect(domenica?.anime[0]?.airTime).toBeNull();
     expect(week[0]?.day).toBe('LUNEDI');
   });
 

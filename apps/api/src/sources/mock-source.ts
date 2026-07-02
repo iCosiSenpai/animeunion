@@ -80,7 +80,7 @@ export class MockSource implements AnimeSource {
       date: `2026-06-${String(8 + index).padStart(2, '0')}`,
       anime: ongoing
         .filter((_, animeIndex) => animeIndex % WEEK_DAYS.length === index)
-        .map(toSummary),
+        .map((anime) => ({ ...toSummary(anime), airTime: '17:30', episodeNumber: null })),
     }));
   }
 

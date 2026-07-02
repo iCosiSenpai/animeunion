@@ -1,6 +1,7 @@
 'use client';
 
-import { AnimeGrid, AnimeGridSkeleton } from '@/components/anime/anime-grid';
+import { AnimeGridSkeleton } from '@/components/anime/anime-grid';
+import { CalendarAnimeGrid } from '@/components/calendar/calendar-anime-grid';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -9,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { trpc } from '@/lib/trpc';
 import { useFollowedIds } from '@/lib/use-followed';
 import { cn } from '@/lib/utils';
-import type { AnimeSummary, WeekDay } from '@animeunion/shared';
+import type { CalendarItem, WeekDay } from '@animeunion/shared';
 import { AlertCircle, CalendarDays, Check, Rows3 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -62,9 +63,11 @@ export function CalendarView() {
   const dates = weekDates(now);
   const week = data ?? [];
 
-  const itemsForDay = (day: WeekDay): AnimeSummary[] => {
+  const itemsForDay = (day: WeekDay): CalendarItem[] => {
     const items = week.find((entry) => entry.day === day)?.anime ?? [];
-    return onlyFollowed ? items.filter((anime) => followedIds.has(anime.id)) : items;
+    const filtered = onlyFollowed ? items.filter((anime) => followedIds.has(anime.id)) : items;
+    // Ordina per orario di uscita (le voci senza airTime in coda): il calendario segue la giornata.
+    return [...filtered].sort((a, b) => (a.airTime ?? '99:99').localeCompare(b.airTime ?? '99:99'));
   };
 
   const emptyText = onlyFollowed
@@ -158,7 +161,7 @@ export function CalendarView() {
                 {items.length === 0 ? (
                   <p className="py-16 text-center text-muted-foreground">{emptyText}</p>
                 ) : (
-                  <AnimeGrid anime={items} />
+                  <CalendarAnimeGrid items={items} />
                 )}
               </TabsContent>
             );
@@ -190,7 +193,7 @@ export function CalendarView() {
                 {items.length === 0 ? (
                   <p className="py-8 text-center text-sm text-muted-foreground">{emptyText}</p>
                 ) : (
-                  <AnimeGrid anime={items} />
+                  <CalendarAnimeGrid items={items} />
                 )}
               </section>
             );

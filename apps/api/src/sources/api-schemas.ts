@@ -156,6 +156,10 @@ const apiCalendarAnimeSchema = z.object({
 
 const apiCalendarItemSchema = z.object({
   dayOfWeek: z.number().int(),
+  // Aggiunti dall'API col potenziamento admin (2026-07): orario di uscita "HH:MM" e numero
+  // dell'episodio in arrivo. Tollerati come nullish per retrocompatibilità con payload più vecchi.
+  airTime: nullableString,
+  episodeNumber: nullableInt,
   anime: apiCalendarAnimeSchema,
 });
 

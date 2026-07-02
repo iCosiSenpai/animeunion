@@ -73,11 +73,18 @@ export function FollowsView() {
         />
       ) : (
         <Tabs defaultValue="watching">
-          <TabsList className="flex-wrap">
+          {/* Tutti gli stati restano nello stesso rettangolo: su schermi stretti la barra scorre in
+              orizzontale invece di mandare "Completato/Droppato" a capo fuori dal riquadro. */}
+          <TabsList className="w-full max-w-full justify-start overflow-x-auto">
             {FOLLOW_STATUSES.map((status) => {
               const count = follows.filter((follow) => follow.status === status.value).length;
               return (
-                <TabsTrigger key={status.value} value={status.value} title={status.hint}>
+                <TabsTrigger
+                  key={status.value}
+                  value={status.value}
+                  title={status.hint}
+                  className="shrink-0"
+                >
                   {status.label} ({count})
                 </TabsTrigger>
               );

@@ -24,7 +24,7 @@ import {
 import { FOLLOW_STATUSES } from '@/lib/follow';
 import { trpc } from '@/lib/trpc';
 import { formatBytes } from '@/lib/utils';
-import type { FollowWithAnime } from '@animeunion/shared';
+import type { FollowStatus, FollowWithAnime } from '@animeunion/shared';
 import { Download, MoreVertical, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
@@ -34,6 +34,7 @@ export function FollowCard({ follow }: { follow: FollowWithAnime }) {
   const utils = trpc.useUtils();
   const [confirmDeleteFiles, setConfirmDeleteFiles] = useState(false);
   const [deleteFolder, setDeleteFolder] = useState(false);
+  const [askDownload, setAskDownload] = useState(false);
 
   const invalidate = () => {
     void utils.follow.list.invalidate();
@@ -107,6 +108,22 @@ export function FollowCard({ follow }: { follow: FollowWithAnime }) {
   const canDeleteFiles = follow.status === 'completed' || follow.status === 'dropped';
   const title = anime.titleIta ?? anime.title;
 
+  // Cambio stato: passando a "In corso" o "Da guardare" chiediamo se scaricare subito gli episodi
+  // (gli stati "attivi" sono quelli per cui ha senso riempire la libreria). Per gli altri stati
+  // si aggiorna e basta.
+  function onChangeStatus(next: FollowStatus) {
+    updateStatus.mutate(
+      { animeId: anime.id, status: next },
+      {
+        onSuccess: () => {
+          if (next === 'watching' || next === 'plan_to_watch') {
+            setAskDownload(true);
+          }
+        },
+      },
+    );
+  }
+
   return (
     <Card className="group overflow-hidden border border-border/50 shadow-sm transition-all duration-300 hover:border-primary/30 hover:shadow-lg">
       <div className="relative aspect-[2/3] bg-muted">
@@ -138,9 +155,7 @@ export function FollowCard({ follow }: { follow: FollowWithAnime }) {
                     <DropdownMenuItem
                       key={status.value}
                       disabled={status.value === follow.status}
-                      onClick={() =>
-                        updateStatus.mutate({ animeId: anime.id, status: status.value })
-                      }
+                      onClick={() => onChangeStatus(status.value)}
                     >
                       {status.label}
                     </DropdownMenuItem>
@@ -197,6 +212,33 @@ export function FollowCard({ follow }: { follow: FollowWithAnime }) {
           {title}
         </Link>
       </div>
+
+      <Dialog open={askDownload} onOpenChange={setAskDownload}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Scaricare gli episodi?</DialogTitle>
+            <DialogDescription>
+              Vuoi mettere in coda subito gli episodi mancanti di &laquo;{title}&raquo;? Puoi sempre
+              farlo dopo dal menu della serie.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button variant="ghost" onClick={() => setAskDownload(false)}>
+              No, solo stato
+            </Button>
+            <Button
+              className="gap-2"
+              onClick={() => {
+                setAskDownload(false);
+                ensureConfirmed(() => addAll.mutate({ animeId: anime.id }));
+              }}
+            >
+              <Download className="h-4 w-4" />
+              Sì, scarica
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={confirmDeleteFiles}

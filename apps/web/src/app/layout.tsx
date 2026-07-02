@@ -35,6 +35,17 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="it" suppressHydrationWarning>
       <body className={inter.className}>
         <Providers>{children}</Providers>
+        {/* Invito a ruotare: visibile solo su telefono in landscape (vedi .landscape-block in
+            globals.css). Copre il contenuto perche' l'app e' ottimizzata in verticale. */}
+        <div className="landscape-block" aria-hidden="true">
+          <span className="text-4xl" aria-hidden="true">
+            📱
+          </span>
+          <p className="text-lg font-semibold">Ruota il telefono in verticale</p>
+          <p className="max-w-xs text-sm text-muted-foreground">
+            AnimeUnion è ottimizzato in modalità verticale su telefono.
+          </p>
+        </div>
       </body>
     </html>
   );

@@ -1,3 +1,4 @@
+import { LanguageBadge } from '@/components/anime/language-badge';
 import { useAnimationsOn } from '@/components/layout/animation-provider';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
@@ -50,7 +51,14 @@ export function AnimeCard({ anime }: { anime: AnimeSummary }) {
           </div>
         </div>
       </div>
-      <div className="space-y-1 p-3">
+      <div className="space-y-1.5 p-3">
+        {anime.availableLanguages.length > 0 ? (
+          <div className="flex flex-wrap gap-1">
+            {anime.availableLanguages.map((language) => (
+              <LanguageBadge key={language} language={language} />
+            ))}
+          </div>
+        ) : null}
         <h3 className="line-clamp-2 text-sm font-medium transition-colors group-hover:text-primary">
           {title}
         </h3>

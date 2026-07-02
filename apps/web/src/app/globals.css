@@ -82,6 +82,31 @@
     background-color: transparent;
   }
 
+  /* Blocco landscape su telefono: l'app e' pensata in verticale. Sotto una certa ALTEZZA (schermo
+     basso = telefono in orizzontale) e in orientamento landscape mostriamo un invito a ruotare e
+     copriamo il contenuto. Usiamo max-height (non max-width) cosi' i tablet in landscape (altezza
+     >= 600px) restano pienamente usabili; il PWA installato usa anche `orientation: portrait` dal
+     manifest. */
+  .landscape-block {
+    display: none;
+  }
+  @media (orientation: landscape) and (max-height: 540px) {
+    .landscape-block {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      padding: 1.5rem;
+      text-align: center;
+      background-color: hsl(var(--background));
+      color: hsl(var(--foreground));
+    }
+  }
+
   /* Toast safe-area fix: forza il posizionamento rispetto alla status bar / notch mobile.
      env(safe-area-inset-top) è > 0 solo con viewport-fit=cover (già configurato in layout.tsx).
      Sonner posiziona il toaster con `top: var(--mobile-offset-top)` dentro `@media (max-width:600px)`

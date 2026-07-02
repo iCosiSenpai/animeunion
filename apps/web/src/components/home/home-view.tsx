@@ -29,7 +29,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import type { ElementType, ReactNode } from 'react';
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { CardCarousel, CardCarouselSkeleton } from './card-carousel';
 import { ContinueWatchingGrid } from './continue-watching';
 import { EpisodeGrid, EpisodeGridExpanded } from './episode-card';
@@ -290,6 +290,10 @@ function HeroCarousel({
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
   const animationsOn = useAnimationsOn();
+  const touchStartX = useRef<number | null>(null);
+
+  const goNext = () => setIndex((prev) => (prev + 1) % anime.length);
+  const goPrev = () => setIndex((prev) => (prev - 1 + anime.length) % anime.length);
 
   useEffect(() => {
     if (anime.length <= 1 || paused) return;
@@ -335,9 +339,22 @@ function HeroCarousel({
 
   return (
     <div
-      className="relative h-[26rem] overflow-hidden rounded-2xl shadow-lg md:h-[32rem] lg:h-[36rem]"
+      className="relative h-[26rem] touch-pan-y overflow-hidden rounded-2xl shadow-lg md:h-[32rem] lg:h-[36rem]"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
+      // Swipe orizzontale su mobile (le frecce restano per desktop): reagiamo solo a spostamenti
+      // orizzontali netti, cosi' lo scroll verticale della pagina e i tap sui bottoni non si rompono.
+      onTouchStart={(e) => {
+        touchStartX.current = e.touches[0]?.clientX ?? null;
+      }}
+      onTouchEnd={(e) => {
+        const start = touchStartX.current;
+        touchStartX.current = null;
+        if (start == null || anime.length <= 1) return;
+        const dx = (e.changedTouches[0]?.clientX ?? start) - start;
+        if (dx > 50) goPrev();
+        else if (dx < -50) goNext();
+      }}
     >
       <div className="absolute inset-0">
         {/* Crossfade tra le slide: la vecchia immagine resta mentre la nuova sfuma sopra (entrambe
@@ -462,7 +479,7 @@ function HeroCarousel({
         <>
           <button
             type="button"
-            onClick={() => setIndex((prev) => (prev - 1 + anime.length) % anime.length)}
+            onClick={goPrev}
             className="absolute left-3 top-1/2 hidden h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white shadow-sm backdrop-blur-sm transition-colors hover:bg-black/60 md:flex"
             aria-label="Hero precedente"
           >
@@ -470,7 +487,7 @@ function HeroCarousel({
           </button>
           <button
             type="button"
-            onClick={() => setIndex((prev) => (prev + 1) % anime.length)}
+            onClick={goNext}
             className="absolute right-3 top-1/2 hidden h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white shadow-sm backdrop-blur-sm transition-colors hover:bg-black/60 md:flex"
             aria-label="Hero successiva"
           >

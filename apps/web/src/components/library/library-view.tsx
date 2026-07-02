@@ -246,17 +246,32 @@ export function LibraryView() {
               <ScanSummary result={lastScan} />
             ) : null}
             {lastScan && lastScan.orphanPaths.length > 0 ? (
-              <Button
-                variant="destructive"
-                size="sm"
-                className="mt-2 gap-1"
-                disabled={deleteOrphans.isPending}
-                onClick={() => setConfirmOrphans(true)}
-              >
-                <Trash2 className="h-4 w-4" />
-                Elimina {lastScan.orphanPaths.length} orfan
-                {lastScan.orphanPaths.length === 1 ? 'o' : 'i'}
-              </Button>
+              <div className="mt-2 space-y-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3">
+                <p className="text-xs text-muted-foreground">
+                  <strong className="text-foreground">Cosa sono gli orfani?</strong> File su disco
+                  non collegati ad alcun episodio del catalogo. Di solito NON sono episodi: sono{' '}
+                  <strong>metadati, copertine, immagini e sigle</strong> (poster, backdrop, theme).
+                  In genere <strong>non vanno eliminati</strong>. Usa il{' '}
+                  <Link
+                    href="/library/files"
+                    className="text-primary underline-offset-4 hover:underline"
+                  >
+                    Gestore file
+                  </Link>{' '}
+                  per controllarli uno per uno prima di rimuovere qualcosa.
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1 border-destructive/40 text-destructive hover:bg-destructive/10"
+                  disabled={deleteOrphans.isPending}
+                  onClick={() => setConfirmOrphans(true)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Elimina comunque {lastScan.orphanPaths.length} orfan
+                  {lastScan.orphanPaths.length === 1 ? 'o' : 'i'}
+                </Button>
+              </div>
             ) : null}
           </div>
         </Card>
@@ -268,8 +283,10 @@ export function LibraryView() {
             <DialogTitle className="text-destructive">Eliminare i file orfani?</DialogTitle>
             <DialogDescription>
               Verranno cancellati {lastScan?.orphanPaths.length ?? 0} file presenti su disco ma non
-              collegati ad alcun episodio del catalogo. L&apos;operazione &egrave;{' '}
-              <strong>irreversibile</strong>.
+              collegati ad alcun episodio del catalogo. Spesso sono{' '}
+              <strong>metadati, copertine, immagini o sigle</strong> (poster, backdrop, theme) e{' '}
+              <strong>non episodi</strong>: se non sei sicuro, controllali prima dal Gestore file.
+              L&apos;operazione &egrave; <strong>irreversibile</strong>.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

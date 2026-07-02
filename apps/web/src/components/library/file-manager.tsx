@@ -660,13 +660,13 @@ export function FileManager() {
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
         <span className="flex items-center gap-1.5">
-          <Badge variant="outline" className="border-amber-500/50 text-amber-300">
+          <Badge variant="outline" className="border-amber-500/60 bg-amber-500/10 text-amber-300">
             non collegato
           </Badge>
           file non associato a un episodio del catalogo
         </span>
         <span className="flex items-center gap-1.5">
-          <Badge variant="outline" className="border-amber-500/50 text-amber-300">
+          <Badge variant="outline" className="border-sky-500/60 bg-sky-500/10 text-sky-300">
             Non importato
           </Badge>
           cartella di contenuto non scaricata dall’app
@@ -800,7 +800,7 @@ export function FileManager() {
                       ) : (
                         <Badge
                           variant="outline"
-                          className="shrink-0 border-amber-500/50 text-amber-300"
+                          className="shrink-0 border-sky-500/60 bg-sky-500/10 text-sky-300"
                         >
                           Non importato
                         </Badge>
@@ -817,7 +817,7 @@ export function FileManager() {
                     {orphan ? (
                       <Badge
                         variant="outline"
-                        className="shrink-0 border-amber-500/50 text-amber-300"
+                        className="shrink-0 border-amber-500/60 bg-amber-500/10 text-amber-300"
                       >
                         non collegato
                       </Badge>

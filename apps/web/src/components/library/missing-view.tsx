@@ -25,7 +25,7 @@ import {
   SlidersHorizontal,
 } from 'lucide-react';
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 interface AnimeGroup {
@@ -164,6 +164,16 @@ export function MissingView() {
     },
     onError: (e) => toast.error(e.message || 'Ri-scarica non riuscito'),
   });
+
+  // Auto-avvio del controllo appena si entra nella pagina (il badge "Mancanti" della libreria
+  // porta qui): l'utente vede subito cosa manca senza dover premere "Controlla la libreria".
+  const autoRan = useRef(false);
+  useEffect(() => {
+    if (!autoRan.current) {
+      autoRan.current = true;
+      scan.mutate();
+    }
+  }, [scan]);
 
   const result = scan.data ?? null;
   const groups = useMemo(() => groupByAnime(result?.missingEntries ?? []), [result]);

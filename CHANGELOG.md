@@ -14,6 +14,35 @@ e il progetto aderisce al [Semantic Versioning](https://semver.org/lang/it/).
 - Gating reale del Premium (collegamento all'account del sito, da definire con l'admin).
 - Update ottimistici e routing del cestino anche per `library.deleteSeries` (rimandati).
 
+## [0.13.7] - 2026-07-02
+
+Lingue sulle card, hero swipe, blocco landscape, orfani spiegati e download alla scelta stato.
+
+### Added
+- **Tag lingua (SUB/DUB) su tutte le card anime:** le locandine del catalogo/home mostrano ora le
+  bandiere audio+sottotitoli (`availableLanguages`), non solo il tipo (TV/Film). Prima erano solo
+  in "Ultimi episodi".
+- **Hero: swipe su mobile** per cambiare slide (le frecce restano su desktop). L'hero e gli "ultimi
+  episodi" sono sincronizzati col sito (feed ufficiale `/in-evidenza` + `/ultimi-episodi`).
+- **Download alla scelta stato:** passando un seguito a «In corso» o «Da guardare» dal menu della
+  card, l'app chiede se scaricare subito gli episodi mancanti (Sì/No).
+- **Blocco landscape su telefono:** in orizzontale su schermi bassi compare l'invito a ruotare
+  (l'app e' pensata in verticale); il PWA installato usa `orientation: portrait`. I tablet restano
+  pienamente utilizzabili.
+- **Controllo mancanti automatico:** entrando in «Episodi mancanti» il controllo parte da solo
+  (niente clic manuale). L'elenco resta ordinato per titolo e numero episodio.
+
+### Changed
+- **Card episodio:** il tag «Ep. N» si sposta sotto la locandina (non piu' in sovrimpressione), cosi'
+  non si accavalla con la lingua quando le card si rimpiccioliscono (3 per riga su mobile).
+- **Seguiti:** i cinque stati restano nello stesso rettangolo (barra scorrevole in orizzontale su
+  schermi stretti) invece di mandare «Completato/Droppato» a capo fuori dal riquadro.
+- **Gestore file:** «non collegato» (ambra) e «Non importato» (azzurro) ora hanno colori distinti e
+  leggibili a colpo d'occhio.
+- **Orfani spiegati in libreria:** dopo la scansione un riquadro chiarisce che gli orfani sono di
+  solito metadati/copertine/sigle (non episodi) e **non vanno eliminati** senza controllare; il
+  pulsante di eliminazione e' meno invadente e la conferma lo ribadisce.
+
 ## [0.13.6] - 2026-07-02
 
 Rete di sicurezza anti-overflow, rifiniture mobile e hero animata.

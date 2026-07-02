@@ -75,10 +75,14 @@ export function EpisodeCard({ episode }: { episode: LatestEpisode }) {
                 className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
               />
             ) : null}
-            <Badge className="absolute left-2 top-2">Ep. {episode.episodeNumber}</Badge>
+            {/* Solo la lingua resta sulla locandina (compatta, un angolo): il tag "Ep. N" va sotto
+                per non sovrapporsi quando la card si rimpicciolisce (3 per riga su mobile). */}
             <LanguageBadge language={episode.language} className="absolute right-2 top-2" />
           </div>
           <div className="space-y-1 p-3">
+            <Badge variant="secondary" className="text-[11px]">
+              Ep. {episode.episodeNumber}
+            </Badge>
             <h3 className="line-clamp-2 text-sm font-medium">{episode.title}</h3>
           </div>
         </Card>

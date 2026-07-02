@@ -57,8 +57,15 @@ backend bridge NAS↔GPU (ibrido locale/cloud) → quality nel download engine (
 
 ## Stato attuale (2026-07-02)
 
-**Versione corrente: v0.13.6 — rete anti-overflow globale, rifiniture mobile (titolo episodio, sidebar landscape, popup chiusi allo scroll) + hero animata.**
+**Versione corrente: v0.13.7 — tag lingua su tutte le card, hero swipe, blocco landscape, orfani spiegati, download alla scelta stato.**
 - 363 test verdi, lint/typecheck verdi, build web ok
+- v0.13.7: `availableLanguages` (SUB/DUB) su AnimeCard; hero con swipe mobile (+ conferma sync col
+  feed ufficiale); prompt download quando un follow passa a watching/plan_to_watch (follow-card);
+  blocco landscape su telefono (overlay `.landscape-block` + manifest `orientation: portrait`);
+  `/library/missing` auto-scan on mount; colori distinti "non collegato" (ambra) / "Non importato"
+  (azzurro) nel gestore file; riquadro esplicativo orfani in libreria. Nota: l'incidente "delete
+  gestore file" era un DUPLICATO (`Mission Yozakura Family 2` vs parent `.../Season 02`), non un
+  bug: il delete funziona e sposta nel cestino.
 - v0.13.6: `overflow-x: clip` globale su `html, body` (rete di sicurezza per "tutto va oltre lo
   schermo" su ogni schermata); titolo "Episodio XX" su due righe su mobile (niente piu' "Ep...");
   sidebar landscape rispetta la safe-area; `useCloseOnScroll` chiude notifiche/download allo scroll

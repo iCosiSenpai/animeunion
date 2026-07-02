@@ -35,7 +35,12 @@ function StatCard({
         {icon}
       </div>
       <div className="min-w-0">
-        <p className="truncate text-2xl font-bold tabular-nums">{value}</p>
+        {/* Niente `truncate`: un numero non va mai tagliato con "…". Se lo spazio è poco il valore
+            rimpicciolisce (text-xl su schermi stretti) e, in ultima istanza, va a capo invece di
+            perdere cifre. `tabular-nums` mantiene le cifre allineate. */}
+        <p className="text-xl font-bold tabular-nums [overflow-wrap:anywhere] sm:text-2xl">
+          {value}
+        </p>
         <p className="text-sm text-muted-foreground">{label}</p>
         {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
       </div>

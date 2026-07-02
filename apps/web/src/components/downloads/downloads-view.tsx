@@ -3,7 +3,6 @@
 import { useAnimationsOn } from '@/components/layout/animation-provider';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { trpc } from '@/lib/trpc';
 import { useDownloadSummary } from '@/lib/use-download-summary';
 import type { DownloadFilter, DownloadGroupSummary } from '@animeunion/shared';
@@ -242,31 +241,32 @@ export function DownloadsView() {
           Nessun download in questa categoria.
         </Card>
       ) : (
-        <ScrollArea className="h-[calc(100dvh-16rem)]">
-          <div className="space-y-3 pr-3">
-            <AnimatePresence initial={false}>
-              {groups.map((group) => (
-                <motion.div
-                  key={group.animeId}
-                  initial={animationsOn ? { opacity: 0, y: 8 } : false}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={animationsOn ? { opacity: 0 } : undefined}
-                  transition={{ duration: 0.18 }}
-                >
-                  <DownloadGroupCard
-                    group={group}
-                    filter={filter}
-                    onCancel={(id) => cancelMutation.mutate({ queueId: id })}
-                    onRetry={(id) => retryMutation.mutate({ queueId: id })}
-                    onPrioritize={(id) => priorityMutation.mutate({ queueId: id, priority: 100 })}
-                    onCancelGroup={(animeId) => cancelGroupMutation.mutate({ animeId })}
-                    onRetryGroup={(animeId) => retryGroupMutation.mutate({ animeId })}
-                  />
-                </motion.div>
-              ))}
-            </AnimatePresence>
-          </div>
-        </ScrollArea>
+        // Nessun contenitore a scroll dedicato: la lista scorre col resto della pagina (niente
+        // "finestra" annidata, niente scrollbar custom che si scontra col testo su mobile, meno
+        // jank/freeze su iOS Safari).
+        <div className="space-y-3">
+          <AnimatePresence initial={false}>
+            {groups.map((group) => (
+              <motion.div
+                key={group.animeId}
+                initial={animationsOn ? { opacity: 0, y: 8 } : false}
+                animate={{ opacity: 1, y: 0 }}
+                exit={animationsOn ? { opacity: 0 } : undefined}
+                transition={{ duration: 0.18 }}
+              >
+                <DownloadGroupCard
+                  group={group}
+                  filter={filter}
+                  onCancel={(id) => cancelMutation.mutate({ queueId: id })}
+                  onRetry={(id) => retryMutation.mutate({ queueId: id })}
+                  onPrioritize={(id) => priorityMutation.mutate({ queueId: id, priority: 100 })}
+                  onCancelGroup={(animeId) => cancelGroupMutation.mutate({ animeId })}
+                  onRetryGroup={(animeId) => retryGroupMutation.mutate({ animeId })}
+                />
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        </div>
       )}
     </div>
   );

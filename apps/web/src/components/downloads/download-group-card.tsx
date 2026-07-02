@@ -333,19 +333,19 @@ function EpisodeRow({
       </div>
 
       {isActive ? (
-        <div className="flex w-40 shrink-0 items-center gap-2">
+        <div className="flex w-24 shrink-0 items-center gap-1.5 sm:w-40 sm:gap-2">
           <ProgressBar value={item.progress} className="h-1.5" />
-          <span className="w-9 text-right text-xs tabular-nums text-muted-foreground">
+          <span className="w-10 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
             {Math.round(item.progress * 100)}%
           </span>
         </div>
       ) : item.status === 'completed' ? (
-        <span className="flex shrink-0 items-center gap-1 text-xs text-green-500">
-          <CheckCircle2 className="h-3.5 w-3.5" />
+        <span className="flex shrink-0 items-center gap-1 whitespace-nowrap text-xs text-green-500">
+          <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
           {item.totalBytes ? formatBytes(item.totalBytes) : 'OK'}
         </span>
       ) : item.status === 'failed' ? (
-        <span className="flex max-w-[12rem] shrink-0 items-center gap-1 truncate text-xs text-destructive">
+        <span className="flex max-w-[8rem] shrink-0 items-center gap-1 truncate text-xs text-destructive sm:max-w-[12rem]">
           <XCircle className="h-3.5 w-3.5 shrink-0" />
           <span className="truncate">{item.error ?? 'Errore'}</span>
         </span>
@@ -355,7 +355,8 @@ function EpisodeRow({
         </Badge>
       )}
 
-      <div className="flex w-16 shrink-0 items-center justify-end gap-1 text-xs text-muted-foreground">
+      {/* Velocita'/ETA: solo da sm in su, su mobile lo spazio non basta (causava overflow orizzontale). */}
+      <div className="hidden w-16 shrink-0 items-center justify-end gap-1 text-xs text-muted-foreground sm:flex">
         {item.status === 'downloading' && item.speedBps ? formatSpeed(item.speedBps) : null}
         {eta ? <span className="hidden sm:inline">{formatDuration(eta)}</span> : null}
       </div>

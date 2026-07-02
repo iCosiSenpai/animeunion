@@ -452,7 +452,7 @@ function EpisodeList({ anime }: { anime: AnimeDetailType }) {
                 {episode.number}
               </span>
               <span className="min-w-0 flex-1 truncate text-sm">
-                {episode.title ?? `Episodio ${episode.number}`}
+                {episode.title?.trim() ? episode.title : `Episodio ${episode.number}`}
               </span>
               {aggregate !== 'none' ? (
                 <Badge className={cn('shrink-0', DL_STATE_BADGE[aggregate].className)}>

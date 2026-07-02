@@ -129,3 +129,17 @@ export function EpisodeGrid({ episodes }: { episodes: LatestEpisode[] }) {
     </CardCarousel>
   );
 }
+
+// Griglia a piena larghezza (non carosello) per la vista "espansa" degli ultimi episodi.
+export function EpisodeGridExpanded({ episodes }: { episodes: LatestEpisode[] }) {
+  return (
+    <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6">
+      {episodes.map((episode) => (
+        <EpisodeCard
+          key={`${episode.animeId}_${episode.episodeNumber}_${episode.language}`}
+          episode={episode}
+        />
+      ))}
+    </div>
+  );
+}

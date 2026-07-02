@@ -8,6 +8,7 @@ import type {
   AnimeSummary,
   FeaturedAnime,
   HomeSectionId,
+  LatestEpisode,
   PaginatedAnime,
   Season,
 } from '@animeunion/shared';
@@ -29,7 +30,7 @@ import type { ElementType, ReactNode } from 'react';
 import { Fragment, useEffect, useState } from 'react';
 import { CardCarousel, CardCarouselSkeleton } from './card-carousel';
 import { ContinueWatchingGrid } from './continue-watching';
-import { EpisodeGrid } from './episode-card';
+import { EpisodeGrid, EpisodeGridExpanded } from './episode-card';
 import { resolveHomeOrder } from './home-sections';
 import { NewsCard } from './news-card';
 
@@ -223,6 +224,56 @@ function SectionBlock({
     <section className="space-y-1">
       <SectionHeader icon={icon} title={title} />
       {children}
+    </section>
+  );
+}
+
+// "Ultimi episodi": carosello compresso (10) con toggle "Mostra di più" che apre la griglia con
+// tutti gli episodi caricati (fino a `limit` dal backend). Ha senso espandere solo se ce n'è di più.
+function LatestEpisodesSection({
+  episodes,
+  isLoading,
+}: {
+  episodes: LatestEpisode[];
+  isLoading: boolean;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const COMPACT_COUNT = 10;
+  if (isLoading || episodes.length === 0) {
+    return null;
+  }
+  const canExpand = episodes.length > COMPACT_COUNT;
+  return (
+    <section className="space-y-1">
+      <SectionHeader
+        icon={Play}
+        title="Ultimi episodi"
+        action={
+          canExpand ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1 text-muted-foreground"
+              onClick={() => setExpanded((e) => !e)}
+            >
+              {expanded ? (
+                <>
+                  Mostra di meno <ChevronUp className="h-4 w-4" />
+                </>
+              ) : (
+                <>
+                  Mostra di più <ChevronDown className="h-4 w-4" />
+                </>
+              )}
+            </Button>
+          ) : undefined
+        }
+      />
+      {expanded ? (
+        <EpisodeGridExpanded episodes={episodes} />
+      ) : (
+        <EpisodeGrid episodes={episodes.slice(0, COMPACT_COUNT)} />
+      )}
     </section>
   );
 }
@@ -448,14 +499,10 @@ export function HomeView() {
   const sectionNodes: Record<HomeSectionId, ReactNode> = {
     hero: <HeroCarousel anime={featured.data ?? []} isLoading={featured.isLoading} />,
     latestEpisodes: (
-      <SectionBlock
-        title="Ultimi episodi"
-        icon={Play}
+      <LatestEpisodesSection
+        episodes={latestEpisodes.data ?? []}
         isLoading={latestEpisodes.isLoading}
-        isEmpty={(latestEpisodes.data ?? []).length === 0}
-      >
-        <EpisodeGrid episodes={(latestEpisodes.data ?? []).slice(0, 10)} />
-      </SectionBlock>
+      />
     ),
     continueWatching: (
       <SectionBlock

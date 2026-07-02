@@ -51,6 +51,34 @@ describe('FavoritesService', () => {
     expect(queue.length).toBe(result.enqueued);
   });
 
+  it('import valorizza la soglia forward-only al max episodio (no download di massa se poi passa a watching)', async () => {
+    const { db, favorites, first } = await setup({
+      getFavorites: async (): Promise<Favorite[]> => [
+        {
+          animeId: first.id,
+          slug: first.slug,
+          title: first.title,
+          coverImage: null,
+          addedAt: '2026-01-01T00:00:00Z',
+        },
+      ],
+    });
+
+    await favorites.importFromSite();
+
+    const follow = db.select().from(schema.follow).where(eq(schema.follow.animeId, first.id)).get();
+    const maxEp = Math.max(
+      ...db
+        .select({ number: schema.episode.number })
+        .from(schema.episode)
+        .where(eq(schema.episode.animeId, first.id))
+        .all()
+        .map((row) => row.number),
+    );
+    expect(maxEp).toBeGreaterThan(0);
+    expect(follow?.autoDownloadFromEp).toBe(maxEp);
+  });
+
   it('non riaccoda gli stessi episodi su una seconda esecuzione (idempotente)', async () => {
     const { favorites, first } = await setup({
       getFavorites: async (): Promise<Favorite[]> => [

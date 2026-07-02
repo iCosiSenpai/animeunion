@@ -1,5 +1,5 @@
 import type { AnimeSource, Favorite, HistoryEntry, WatchlistItem } from '@animeunion/shared';
-import { eq, inArray } from 'drizzle-orm';
+import { eq, inArray, max } from 'drizzle-orm';
 import type { Db } from '../db';
 import { schema } from '../db';
 import type { Logger } from '../lib/logger';
@@ -91,6 +91,16 @@ export function createFavoritesService(deps: FavoritesServiceDeps): FavoritesSer
     }
   }
 
+  // Massimo numero episodio noto a catalogo: soglia forward-only per l'auto-download.
+  function maxEpisode(animeId: string): number {
+    const row = db
+      .select({ value: max(schema.episode.number) })
+      .from(schema.episode)
+      .where(eq(schema.episode.animeId, animeId))
+      .get();
+    return row?.value ?? 0;
+  }
+
   /** Inserisce/aggiorna la riga follow locale senza ri-propagare al sito. */
   function upsertFollow(animeId: string): void {
     const existing = db
@@ -108,6 +118,10 @@ export function createFavoritesService(deps: FavoritesServiceDeps): FavoritesSer
         animeId,
         status: 'plan_to_watch',
         notes: null,
+        // Forward-only: cattura il backlog gia' uscito al momento dell'import, cosi' se in seguito
+        // il follow passa a "In corso" l'auto-download parte dai nuovi episodi, non dall'intero
+        // backlog (evita il download di massa a sorpresa).
+        autoDownloadFromEp: maxEpisode(animeId),
         addedAt: timestamp,
         updatedAt: timestamp,
         lastCheckAt: null,

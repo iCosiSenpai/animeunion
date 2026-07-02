@@ -99,6 +99,39 @@ describe('FollowService', () => {
     expect(service.list()[0]?.status).toBe('completed');
   });
 
+  it('updateStatus a watching ancora la soglia forward-only se era nulla (import/legacy)', async () => {
+    const { db, service, animeId } = await setup();
+    // Simula un follow importato dai preferiti / legacy: soglia mai fissata.
+    const ts = new Date().toISOString();
+    db.insert(schema.follow)
+      .values({
+        id: 'legacy-1',
+        animeId,
+        status: 'plan_to_watch',
+        autoDownloadFromEp: null,
+        addedAt: ts,
+        updatedAt: ts,
+      })
+      .run();
+    insertEpisode(db, 'e-1', animeId, 7);
+
+    service.updateStatus({ animeId, status: 'watching' });
+
+    // Ancorata al max (7): l'auto-download partira' dagli episodi > 7, non dall'intero backlog.
+    expect(followRow(db, animeId)?.autoDownloadFromEp).toBe(7);
+  });
+
+  it('updateStatus a watching non tocca una soglia gia impostata', async () => {
+    const { db, service, animeId } = await setup();
+    service.add({ animeId, status: 'plan_to_watch' }); // soglia 0 (nessun episodio)
+    insertEpisode(db, 'e-1', animeId, 4);
+
+    service.updateStatus({ animeId, status: 'watching' });
+
+    // Resta 0: la soglia esisteva gia', non la ri-ancoriamo (rispetta la scelta forward-only).
+    expect(followRow(db, animeId)?.autoDownloadFromEp).toBe(0);
+  });
+
   it('updateStatus senza follow lancia NotFoundError', async () => {
     const { service, animeId } = await setup();
     expect(() => service.updateStatus({ animeId, status: 'completed' })).toThrow(NotFoundError);

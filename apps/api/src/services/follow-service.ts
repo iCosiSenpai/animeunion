@@ -157,11 +157,24 @@ export function createFollowService(deps: FollowServiceDeps): FollowService {
         throw new NotFoundError(`Follow non trovato per anime: ${input.animeId}`);
       }
       const timestamp = new Date().toISOString();
+      // Passando a "In corso" l'auto-download diventa effettivo (autoDownload null ricade su
+      // status==='watching'). Se la soglia forward-only non e' mai stata fissata (import preferiti
+      // o righe legacy pre-migrazione), la ancoriamo ora al max episodio: evita che il primo tick
+      // auto-scarichi l'intero backlog gia' uscito.
+      const fromEp =
+        input.status === 'watching' && existing.autoDownloadFromEp == null
+          ? maxEpisode(existing.animeId)
+          : existing.autoDownloadFromEp;
       db.update(schema.follow)
-        .set({ status: input.status, updatedAt: timestamp })
+        .set({ status: input.status, autoDownloadFromEp: fromEp, updatedAt: timestamp })
         .where(eq(schema.follow.id, existing.id))
         .run();
-      return toFollow({ ...existing, status: input.status, updatedAt: timestamp });
+      return toFollow({
+        ...existing,
+        status: input.status,
+        autoDownloadFromEp: fromEp,
+        updatedAt: timestamp,
+      });
     },
 
     setAutoDownload(input: FollowSetAutoDownloadInput): Follow {

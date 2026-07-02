@@ -14,6 +14,25 @@ e il progetto aderisce al [Semantic Versioning](https://semver.org/lang/it/).
 - Gating reale del Premium (collegamento all'account del sito, da definire con l'admin).
 - Update ottimistici e routing del cestino anche per `library.deleteSeries` (rimandati).
 
+## [0.13.2] - 2026-07-02
+
+Patch di affidabilità dell'auto-download: chiude un footgun silenzioso e rende visibile quando
+l'interruttore globale è spento.
+
+### Fixed
+- **Soglia forward-only sempre ancorata:** i preferiti importati (`favorites-service.upsertFollow`)
+  e le righe legacy pre-migrazione avevano `autoDownloadFromEp = null`. Portando poi il follow a
+  "In corso" (`follow-service.updateStatus`, che non toccava la soglia) il follow diventava
+  eleggibile con soglia nulla e il primo tick avrebbe auto-scaricato **l'intero backlog** già
+  uscito. Ora la soglia viene fissata al max episodio all'import e all'ingresso in "watching"
+  quando mai impostata; le soglie esistenti non vengono toccate.
+
+### Added
+- **Avviso auto-download globale spento:** banner nella pagina *Seguiti* quando l'interruttore
+  globale `autoDownload` è off ma esistono serie impostate su "Auto" (con CTA alle Impostazioni),
+  più una nota inline nel dialog *Segui*. Elimina il caso silenzioso in cui il badge "Auto" e la
+  checkbox spuntata lasciavano credere che l'auto-download fosse attivo mentre il master era off.
+
 ## [0.13.1] - 2026-07-02
 
 Batch di fix UX mobile + calendario potenziato, più una miglioria di performance sul refresh Jellyfin.

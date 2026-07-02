@@ -57,8 +57,11 @@ backend bridge NAS↔GPU (ibrido locale/cloud) → quality nel download engine (
 
 ## Stato attuale (2026-07-02)
 
-**Versione corrente: v0.13.1 — patch di fix UX mobile + calendario potenziato + refresh Jellyfin mirato.**
-- 357 test verdi, lint/typecheck verdi, build web ok
+**Versione corrente: v0.13.2 — patch affidabilità auto-download (soglia forward-only ancorata + avviso master spento).**
+- 360 test verdi, lint/typecheck verdi, build web ok
+- Auto-download "non parte"/push "assenti": quasi sempre config/ambiente, non bug — master globale
+  `autoDownload` (default off) + eleggibilità per-follow; push tutto implementato ma nascosto senza
+  HTTPS. Vedi memoria `autodownload-eligibility-and-push-https`.
 - Diagnosi download lento: contesa I/O sull'HDD pool2 condiviso con Jellyfin, NON un bug (vedi
   memoria `download-slow-jellyfin-io-contention`); mitigato col refresh Jellyfin per-libreria.
 - Premium: `GET /me` ancora `role: USER`, nessun endpoint premium lato API (`/me/subscription` 404).

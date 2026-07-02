@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, statSync } from 'node:fs';
 import { resolve, sep } from 'node:path';
 import type {
   DownloadAddByRefInput,
@@ -18,6 +18,7 @@ import { NotFoundError, PreconditionError } from '../lib/errors';
 import type { Logger } from '../lib/logger';
 import type { CatalogService } from './catalog-service';
 import type { ConfigService } from './config-service';
+import type { RenamerService } from './renamer-service';
 
 export interface DownloadQueueItem {
   id: string;
@@ -111,6 +112,7 @@ export interface DownloadServiceDeps {
   worker: DownloadWorker;
   catalog: CatalogService;
   config: ConfigService;
+  renamer: RenamerService;
   logger: Logger;
   now?: () => Date;
   /** Callback opzionale: nuovi episodi accodati automaticamente per un anime (per notifiche). */
@@ -222,7 +224,7 @@ function statusesForFilter(filter: DownloadFilter): readonly string[] | null {
 }
 
 export function createDownloadService(deps: DownloadServiceDeps): DownloadService {
-  const { db, worker, catalog, config, logger } = deps;
+  const { db, worker, catalog, config, renamer, logger } = deps;
   const now = deps.now ?? (() => new Date());
 
   function alreadyInQueue(episodeFileId: string): string | null {
@@ -288,6 +290,52 @@ export function createDownloadService(deps: DownloadServiceDeps): DownloadServic
     return true;
   }
 
+  // Self-healing "in ingresso": un episode_file `not_downloaded` il cui file esiste GIA' su disco al
+  // path atteso (renamer) viene marcato downloaded invece di essere ri-scaricato. Evita di ri-scaricare
+  // e sovrascrivere una libreria gia' presente quando il DB ne ha perso traccia (es. dopo un restore
+  // o una desync disco/DB). Ritorna true se ha riconciliato il file (→ niente enqueue).
+  function healPresent(
+    file: { id: string; language: string; number: number },
+    animeId: string,
+  ): boolean {
+    let path: string;
+    try {
+      path = renamer.computeEpisodePath({
+        animeId,
+        episodeNumber: file.number,
+        language: file.language as Language,
+      });
+    } catch (error) {
+      logger.debug({ err: error, episodeFileId: file.id }, 'healPresent: calcolo path fallito');
+      return false;
+    }
+    if (!existsSync(path)) {
+      return false;
+    }
+    let size = 0;
+    try {
+      size = statSync(path).size;
+    } catch {
+      size = 0;
+    }
+    const ts = now().toISOString();
+    db.update(schema.episodeFile)
+      .set({
+        downloadStatus: 'downloaded',
+        localPath: path,
+        fileSize: size,
+        downloadedAt: ts,
+        updatedAt: ts,
+      })
+      .where(eq(schema.episodeFile.id, file.id))
+      .run();
+    logger.info(
+      { episodeFileId: file.id, path },
+      'Self-healing: file gia presente su disco, marcato downloaded (nessun ri-download)',
+    );
+    return true;
+  }
+
   // Accoda gli episodi mancanti di un anime. `auto` = chiamata dallo scheduler: applica il cooldown
   // sui falliti per non ritentare gli errori permanenti a ogni ciclo. Conta solo ciò che accoda o
   // ritenta davvero (un fallito ritentato via worker.retry, un nuovo via worker.enqueue), così il
@@ -321,6 +369,9 @@ export function createDownloadService(deps: DownloadServiceDeps): DownloadServic
       if (minEpisodeNumber != null && file.number <= minEpisodeNumber) return false;
       const healed = healMissing(file);
       if (!healed && (file.status === 'downloaded' || file.status === 'external')) return false;
+      // Se il DB dice not_downloaded ma il file esiste gia' al path atteso, riconcilialo e non
+      // ri-scaricarlo (idempotenza rispetto al disco).
+      if (file.status === 'not_downloaded' && healPresent(file, animeId)) return false;
       return true;
     });
 

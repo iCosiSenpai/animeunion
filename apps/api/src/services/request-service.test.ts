@@ -6,6 +6,7 @@ import { createCatalogService } from './catalog-service';
 import { createConfigService } from './config-service';
 import { createDownloadService } from './download-service';
 import { createFollowService } from './follow-service';
+import { createRenamerService } from './renamer-service';
 import { createRequestService } from './request-service';
 import { createSeriesResolver } from './series-resolver';
 
@@ -16,6 +17,7 @@ function setup() {
   const catalog = createCatalogService({ db, source, config, logger: testLogger });
   const resolver = createSeriesResolver({ db });
   const follow = createFollowService({ db, source, logger: testLogger });
+  const renamer = createRenamerService({ db, config, seriesResolver: resolver });
   const download = createDownloadService({
     db,
     worker: {
@@ -27,6 +29,7 @@ function setup() {
     } as never,
     catalog,
     config,
+    renamer,
     logger: testLogger,
   });
   const requests = createRequestService({ db, catalog, resolver, follow, download, config });

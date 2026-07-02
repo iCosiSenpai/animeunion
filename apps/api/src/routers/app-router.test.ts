@@ -63,6 +63,7 @@ function makeCaller() {
     } as never,
     catalog,
     config,
+    renamer,
     logger: testLogger,
   });
   const requests = createRequestService({ db, catalog, resolver, follow, download, config });

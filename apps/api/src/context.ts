@@ -109,6 +109,7 @@ export function createAppContext(options: { env?: Env; databasePath?: string } =
     worker,
     catalog,
     config,
+    renamer,
     logger,
     onAutoEnqueued: (animeId, count) => {
       notifications.create({

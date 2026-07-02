@@ -7,6 +7,7 @@ import { createCatalogService } from './services/catalog-service';
 import { createConfigService } from './services/config-service';
 import { createDownloadService } from './services/download-service';
 import { createFollowService } from './services/follow-service';
+import { createRenamerService } from './services/renamer-service';
 import { createRequestAuthService } from './services/request-auth-service';
 import { createRequestService } from './services/request-service';
 import { createSeriesResolver } from './services/series-resolver';
@@ -25,6 +26,7 @@ function buildCtx(opts: { downloadConfigured?: boolean } = {}) {
   const catalog = createCatalogService({ db, source, config, logger: testLogger });
   const follow = createFollowService({ db, source, logger: testLogger });
   const resolver = createSeriesResolver({ db });
+  const renamer = createRenamerService({ db, config, seriesResolver: resolver });
   const download = createDownloadService({
     db,
     worker: {
@@ -36,6 +38,7 @@ function buildCtx(opts: { downloadConfigured?: boolean } = {}) {
     } as never,
     catalog,
     config,
+    renamer,
     logger: testLogger,
   });
   const requestAuth = createRequestAuthService({ db });

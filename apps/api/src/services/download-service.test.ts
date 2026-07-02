@@ -1,6 +1,6 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { eq, sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { schema } from '../db';
@@ -174,6 +174,7 @@ describe('DownloadService', () => {
       worker: worker as never,
       catalog,
       config,
+      renamer,
       logger: testLogger,
       onAutoEnqueued,
     });
@@ -194,6 +195,7 @@ describe('DownloadService', () => {
       worker: worker as never,
       catalog: buildStubCatalog(),
       config,
+      renamer: createRenamerService({ db, config }),
       logger: testLogger,
       now: () => nowDate,
     });
@@ -309,6 +311,32 @@ describe('DownloadService', () => {
       .where(eq(schema.downloadQueue.id, 'q-old'))
       .get();
     expect(oldQ).toBeUndefined();
+  });
+
+  it('addMissing self-heal in ingresso: file gia presente su disco marcato downloaded senza ri-scaricarlo', async () => {
+    const { service, config } = makeService();
+    insertAnime(db, 'a-1');
+    insertEpisode(db, 'e-1', 'a-1', 1);
+    insertFile(db, 'ef-1', 'e-1', 'SUB_ITA', 'not_downloaded');
+    // Crea il file reale al path atteso dal renamer: la libreria esiste ma il DB la ignora.
+    const renamer = createRenamerService({ db, config });
+    const path = renamer.computeEpisodePath({
+      animeId: 'a-1',
+      episodeNumber: 1,
+      language: 'SUB_ITA',
+    });
+    await mkdir(dirname(path), { recursive: true });
+    await writeFile(path, 'x'.repeat(1234));
+
+    const n = service.addMissing({ animeId: 'a-1' });
+
+    // Riconciliato, non ri-scaricato.
+    expect(n).toBe(0);
+    expect(enqueueSpy).not.toHaveBeenCalled();
+    const ef = db.select().from(schema.episodeFile).where(eq(schema.episodeFile.id, 'ef-1')).get();
+    expect(ef?.downloadStatus).toBe('downloaded');
+    expect(ef?.localPath).toBe(path);
+    expect(ef?.fileSize).toBe(1234);
   });
 
   it('addMissing self-heal: NON azzera se la root non e raggiungibile (disco offline)', () => {

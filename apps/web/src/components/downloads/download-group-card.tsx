@@ -326,7 +326,7 @@ function EpisodeRow({
             E{pad2(item.episodeNumber)}
           </span>
         ) : null}
-        <Link href={href} className="truncate hover:text-primary">
+        <Link href={href} className="min-w-0 truncate hover:text-primary">
           {item.episodeTitle ?? (hideNumber ? 'Film' : `Episodio ${item.episodeNumber}`)}
         </Link>
         <LanguageBadge language={item.language} />

@@ -116,7 +116,7 @@ export function DownloadStatus() {
                 <div key={item.id} className="space-y-1.5">
                   <div className="flex items-center gap-2">
                     <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                    <span className="line-clamp-1 flex-1 text-sm">
+                    <span className="line-clamp-1 min-w-0 flex-1 text-sm">
                       {item.animeTitle} · E{item.episodeNumber}
                     </span>
                     <span className="text-xs text-muted-foreground">

@@ -703,22 +703,6 @@ export function SettingsView() {
               </Select>
             </Field>
             <Field
-              label="Prova notifica in-app"
-              hint="Mostra un toast di prova per verificare la posizione (utile su iPhone/PWA)."
-            >
-              <Button
-                variant="outline"
-                onClick={() =>
-                  toast.success('Notifica di prova', {
-                    description: 'Se la vedi qui, i toast in-app funzionano.',
-                  })
-                }
-              >
-                <Bell className="mr-2 h-4 w-4" />
-                Mostra toast di prova
-              </Button>
-            </Field>
-            <Field
               label="Nuove stagioni"
               hint="Avvisa quando una serie che segui ottiene una nuova stagione o contenuto correlato."
             >

@@ -50,7 +50,9 @@ export function Sidebar() {
       {/* Sidebar desktop */}
       <aside
         className={cn(
-          'fixed left-0 top-0 z-30 hidden h-screen flex-col border-r bg-card transition-all duration-200 md:flex',
+          // Safe-area: in landscape su telefono (larghezza >= md) la sidebar mostrata non deve
+          // finire sotto la status bar / il notch. pt/pl = env(safe-area-inset-*).
+          'fixed left-0 top-0 z-30 hidden h-screen flex-col border-r bg-card pl-[env(safe-area-inset-left)] pt-[env(safe-area-inset-top)] transition-all duration-200 md:flex',
           expanded ? 'w-56' : 'w-16',
         )}
       >

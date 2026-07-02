@@ -66,6 +66,17 @@
   body {
     @apply bg-background text-foreground;
   }
+  /* Guardia globale anti-overflow orizzontale: NESSUNA schermata deve poter scorrere lateralmente
+     su mobile (causa il classico "tutto va oltre lo schermo"). `clip` (non `hidden`) non crea un
+     contenitore di scroll e non rompe lo scroll-anchoring verticale. I dialog/popup sono in portale
+     con il proprio cap di larghezza (w-[calc(100%-2rem)]), quindi restano gestiti a parte. Questo è
+     la rete di sicurezza per schermate presenti e future: il contenuto largo va comunque reso
+     responsivo (min-w-0 sui flex, truncate/break-words sui testi, max-w-full sui media). */
+  html,
+  body {
+    overflow-x: clip;
+    max-width: 100%;
+  }
   /* Tema con sfondo wallpaper: body trasparente cosi' il backdrop fisso (AppTheme) traspare. */
   html.theme-has-bg body {
     background-color: transparent;

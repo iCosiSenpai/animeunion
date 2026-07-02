@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { trpc } from '@/lib/trpc';
+import { useCloseOnScroll } from '@/lib/use-close-on-scroll';
 import { useDownloadSummary } from '@/lib/use-download-summary';
 import { cn, formatSpeed } from '@/lib/utils';
 import { CheckCircle2, Download, Loader2, Pause, Play, Trash2 } from 'lucide-react';
@@ -25,6 +26,7 @@ function ProgressBar({ progress }: { progress: number }) {
 export function DownloadStatus() {
   const utils = trpc.useUtils();
   const [open, setOpen] = useState(false);
+  useCloseOnScroll(open, () => setOpen(false));
   const { query: summary, counts, activeCount } = useDownloadSummary();
   const pausedQuery = trpc.download.isPaused.useQuery(undefined, {
     refetchInterval: 5000,

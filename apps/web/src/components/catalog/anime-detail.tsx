@@ -454,18 +454,25 @@ function EpisodeList({ anime }: { anime: AnimeDetailType }) {
               <span className="w-7 shrink-0 text-sm font-medium text-muted-foreground sm:w-10">
                 {episode.number}
               </span>
-              <span className="min-w-0 flex-1 truncate text-sm">
-                {episode.title?.trim() ? episode.title : `Episodio ${episode.number}`}
-              </span>
-              {aggregate !== 'none' ? (
-                <Badge className={cn('shrink-0', DL_STATE_BADGE[aggregate].className)}>
-                  {DL_STATE_BADGE[aggregate].label}
-                </Badge>
-              ) : null}
-              <div className="flex shrink-0 gap-1">
-                {episode.languages.map((language) => (
-                  <LanguageBadge key={language} language={language} />
-                ))}
+              {/* Su mobile titolo e metadati (stato + lingue) vanno su due righe: cosi' il titolo
+                  "Episodio XX" non viene compresso in "Ep..." quando la riga e' affollata. Da sm
+                  tornano su una riga sola con il titolo che occupa lo spazio flessibile. */}
+              <div className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
+                <span className="min-w-0 truncate text-sm sm:flex-1">
+                  {episode.title?.trim() ? episode.title : `Episodio ${episode.number}`}
+                </span>
+                <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+                  {aggregate !== 'none' ? (
+                    <Badge className={cn('shrink-0', DL_STATE_BADGE[aggregate].className)}>
+                      {DL_STATE_BADGE[aggregate].label}
+                    </Badge>
+                  ) : null}
+                  <div className="flex shrink-0 gap-1">
+                    {episode.languages.map((language) => (
+                      <LanguageBadge key={language} language={language} />
+                    ))}
+                  </div>
+                </div>
               </div>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>

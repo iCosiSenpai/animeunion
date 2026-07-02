@@ -57,8 +57,13 @@ backend bridge NAS↔GPU (ibrido locale/cloud) → quality nel download engine (
 
 ## Stato attuale (2026-07-02)
 
-**Versione corrente: v0.13.5 — rifiniture UI mobile (lista episodi, locandina, ricerca iOS) + conteggio orfani.**
+**Versione corrente: v0.13.6 — rete anti-overflow globale, rifiniture mobile (titolo episodio, sidebar landscape, popup chiusi allo scroll) + hero animata.**
 - 363 test verdi, lint/typecheck verdi, build web ok
+- v0.13.6: `overflow-x: clip` globale su `html, body` (rete di sicurezza per "tutto va oltre lo
+  schermo" su ogni schermata); titolo "Episodio XX" su due righe su mobile (niente piu' "Ep...");
+  sidebar landscape rispetta la safe-area; `useCloseOnScroll` chiude notifiche/download allo scroll
+  su mobile; hero home con crossfade+Ken Burns; rimosso "Mostra toast di prova" (test push reale
+  resta in `PushToggle`).
 - v0.13.4: chiude la 2a via di ri-download (sync preferiti import-only), `library.checkVanished`, UI download mobile.
 - Incidente 2026-07-02: accendere l'auto-download con DB desync (molti episode_file `not_downloaded`
   ma file già su disco) e soglie forward-only a 0/null ha ri-scaricato/sovrascritto il backlog (NON

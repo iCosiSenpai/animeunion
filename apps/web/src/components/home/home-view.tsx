@@ -1,6 +1,7 @@
 'use client';
 
 import { AnimeCard } from '@/components/anime/anime-card';
+import { useAnimationsOn } from '@/components/layout/animation-provider';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { trpc } from '@/lib/trpc';
@@ -12,6 +13,7 @@ import type {
   PaginatedAnime,
   Season,
 } from '@animeunion/shared';
+import { AnimatePresence, motion } from 'framer-motion';
 import {
   Calendar,
   ChevronDown,
@@ -287,6 +289,7 @@ function HeroCarousel({
 }) {
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
+  const animationsOn = useAnimationsOn();
 
   useEffect(() => {
     if (anime.length <= 1 || paused) return;
@@ -337,41 +340,63 @@ function HeroCarousel({
       onMouseLeave={() => setPaused(false)}
     >
       <div className="absolute inset-0">
-        {current.bannerImage ? (
-          // Banner 16:9 ad alta risoluzione: full-bleed nitido.
-          <img
-            src={current.bannerImage}
-            alt=""
-            className="h-full w-full object-cover object-center"
-            loading="eager"
-          />
-        ) : current.coverImage ? (
-          // Niente banner: backdrop poster sfocato (mai upscaling) + poster nitido su lg+.
-          <>
-            <img
-              src={current.coverImage}
-              alt=""
-              aria-hidden
-              className="h-full w-full scale-110 object-cover blur-2xl brightness-[0.55]"
-              loading="eager"
-            />
-            <img
-              src={current.coverImage}
-              alt=""
-              className="absolute right-14 top-1/2 hidden h-[72%] -translate-y-1/2 rounded-xl object-contain shadow-2xl lg:block"
-              loading="eager"
-            />
-          </>
-        ) : (
-          <div className="absolute inset-0 bg-gradient-to-br from-primary/30 to-background" />
-        )}
+        {/* Crossfade tra le slide: la vecchia immagine resta mentre la nuova sfuma sopra (entrambe
+            in absolute inset-0), con un leggero zoom-out (effetto Ken Burns). Gli overlay/gradient
+            restano statici sopra. Con le animazioni spente lo scambio e' immediato. */}
+        <AnimatePresence initial={false}>
+          <motion.div
+            key={index}
+            className="absolute inset-0"
+            initial={animationsOn ? { opacity: 0, scale: 1.06 } : false}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={animationsOn ? { opacity: 0 } : undefined}
+            transition={{ duration: 0.8, ease: 'easeInOut' }}
+          >
+            {current.bannerImage ? (
+              // Banner 16:9 ad alta risoluzione: full-bleed nitido.
+              <img
+                src={current.bannerImage}
+                alt=""
+                className="h-full w-full object-cover object-center"
+                loading="eager"
+              />
+            ) : current.coverImage ? (
+              // Niente banner: backdrop poster sfocato (mai upscaling) + poster nitido su lg+.
+              <>
+                <img
+                  src={current.coverImage}
+                  alt=""
+                  aria-hidden
+                  className="h-full w-full scale-110 object-cover blur-2xl brightness-[0.55]"
+                  loading="eager"
+                />
+                <img
+                  src={current.coverImage}
+                  alt=""
+                  className="absolute right-14 top-1/2 hidden h-[72%] -translate-y-1/2 rounded-xl object-contain shadow-2xl lg:block"
+                  loading="eager"
+                />
+              </>
+            ) : (
+              <div className="absolute inset-0 bg-gradient-to-br from-primary/30 to-background" />
+            )}
+          </motion.div>
+        </AnimatePresence>
         <div className="absolute inset-0 bg-black/20" />
         <div className="absolute inset-0 bg-gradient-to-r from-background via-background/80 to-transparent" />
         <div className="absolute inset-0 bg-gradient-to-t from-background via-background/40 to-transparent" />
       </div>
 
       <div className="relative flex h-full items-end px-6 pb-10 md:px-10 md:pb-12 lg:px-14">
-        <div className="max-w-2xl space-y-3 md:space-y-4 lg:max-w-[58%]">
+        {/* Il testo entra dal basso ad ogni cambio slide (remount via key). Nessun exit: la
+            dissolvenza dello sfondo copre lo scambio, evitando due blocchi di testo in flusso. */}
+        <motion.div
+          key={index}
+          className="max-w-2xl space-y-3 md:space-y-4 lg:max-w-[58%]"
+          initial={animationsOn ? { opacity: 0, y: 16 } : false}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, ease: 'easeOut', delay: animationsOn ? 0.1 : 0 }}
+        >
           <div className="flex flex-wrap items-center gap-2">
             <Badge
               variant="secondary"
@@ -430,7 +455,7 @@ function HeroCarousel({
               <Link href="/catalog">Esplora il catalogo</Link>
             </Button>
           </div>
-        </div>
+        </motion.div>
       </div>
 
       {anime.length > 1 ? (

@@ -56,3 +56,6 @@ Thumbs.db
 
 # Piani di lavoro durevoli (working docs locali per Claude, non parte del codice)
 /plan/
+
+# Scratch locale (es. screenshot di prova incollati durante lo sviluppo)
+/tmp/

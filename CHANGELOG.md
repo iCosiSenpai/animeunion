@@ -14,6 +14,34 @@ e il progetto aderisce al [Semantic Versioning](https://semver.org/lang/it/).
 - Gating reale del Premium (collegamento all'account del sito, da definire con l'admin).
 - Update ottimistici e routing del cestino anche per `library.deleteSeries` (rimandati).
 
+## [0.13.6] - 2026-07-02
+
+Rete di sicurezza anti-overflow, rifiniture mobile e hero animata.
+
+### Fixed
+- **Nessuna schermata sfora piu' in orizzontale (presente e futura):** guardia globale
+  `overflow-x: clip` su `html, body` in `globals.css`. `clip` (non `hidden`) non crea un contenitore
+  di scroll e non rompe lo `sticky` della navbar; lo scroll verticale resta intatto. E' la rete di
+  sicurezza per il classico "tutte le scritte vanno oltre lo schermo" anche su schermate nuove.
+- **Titolo episodio non si comprime piu' in "Ep...":** nella lista episodi della scheda anime, su
+  mobile titolo e metadati (stato + lingue) vanno su due righe; il titolo "Episodio XX" occupa la
+  larghezza piena e non viene troncato quando la riga e' affollata. Da `sm` tornano su una riga.
+- **Sidebar in landscape su mobile:** la sidebar desktop (visibile da `md`, quindi anche in
+  landscape su telefono) rispetta la safe-area con `pl/pt = env(safe-area-inset-*)`, cosi' non
+  finisce sotto la status bar / il notch.
+
+### Changed
+- **Popup che si chiudono allo scroll su mobile:** aprendo notifiche o coda download e scorrendo la
+  pagina, il popover si chiude (hook `useCloseOnScroll`, attivo solo sotto `md`). Lo scroll interno
+  al popover non lo chiude (gli eventi scroll annidati non raggiungono `window`).
+- **Hero della home animata:** crossfade tra le slide con leggero zoom-out (Ken Burns) sullo sfondo
+  e testo che entra dal basso ad ogni cambio. Rispetta l'interruttore animazioni (`useAnimationsOn`):
+  a animazioni spente lo scambio e' immediato.
+
+### Removed
+- **"Mostra toast di prova"** dalle impostazioni Notifiche: verificava solo la posizione del toast
+  in-app, non le notifiche push. Il test reale (push anche ad app chiusa, via `PushToggle`) resta.
+
 ## [0.13.5] - 2026-07-02
 
 Rifiniture UI mobile e conteggio libreria.

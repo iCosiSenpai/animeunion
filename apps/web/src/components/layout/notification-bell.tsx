@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { trpc } from '@/lib/trpc';
+import { useCloseOnScroll } from '@/lib/use-close-on-scroll';
 import { cn, formatDate } from '@/lib/utils';
 import type { Notification, NotificationType } from '@animeunion/shared';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -112,6 +113,7 @@ export function NotificationBell() {
   const animationsOn = useAnimationsOn();
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState<FilterKey>('all');
+  useCloseOnScroll(open, () => setOpen(false));
 
   const unread = trpc.notifications.unreadCount.useQuery(undefined, { refetchInterval: 20000 });
   const list = trpc.notifications.list.useQuery(undefined, { refetchInterval: 20000 });

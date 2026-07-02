@@ -57,8 +57,12 @@ backend bridge NAS↔GPU (ibrido locale/cloud) → quality nel download engine (
 
 ## Stato attuale (2026-07-02)
 
-**Versione corrente: v0.13.2 — patch affidabilità auto-download (soglia forward-only ancorata + avviso master spento).**
-- 360 test verdi, lint/typecheck verdi, build web ok
+**Versione corrente: v0.13.3 — patch sicurezza auto-download (self-heal "in ingresso": non ri-scarica file già su disco).**
+- 361 test verdi, lint/typecheck verdi, build web ok
+- Incidente 2026-07-02: accendere l'auto-download con DB desync (molti episode_file `not_downloaded`
+  ma file già su disco) e soglie forward-only a 0/null ha ri-scaricato/sovrascritto il backlog (NON
+  duplicati: sovrascritture in-place). Fix: `healPresent` in `download-service` + soglie ri-ancorate
+  al max. Prima di riaccendere l'auto-download conviene SEMPRE una scansione libreria.
 - Auto-download "non parte"/push "assenti": quasi sempre config/ambiente, non bug — master globale
   `autoDownload` (default off) + eleggibilità per-follow; push tutto implementato ma nascosto senza
   HTTPS. Vedi memoria `autodownload-eligibility-and-push-https`.

@@ -14,6 +14,19 @@ e il progetto aderisce al [Semantic Versioning](https://semver.org/lang/it/).
 - Gating reale del Premium (collegamento all'account del sito, da definire con l'admin).
 - Update ottimistici e routing del cestino anche per `library.deleteSeries` (rimandati).
 
+## [0.13.3] - 2026-07-02
+
+Patch di sicurezza dell'auto-download: evita di ri-scaricare file già presenti su disco.
+
+### Fixed
+- **Self-heal "in ingresso" nell'auto-download:** prima di accodare un episodio `not_downloaded`,
+  il download-service ora controlla se il file esiste già su disco al path atteso (renamer) e in
+  quel caso lo marca `downloaded` invece di ri-scaricarlo/sovrascriverlo (`download-service.ts`,
+  `healPresent`, speculare a `healMissing`). Elimina il ri-download di massa quando il DB del
+  container ha perso traccia di una libreria già presente (es. dopo un restore o una desync
+  disco/DB): l'auto-download diventa idempotente rispetto al disco. Vale anche per l'azione
+  manuale "Scarica episodi mancanti".
+
 ## [0.13.2] - 2026-07-02
 
 Patch di affidabilità dell'auto-download: chiude un footgun silenzioso e rende visibile quando

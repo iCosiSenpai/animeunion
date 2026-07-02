@@ -125,35 +125,38 @@ export function WallpaperPicker({
           Cerco wallpaper…
         </div>
       ) : results.data && results.data.length > 0 ? (
-        <div className="grid max-h-72 grid-cols-3 gap-2 overflow-y-auto">
+        <div className="grid max-h-72 grid-cols-2 gap-2 overflow-y-auto sm:grid-cols-3">
           {results.data.map((w) => {
             const active = w.fullUrl === value;
             return (
               <div
                 key={w.id}
                 className={cn(
-                  'relative aspect-video overflow-hidden rounded-md border',
+                  'relative overflow-hidden rounded-md border',
                   active && 'ring-2 ring-ring',
                 )}
               >
+                {/* È l'<img> (elemento replaced) a dare l'altezza della cella tramite aspect-video:
+                    così il box non collassa a 0 su iOS Safari — dove aspect-ratio su un box con soli
+                    figli assoluti non stabilisce l'altezza — evitando le anteprime accavallate. */}
                 <button
                   type="button"
                   onClick={() => onChange(w.fullUrl)}
                   title={w.resolution}
-                  className="absolute inset-0 transition-opacity hover:opacity-80"
+                  className="block w-full transition-opacity hover:opacity-80"
                 >
                   <img
                     src={w.thumbUrl}
                     alt=""
                     loading="lazy"
-                    className="h-full w-full object-cover"
+                    className="aspect-video w-full object-cover"
                   />
-                  {active ? (
-                    <span className="absolute inset-0 flex items-center justify-center bg-black/40">
-                      <Check className="h-5 w-5 text-white" />
-                    </span>
-                  ) : null}
                 </button>
+                {active ? (
+                  <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/40">
+                    <Check className="h-5 w-5 text-white" />
+                  </span>
+                ) : null}
                 <button
                   type="button"
                   onClick={() => setPreview(w)}

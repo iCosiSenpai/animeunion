@@ -32,7 +32,7 @@ export interface FavoritesServiceDeps {
 }
 
 export function createFavoritesService(deps: FavoritesServiceDeps): FavoritesService {
-  const { db, source, catalog, config, logger } = deps;
+  const { db, source, catalog, logger } = deps;
   const now = deps.now ?? (() => new Date());
 
   function getCursor(): string | null {
@@ -130,46 +130,9 @@ export function createFavoritesService(deps: FavoritesServiceDeps): FavoritesSer
       .run();
   }
 
-  /** Accoda i file episodio non ancora scaricati/in coda per un anime. Ritorna quanti accodati. */
-  function enqueueDownloads(animeId: string): number {
-    const files = db
-      .select({ id: schema.episodeFile.id, status: schema.episodeFile.downloadStatus })
-      .from(schema.episodeFile)
-      .innerJoin(schema.episode, eq(schema.episodeFile.episodeId, schema.episode.id))
-      .where(eq(schema.episode.animeId, animeId))
-      .all();
-    const timestamp = now().toISOString();
-    let enqueued = 0;
-    for (const file of files) {
-      // `external` = file dell'utente collegato senza scaricare: il sync preferiti non lo ri-accoda.
-      if (file.status === 'completed' || file.status === 'external') {
-        continue;
-      }
-      const inQueue = db
-        .select({ id: schema.downloadQueue.id })
-        .from(schema.downloadQueue)
-        .where(eq(schema.downloadQueue.episodeFileId, file.id))
-        .get();
-      if (inQueue) {
-        continue;
-      }
-      db.insert(schema.downloadQueue)
-        .values({
-          id: crypto.randomUUID(),
-          episodeFileId: file.id,
-          status: 'queued',
-          createdAt: timestamp,
-        })
-        .run();
-      enqueued += 1;
-    }
-    return enqueued;
-  }
-
   async function applyFavorites(favorites: Favorite[]): Promise<FavoritesSyncResult> {
-    const autoDownload = config.get('autoDownload');
     let imported = 0;
-    let enqueued = 0;
+    const enqueued = 0;
     for (const fav of favorites) {
       const animeId = await ensureAnimeCached(fav);
       if (!animeId) {
@@ -177,10 +140,12 @@ export function createFavoritesService(deps: FavoritesServiceDeps): FavoritesSer
       }
       upsertFollow(animeId);
       imported += 1;
-      if (autoDownload) {
-        enqueued += enqueueDownloads(animeId);
-      }
     }
+    // I download NON vengono piu' accodati qui: la vecchia enqueueDownloads riaccodava l'intero
+    // backlog ad ogni sync (all'avvio + ogni 10 min) bypassando sia la soglia forward-only sia il
+    // self-healing su disco, causando ri-download/sovrascritture di massa. Ora la sync preferiti
+    // importa solo i follow; a scaricare i nuovi episodi pensa SOLO lo scheduler
+    // (download.enqueueForAutoFollows: forward-only + healPresent).
     return { imported, enqueued };
   }
 

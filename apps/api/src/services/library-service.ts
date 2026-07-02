@@ -20,8 +20,22 @@ import { loadGenresByAnimeIds, toAnimeSummary } from './mappers';
 import type { RenamerService } from './renamer-service';
 import type { SeriesResolver } from './series-resolver';
 
+export interface VanishedEpisode {
+  animeId: string;
+  animeSlug: string;
+  animeTitle: string | null;
+  episodeNumber: number;
+  language: Language;
+}
+
 export interface LibraryService {
   scan(): Promise<LibraryScanResult>;
+  /**
+   * Controllo attivo d'integrità: rileva gli episodi marcati `downloaded` il cui file è sparito dal
+   * disco (con la root raggiungibile), li riporta a `not_downloaded` e li ritorna così il chiamante
+   * può avvisare l'utente. Più leggero di scan(): niente walk del disco, solo stat dei tracciati.
+   */
+  checkVanished(): Promise<VanishedEpisode[]>;
   list(): LibraryGroup[];
   stats(): LibraryStats;
   /** Elimina il file di un singolo episodio (episodio+lingua). */
@@ -456,6 +470,71 @@ export function createLibraryService(deps: LibraryServiceDeps): LibraryService {
         orphanPaths,
         missingEntries,
       };
+    },
+
+    async checkVanished() {
+      const rows = db
+        .select({
+          episodeFileId: schema.episodeFile.id,
+          localPath: schema.episodeFile.localPath,
+          language: schema.episodeFile.language,
+          episodeNumber: schema.episode.number,
+          animeId: schema.anime.id,
+          animeSlug: schema.anime.slug,
+          animeTitle: schema.anime.title,
+          animeTitleIta: schema.anime.titleIta,
+        })
+        .from(schema.episodeFile)
+        .innerJoin(schema.episode, eq(schema.episode.id, schema.episodeFile.episodeId))
+        .innerJoin(schema.anime, eq(schema.anime.id, schema.episode.animeId))
+        .where(eq(schema.episodeFile.downloadStatus, 'downloaded'))
+        .all();
+
+      // Root raggiungibili: se il mount è staccato NON segnaliamo (eviteremmo falsi allarmi di massa).
+      const roots = config
+        .distinctDownloadRoots()
+        .map((r) => resolve(r))
+        .filter((r) => existsSync(r));
+      const rootPresent = (p: string): boolean =>
+        roots.some((r) => p === r || p.startsWith(r + sep));
+
+      const vanished: VanishedEpisode[] = [];
+      const now = new Date().toISOString();
+      const STAT_BATCH = 32;
+      for (let i = 0; i < rows.length; i += STAT_BATCH) {
+        await Promise.all(
+          rows.slice(i, i + STAT_BATCH).map(async (row) => {
+            if (!row.localPath) {
+              return;
+            }
+            const abs = resolve(row.localPath);
+            const present = await stat(abs)
+              .then(() => true)
+              .catch(() => false);
+            // C'è ancora, oppure la root è offline: non toccare.
+            if (present || !rootPresent(abs)) {
+              return;
+            }
+            db.update(schema.episodeFile)
+              .set({
+                downloadStatus: 'not_downloaded',
+                localPath: null,
+                downloadedAt: null,
+                updatedAt: now,
+              })
+              .where(eq(schema.episodeFile.id, row.episodeFileId))
+              .run();
+            vanished.push({
+              animeId: row.animeId,
+              animeSlug: row.animeSlug,
+              animeTitle: row.animeTitleIta ?? row.animeTitle,
+              episodeNumber: row.episodeNumber,
+              language: row.language as Language,
+            });
+          }),
+        );
+      }
+      return vanished;
     },
 
     list() {

@@ -25,7 +25,7 @@ async function setup(overrides: Partial<AnimeSource> = {}) {
 }
 
 describe('FavoritesService', () => {
-  it('importFromSite crea i follow locali e accoda i download (autoDownload on)', async () => {
+  it('importFromSite crea i follow locali ma NON accoda download (li gestisce lo scheduler)', async () => {
     const { db, favorites, config, first } = await setup({
       getFavorites: async (): Promise<Favorite[]> => [
         {
@@ -45,10 +45,11 @@ describe('FavoritesService', () => {
     expect(result.imported).toBe(1);
     const follow = db.select().from(schema.follow).where(eq(schema.follow.animeId, first.id)).get();
     expect(follow).toBeDefined();
-    // gli episodi del mock vengono scaricati da getBySlug, quindi la coda si popola
-    expect(result.enqueued).toBeGreaterThan(0);
+    // La sync preferiti importa solo i follow: mai accodare download da qui (evita il ri-download
+    // di massa che bypassava soglia forward-only + self-heal). Se ne occupa enqueueForAutoFollows.
+    expect(result.enqueued).toBe(0);
     const queue = db.select().from(schema.downloadQueue).all();
-    expect(queue.length).toBe(result.enqueued);
+    expect(queue.length).toBe(0);
   });
 
   it('import valorizza la soglia forward-only al max episodio (no download di massa se poi passa a watching)', async () => {

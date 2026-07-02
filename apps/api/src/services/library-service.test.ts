@@ -144,6 +144,58 @@ describe('LibraryService', () => {
     expect(service.stats()).toEqual({ totalEpisodes: 1, totalSizeBytes: 10, totalSeries: 1 });
   });
 
+  it('checkVanished rileva un episodio scaricato sparito dal disco, lo azzera e lo ritorna', async () => {
+    const db = createTestDb();
+    insertAnime(db, 'show-v', { title: 'Show V' });
+    insertEpisode(db, 'ep-v-1', 'show-v', 1);
+    insertEpisode(db, 'ep-v-2', 'show-v', 2);
+    const { service, renamer } = makeService(db, tmpDir);
+    // ep1: file presente su disco → NON sparito.
+    const present = await placeEpisode(renamer, 'show-v', 1, 'SUB_ITA');
+    insertFile(db, 'file-v-1', 'ep-v-1', 'SUB_ITA', 'downloaded', present);
+    // ep2: marcato downloaded ma il file non c'è (root presente) → sparito.
+    const gonePath = join(tmpDir, 'Show V', 'Season 01', 'gone.mp4');
+    insertFile(db, 'file-v-2', 'ep-v-2', 'SUB_ITA', 'downloaded', gonePath);
+
+    const vanished = await service.checkVanished();
+
+    expect(vanished).toHaveLength(1);
+    expect(vanished[0]?.episodeNumber).toBe(2);
+    expect(vanished[0]?.animeTitle).toBe('Show V');
+    const gone = db
+      .select()
+      .from(schema.episodeFile)
+      .where(eq(schema.episodeFile.id, 'file-v-2'))
+      .get();
+    expect(gone?.downloadStatus).toBe('not_downloaded');
+    expect(gone?.localPath).toBeNull();
+    const ok = db
+      .select()
+      .from(schema.episodeFile)
+      .where(eq(schema.episodeFile.id, 'file-v-1'))
+      .get();
+    expect(ok?.downloadStatus).toBe('downloaded');
+  });
+
+  it('checkVanished non tocca nulla se la root e offline (disco staccato)', async () => {
+    const db = createTestDb();
+    insertAnime(db, 'show-w');
+    insertEpisode(db, 'ep-w-1', 'show-w', 1);
+    const goneRoot = join(tmpdir(), 'au-gone-root-vanish-xyz-123');
+    const { service } = makeService(db, goneRoot); // root inesistente = NAS staccato
+    insertFile(db, 'file-w-1', 'ep-w-1', 'SUB_ITA', 'downloaded', join(goneRoot, 'x.mp4'));
+
+    const vanished = await service.checkVanished();
+
+    expect(vanished).toHaveLength(0);
+    const row = db
+      .select()
+      .from(schema.episodeFile)
+      .where(eq(schema.episodeFile.id, 'file-w-1'))
+      .get();
+    expect(row?.downloadStatus).toBe('downloaded'); // invariato
+  });
+
   it('scan non tocca i file external e la libreria li mostra (niente missing/orfani)', async () => {
     const db = createTestDb();
     insertAnime(db, 'show-x');

@@ -13,6 +13,8 @@ const TRASH_PRUNE_HOURS = 12;
 const DISK_CHECK_HOURS = 6;
 const SEASON_CHECK_HOURS = 12;
 const SEASON_CHECK_STARTUP_MS = 2 * 60 * 1000; // prima passata ~2 min dopo l'avvio
+const LIBRARY_CHECK_MINUTES = 15; // controllo attivo integrità libreria (episodi spariti dal disco)
+const LIBRARY_CHECK_STARTUP_MS = 3 * 60 * 1000;
 // Soglia di avviso (1 GiB): più alta del hard-stop del worker (500 MiB) per avvisare prima.
 const DISK_LOW_BYTES = 1024 * 1024 * 1024;
 
@@ -182,6 +184,45 @@ export function createScheduler(ctx: Context): Scheduler {
       const seasonTimer = setInterval(seasonCheck, SEASON_CHECK_HOURS * 60 * 60 * 1000);
       seasonTimer.unref?.();
       timers.push(seasonTimer);
+
+      // Controllo attivo integrità libreria: se un episodio scaricato sparisce dal disco (cancellato
+      // fuori app), lo rileva, azzera lo stato e avvisa l'utente (notifica in-app + push).
+      const libraryCheck = async () => {
+        try {
+          const vanished = await services.library.checkVanished();
+          if (vanished.length === 0) {
+            return;
+          }
+          // Raggruppa per anime per non floodare le notifiche.
+          const byAnime = new Map<string, { title: string; nums: number[] }>();
+          for (const v of vanished) {
+            const entry = byAnime.get(v.animeId) ?? { title: v.animeTitle ?? 'Serie', nums: [] };
+            entry.nums.push(v.episodeNumber);
+            byAnime.set(v.animeId, entry);
+          }
+          for (const [animeId, { title, nums }] of byAnime) {
+            const uniq = [...new Set(nums)].sort((a, b) => a - b);
+            services.notifications.create({
+              type: 'info',
+              title: `Episodi mancanti: ${title}`,
+              body:
+                uniq.length === 1
+                  ? `L'episodio ${uniq[0]} non e' piu' presente su disco.`
+                  : `${uniq.length} episodi non piu' presenti su disco (${uniq.slice(0, 8).join(', ')}${uniq.length > 8 ? '…' : ''}).`,
+              animeId,
+            });
+          }
+          logger.warn({ count: vanished.length }, 'Controllo libreria: episodi spariti dal disco');
+        } catch (error) {
+          logger.debug({ err: error }, 'Tick controllo libreria fallito');
+        }
+      };
+      const libStartup = setTimeout(() => void libraryCheck(), LIBRARY_CHECK_STARTUP_MS);
+      libStartup.unref?.();
+      timers.push(libStartup);
+      const libTimer = setInterval(() => void libraryCheck(), LIBRARY_CHECK_MINUTES * 60 * 1000);
+      libTimer.unref?.();
+      timers.push(libTimer);
 
       logger.info(
         {

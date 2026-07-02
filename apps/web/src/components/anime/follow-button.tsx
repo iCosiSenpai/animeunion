@@ -15,7 +15,8 @@ import { FOLLOW_STATUSES, FOLLOW_STATUS_LABELS } from '@/lib/follow';
 import { trpc } from '@/lib/trpc';
 import { cn } from '@/lib/utils';
 import type { AnimeStatus, FollowStatus } from '@animeunion/shared';
-import { Check, ChevronDown, Loader2, Plus } from 'lucide-react';
+import { Check, ChevronDown, Loader2, Plus, TriangleAlert } from 'lucide-react';
+import Link from 'next/link';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
@@ -28,6 +29,8 @@ export function FollowButton({
 }) {
   const utils = trpc.useUtils();
   const follows = trpc.follow.list.useQuery();
+  const config = trpc.config.getAll.useQuery();
+  const masterOff = config.data ? !config.data.autoDownload : false;
   const current = follows.data?.find((follow) => follow.animeId === animeId) ?? null;
   // Serie conclusa: l'auto-download resta attivabile (lo stato d'onda non e' piu' un gate),
   // mostriamo solo una nota informativa.
@@ -170,6 +173,21 @@ export function FollowButton({
                 />
                 Scarica automaticamente i nuovi episodi
               </label>
+              {autoDownload && masterOff ? (
+                <p className="flex items-start gap-1.5 pl-6 text-xs text-amber-600 dark:text-amber-400">
+                  <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  <span>
+                    L&apos;auto-download globale è spento: attivalo in{' '}
+                    <Link
+                      href="/settings"
+                      className="font-medium underline underline-offset-2 hover:text-amber-700 dark:hover:text-amber-300"
+                    >
+                      Impostazioni
+                    </Link>{' '}
+                    perché i nuovi episodi partano da soli.
+                  </span>
+                </p>
+              ) : null}
               {isCompleted ? (
                 <p className="pl-6 text-xs text-muted-foreground">
                   Serie conclusa: di norma non escono nuovi episodi. Per quelli già usciti usa

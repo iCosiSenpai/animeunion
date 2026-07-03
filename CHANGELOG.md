@@ -14,6 +14,20 @@ e il progetto aderisce al [Semantic Versioning](https://semver.org/lang/it/).
 - Gating reale del Premium (collegamento all'account del sito, da definire con l'admin).
 - Update ottimistici e routing del cestino anche per `library.deleteSeries` (rimandati).
 
+## [0.13.8] - 2026-07-04
+
+Anti-duplicati: il self-heal riconosce le librerie pre-esistenti con naming diverso.
+
+### Fixed
+- **Duplicati da naming legacy (causa radice dell'incidente del 2026-07-02):** `healPresent`
+  (self-heal "non ri-scaricare se gia' presente") faceva match per **nome file esatto** (solo il path
+  canonico `<Titolo> - SxxExx.mp4`). Le serie gia' possedute con naming diverso (`S01E05.mp4`,
+  `01.mp4`, `E01.mp4`, `Nome Ep. 5.mp4`) non venivano riconosciute → ri-scaricate al path canonico →
+  **duplicate**. Ora l'episodio gia' presente viene riconosciuto per **(stagione, numero)** nella
+  cartella di destinazione, non per nome. Con SUB e DUB nella stessa root (nome con tag lingua) il
+  match "loose" e' disattivato per sicurezza (un file senza tag e' ambiguo). Indagine sul NAS: 11
+  serie, 182 file, ~45 GB di duplicati md5-identici, ripuliti a parte.
+
 ## [0.13.7] - 2026-07-02
 
 Lingue sulle card, hero swipe, blocco landscape, orfani spiegati e download alla scelta stato.

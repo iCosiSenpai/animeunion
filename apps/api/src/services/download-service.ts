@@ -1,5 +1,5 @@
-import { existsSync, statSync } from 'node:fs';
-import { resolve, sep } from 'node:path';
+import { existsSync, readdirSync, statSync } from 'node:fs';
+import { basename, dirname, extname, join, resolve, sep } from 'node:path';
 import type {
   DownloadAddByRefInput,
   DownloadCounts,
@@ -223,6 +223,63 @@ function statusesForFilter(filter: DownloadFilter): readonly string[] | null {
   return null;
 }
 
+const VIDEO_EXT = new Set(['.mp4', '.mkv']);
+
+// Trova un file video gia' presente nella cartella di destinazione che rappresenta lo STESSO
+// episodio del path canonico, anche se il nome non coincide. Serve a non ri-scaricare (→ duplicare)
+// una libreria pre-esistente importata con naming diverso da quello dell'app: `S01E05.mp4`,
+// `01.mp4`, `E01.mp4`, `Nome Ep. 5.mp4`. Ritorna il path del file trovato o null. Il match canonico
+// esatto ha priorita'; per i film (path senza SxxExx) NON si fa match loose (evita falsi positivi).
+export function findExistingEpisodeFile(canonicalPath: string): string | null {
+  if (existsSync(canonicalPath)) {
+    return canonicalPath;
+  }
+  const canonBase = basename(canonicalPath);
+  const se = canonBase.match(/S(\d{1,3})E(\d{1,4})/i);
+  if (!se) {
+    return null;
+  }
+  const season = Number(se[1]);
+  const ep = Number(se[2]);
+  // Se il canonico ha un tag lingua (SUB e DUB condividono la root, renamer righe ~162-164) un file
+  // legacy senza tag e' ambiguo: si accettano solo candidati con lo STESSO tag, mai i nomi "grezzi".
+  const requiredTag = canonBase.match(/ - (?:SUB|DUB) ITA/i)?.[0]?.toUpperCase() ?? null;
+  const dir = dirname(canonicalPath);
+  let entries: string[];
+  try {
+    entries = readdirSync(dir);
+  } catch {
+    return null;
+  }
+  for (const name of entries) {
+    if (!VIDEO_EXT.has(extname(name).toLowerCase())) {
+      continue;
+    }
+    if (requiredTag && !name.toUpperCase().includes(requiredTag)) {
+      continue;
+    }
+    const cand = name.match(/S(\d{1,3})E(\d{1,4})/i);
+    if (cand) {
+      if (Number(cand[1]) === season && Number(cand[2]) === ep) {
+        return join(dir, name);
+      }
+      continue;
+    }
+    // Con tag richiesto non ci si fida dei nomi legacy senza SxxExx (ambigui sulla lingua).
+    if (requiredTag) {
+      continue;
+    }
+    // Naming legacy senza SxxExx: numero episodio grezzo. La stagione e' implicita nella cartella.
+    const alt =
+      name.match(/(?:^|[^A-Za-z0-9])(?:E|Ep\.?)\s*(\d{1,3})(?:\D|$)/i) ??
+      name.match(/^(\d{1,3})\.[^.]+$/);
+    if (alt && Number(alt[1]) === ep) {
+      return join(dir, name);
+    }
+  }
+  return null;
+}
+
 export function createDownloadService(deps: DownloadServiceDeps): DownloadService {
   const { db, worker, catalog, config, renamer, logger } = deps;
   const now = deps.now ?? (() => new Date());
@@ -298,9 +355,9 @@ export function createDownloadService(deps: DownloadServiceDeps): DownloadServic
     file: { id: string; language: string; number: number },
     animeId: string,
   ): boolean {
-    let path: string;
+    let canonicalPath: string;
     try {
-      path = renamer.computeEpisodePath({
+      canonicalPath = renamer.computeEpisodePath({
         animeId,
         episodeNumber: file.number,
         language: file.language as Language,
@@ -309,7 +366,10 @@ export function createDownloadService(deps: DownloadServiceDeps): DownloadServic
       logger.debug({ err: error, episodeFileId: file.id }, 'healPresent: calcolo path fallito');
       return false;
     }
-    if (!existsSync(path)) {
+    // Cerca l'episodio su disco per (stagione, numero) — non solo al nome canonico — cosi' una
+    // libreria pre-esistente con naming legacy viene riconosciuta invece che ri-scaricata (duplicata).
+    const path = findExistingEpisodeFile(canonicalPath);
+    if (!path) {
       return false;
     }
     let size = 0;

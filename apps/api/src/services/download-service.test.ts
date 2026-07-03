@@ -339,6 +339,97 @@ describe('DownloadService', () => {
     expect(ef?.fileSize).toBe(1234);
   });
 
+  // Libreria pre-esistente con naming diverso da quello dell'app: healPresent deve riconoscere
+  // l'episodio per (stagione, numero) e non ri-scaricarlo (→ duplicato). Regressione dell'incidente
+  // del 2026-07-02 (45 GB di duplicati per serie legacy tipo `S01E05.mp4`, `01.mp4`, `Ep. 5.mp4`).
+  it.each([
+    ['SxxExx senza titolo', 'S01E01.mp4'],
+    ['numero grezzo', '01.mp4'],
+    ['prefisso E', 'E01.mp4'],
+    ['stile "Ep. N"', 'a-1 Ep. 1.mp4'],
+  ])(
+    'addMissing self-heal legacy (%s): file gia presente con nome non-canonico non viene ri-scaricato',
+    async (_label, legacyName) => {
+      const { service, config } = makeService();
+      // Setup reale utente: SUB e DUB in root separate → niente tag lingua nel nome canonico.
+      config.set('seriesPathDub', join(animePath, '__dub'));
+      insertAnime(db, 'a-1');
+      insertEpisode(db, 'e-1', 'a-1', 1);
+      insertFile(db, 'ef-1', 'e-1', 'SUB_ITA', 'not_downloaded');
+      const renamer = createRenamerService({ db, config });
+      const canonical = renamer.computeEpisodePath({
+        animeId: 'a-1',
+        episodeNumber: 1,
+        language: 'SUB_ITA',
+      });
+      // Nessun file al path canonico: solo la copia legacy nella stessa cartella stagione.
+      const legacyPath = join(dirname(canonical), legacyName);
+      await mkdir(dirname(canonical), { recursive: true });
+      await writeFile(legacyPath, 'x'.repeat(999));
+
+      const n = service.addMissing({ animeId: 'a-1' });
+
+      expect(n).toBe(0);
+      expect(enqueueSpy).not.toHaveBeenCalled();
+      const ef = db
+        .select()
+        .from(schema.episodeFile)
+        .where(eq(schema.episodeFile.id, 'ef-1'))
+        .get();
+      expect(ef?.downloadStatus).toBe('downloaded');
+      expect(ef?.localPath).toBe(legacyPath);
+      expect(ef?.fileSize).toBe(999);
+    },
+  );
+
+  it('addMissing self-heal legacy: un file di un ALTRO episodio non viene scambiato', async () => {
+    const { service, config } = makeService();
+    config.set('seriesPathDub', join(animePath, '__dub'));
+    insertAnime(db, 'a-1');
+    insertEpisode(db, 'e-1', 'a-1', 1);
+    insertFile(db, 'ef-1', 'e-1', 'SUB_ITA', 'not_downloaded');
+    const renamer = createRenamerService({ db, config });
+    const canonical = renamer.computeEpisodePath({
+      animeId: 'a-1',
+      episodeNumber: 1,
+      language: 'SUB_ITA',
+    });
+    // Nella cartella c'e' solo l'episodio 2 (legacy): l'episodio 1 NON e' presente → si accoda.
+    await mkdir(dirname(canonical), { recursive: true });
+    await writeFile(join(dirname(canonical), 'S01E02.mp4'), 'x'.repeat(10));
+
+    const n = service.addMissing({ animeId: 'a-1' });
+
+    expect(n).toBe(1);
+    expect(enqueueSpy).toHaveBeenCalledWith('ef-1');
+    const ef = db.select().from(schema.episodeFile).where(eq(schema.episodeFile.id, 'ef-1')).get();
+    expect(ef?.downloadStatus).toBe('not_downloaded');
+  });
+
+  it('addMissing self-heal legacy: a root condivisa (tag lingua) un file legacy senza tag NON viene riconciliato', async () => {
+    // SUB e DUB nella stessa cartella (config di default) → il canonico porta " - SUB ITA". Un file
+    // "grezzo" senza tag e' ambiguo sulla lingua: per sicurezza NON lo si riconcilia, si ri-scarica
+    // col nome canonico taggato (nessun rischio di assegnare la lingua sbagliata).
+    const { service, config } = makeService(); // seriesPathDub vuoto → root condivisa
+    insertAnime(db, 'a-1');
+    insertEpisode(db, 'e-1', 'a-1', 1);
+    insertFile(db, 'ef-1', 'e-1', 'SUB_ITA', 'not_downloaded');
+    const renamer = createRenamerService({ db, config });
+    const canonical = renamer.computeEpisodePath({
+      animeId: 'a-1',
+      episodeNumber: 1,
+      language: 'SUB_ITA',
+    });
+    expect(canonical).toMatch(/ - SUB ITA\.mp4$/);
+    await mkdir(dirname(canonical), { recursive: true });
+    await writeFile(join(dirname(canonical), 'S01E01.mp4'), 'x'.repeat(10)); // legacy senza tag
+
+    const n = service.addMissing({ animeId: 'a-1' });
+
+    expect(n).toBe(1);
+    expect(enqueueSpy).toHaveBeenCalledWith('ef-1');
+  });
+
   it('addMissing self-heal: NON azzera se la root non e raggiungibile (disco offline)', () => {
     const { service, config } = makeService();
     const goneRoot = join(tmpdir(), 'au-gone-root-xyz-123');

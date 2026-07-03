@@ -55,10 +55,17 @@ Step pianificati: GPU service Windows (Python FastAPI + real-esrgan-ncnn-vulkan)
 backend bridge NAS↔GPU (ibrido locale/cloud) → quality nel download engine (XQ/XQ+) → UI quality
 + upscale per-serie → premium gate → release v0.14.0.
 
-## Stato attuale (2026-07-02)
+## Stato attuale (2026-07-04)
 
-**Versione corrente: v0.13.7 — tag lingua su tutte le card, hero swipe, blocco landscape, orfani spiegati, download alla scelta stato.**
-- 363 test verdi, lint/typecheck verdi, build web ok
+**Versione corrente: v0.13.8 — anti-duplicati: healPresent riconosce le librerie con naming legacy.**
+- 369 test verdi, lint/typecheck verdi, build web ok
+- v0.13.8: `healPresent` (`download-service`) riconosce un episodio gia' su disco per
+  **(stagione, numero)** nella cartella, non solo al nome canonico `<Titolo> - SxxExx.mp4`. Chiude la
+  causa radice dei duplicati: le serie gia' possedute con naming diverso (`S01E05.mp4`, `01.mp4`,
+  `E01.mp4`, `Nome Ep. 5.mp4`) non vengono piu' ri-scaricate. Con SUB+DUB nella stessa root (nome con
+  tag lingua) il match loose e' disattivato (un file senza tag e' ambiguo). Indagine NAS 2026-07-03:
+  11 serie, 182 file, ~45 GB di duplicati md5-identici, spostati in `.dup-trash-20260703/` (NAS,
+  reversibile). Vedi memoria `healpresent-filename-only-duplicates`.
 - v0.13.7: `availableLanguages` (SUB/DUB) su AnimeCard; hero con swipe mobile (+ conferma sync col
   feed ufficiale); prompt download quando un follow passa a watching/plan_to_watch (follow-card);
   blocco landscape su telefono (overlay `.landscape-block` + manifest `orientation: portrait`);
@@ -73,10 +80,14 @@ backend bridge NAS↔GPU (ibrido locale/cloud) → quality nel download engine (
   resta in `PushToggle`).
 - v0.13.4: chiude la 2a via di ri-download (sync preferiti import-only), `library.checkVanished`, UI download mobile.
 - Incidente 2026-07-02: accendere l'auto-download con DB desync (molti episode_file `not_downloaded`
-  ma file già su disco) e soglie forward-only a 0/null ha ri-scaricato/sovrascritto il backlog (NON
-  duplicati: sovrascritture in-place). Fix v0.13.3: `healPresent` in `download-service`. Fix v0.13.4:
-  `favorites-service` non accoda piu' download (bypassava soglia+self-heal); i download passano SOLO
-  da `enqueueForAutoFollows`. Prima di riaccendere l'auto-download conviene SEMPRE una scansione + soglie al max.
+  ma file già su disco) e soglie forward-only a 0/null ha ri-scaricato il backlog. Per le serie col
+  path canonico erano sovrascritture in-place; per quelle con naming legacy (`S01E05.mp4`, `01.mp4`,
+  ...) erano invece VERI DUPLICATI (verificato sul NAS 2026-07-03: 11 serie, 182 file, ~45 GB
+  md5-identici — la nota "solo sovrascritture, non duplicati" era inesatta). Fix v0.13.3:
+  `healPresent` in `download-service` (solo path canonico). Fix v0.13.4: `favorites-service` non
+  accoda piu' download. Fix v0.13.8: `healPresent` match per (stagione, numero), non per nome file —
+  chiude la causa radice dei duplicati. Prima di riaccendere l'auto-download conviene SEMPRE una
+  scansione + soglie al max.
 - Aperto: locandina bassa qualità in libreria (#9, serve indagine URL immagine API); riempimento
   stagioni dimezzate = `download.addAll` per anime toccati (self-heal salta i presenti).
 - Auto-download "non parte"/push "assenti": quasi sempre config/ambiente, non bug — master globale

@@ -32,6 +32,7 @@ import {
   FileSymlink,
   FileVideo,
   Folder,
+  FolderInput,
   FolderPlus,
   FolderX,
   Globe,
@@ -621,6 +622,101 @@ function DuplicatesDialog({ onClose, onChanged }: { onClose: () => void; onChang
   );
 }
 
+/** Sposta un file/cartella scegliendo la destinazione da un folder picker (funziona anche su touch,
+ * dove il drag-and-drop non è disponibile). */
+function MoveDialog({
+  entry,
+  onClose,
+  onMoved,
+}: {
+  entry: FileEntry;
+  onClose: () => void;
+  onMoved: () => void;
+}) {
+  const [dest, setDest] = useState('');
+  const listQ = trpc.files.list.useQuery({ path: dest || undefined });
+  const move = trpc.files.move.useMutation({
+    onSuccess: () => {
+      toast.success('Spostato.');
+      onMoved();
+    },
+    onError: (e) => toastError(e, 'Spostamento non riuscito'),
+  });
+  const data = listQ.data;
+  const atRoots = !data || data.path === '';
+  const folders = (data?.entries ?? []).filter((e) => e.type === 'dir');
+  // La cartella che già contiene l'elemento (per non proporre uno spostamento nullo).
+  const parentOfEntry = entry.path.slice(0, entry.path.length - entry.name.length - 1);
+  const canMoveHere = !atRoots && data?.path !== entry.path && data?.path !== parentOfEntry;
+
+  return (
+    <ResponsiveDialog
+      open
+      onOpenChange={(o) => (o ? null : onClose())}
+      title="Sposta in…"
+      description={
+        <span className="break-words">
+          Scegli la cartella di destinazione per &quot;{entry.name}&quot;.
+        </span>
+      }
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose} disabled={move.isPending}>
+            Annulla
+          </Button>
+          <Button
+            disabled={!canMoveHere || move.isPending}
+            onClick={() => data && move.mutate({ path: entry.path, destDir: data.path })}
+          >
+            {move.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            Sposta qui
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          {data && data.parent !== null ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1"
+              onClick={() => setDest(data.parent ?? '')}
+            >
+              <ChevronLeft className="h-4 w-4" /> Su
+            </Button>
+          ) : null}
+          <p className="truncate font-mono text-xs text-muted-foreground">
+            {atRoots ? 'Le tue cartelle' : data?.path}
+          </p>
+        </div>
+        {listQ.isLoading ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">Caricamento…</p>
+        ) : folders.length === 0 ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">
+            Nessuna sottocartella qui.
+          </p>
+        ) : (
+          <ul className="max-h-[45vh] divide-y overflow-y-auto rounded-md border">
+            {folders.map((f) => (
+              <li key={f.path}>
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2 p-2 text-left hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
+                  onClick={() => setDest(f.path)}
+                >
+                  <Folder className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+                  <span className="truncate">{atRoots ? f.path : f.name}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </ResponsiveDialog>
+  );
+}
+
 export function FileManager() {
   const utils = trpc.useUtils();
   const [path, setPath] = useState('');
@@ -655,6 +751,7 @@ export function FileManager() {
   const [mkdirName, setMkdirName] = useState('');
   const [relinkTarget, setRelinkTarget] = useState<FileEntry | null>(null);
   const [folderTarget, setFolderTarget] = useState<FileEntry | null>(null);
+  const [moveTarget, setMoveTarget] = useState<FileEntry | null>(null);
   // Riscarica multi-stagione: dopo l'eliminazione della cartella si apre il dialog correlazioni
   // (riuso del catalogo) per scegliere e classificare ogni stagione/correlato.
   const [franchise, setFranchise] = useState<{ slug: string } | null>(null);
@@ -828,6 +925,16 @@ export function FileManager() {
 
       {dupOpen ? <DuplicatesDialog onClose={() => setDupOpen(false)} onChanged={refresh} /> : null}
       {trashOpen ? <TrashDialog onClose={() => setTrashOpen(false)} onChanged={refresh} /> : null}
+      {moveTarget ? (
+        <MoveDialog
+          entry={moveTarget}
+          onClose={() => setMoveTarget(null)}
+          onMoved={() => {
+            setMoveTarget(null);
+            refresh();
+          }}
+        />
+      ) : null}
 
       {list.isLoading ? (
         <div className="space-y-2">
@@ -953,6 +1060,16 @@ export function FileManager() {
                         <Link2 className="h-4 w-4" />
                       </Button>
                     ) : null}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      title="Sposta in un'altra cartella"
+                      aria-label={`Sposta ${entry.name}`}
+                      onClick={() => setMoveTarget(entry)}
+                    >
+                      <FolderInput className="h-4 w-4" />
+                    </Button>
                     <Button
                       variant="ghost"
                       size="icon"

@@ -14,6 +14,7 @@ import {
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { PageHeader } from '@/components/ui/page-header';
+import { QueryError } from '@/components/ui/query-error';
 import {
   Select,
   SelectContent,
@@ -351,6 +352,8 @@ export function LibraryView() {
 
       {listQuery.isLoading ? (
         <LibrarySkeleton />
+      ) : listQuery.isError ? (
+        <QueryError onRetry={() => listQuery.refetch()} title="Impossibile caricare la libreria" />
       ) : items.length === 0 ? (
         <EmptyState
           icon={FolderOpen}

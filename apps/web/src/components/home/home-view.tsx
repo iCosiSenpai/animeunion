@@ -4,6 +4,7 @@ import { AnimeCard } from '@/components/anime/anime-card';
 import { useAnimationsOn } from '@/components/layout/animation-provider';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { QueryError } from '@/components/ui/query-error';
 import { trpc } from '@/lib/trpc';
 import type {
   AnimeSummary,
@@ -609,13 +610,26 @@ export function HomeView() {
     ),
   };
 
+  // Fallback di pagina solo se TUTTE le sezioni principali falliscono (es. rete giù): meglio un
+  // errore chiaro con "Riprova" che una pagina di sezioni vuote. I fallimenti parziali degradano
+  // comunque bene (la singola sezione vuota si nasconde da sé).
+  const primaryQueries = [featured, latestEpisodes, week, seasonal, topRated, recent];
+  const allFailed = primaryQueries.every((q) => q.isError);
+  const retryAll = () => {
+    for (const q of [...primaryQueries, continueWatching, news, config]) {
+      void q.refetch();
+    }
+  };
+
   return (
     <div className="space-y-14">
-      {order
-        .filter((entry) => entry.visible)
-        .map((entry) => (
-          <Fragment key={entry.id}>{sectionNodes[entry.id]}</Fragment>
-        ))}
+      {allFailed ? (
+        <QueryError onRetry={retryAll} title="Impossibile caricare la home" />
+      ) : (
+        order
+          .filter((entry) => entry.visible)
+          .map((entry) => <Fragment key={entry.id}>{sectionNodes[entry.id]}</Fragment>)
+      )}
     </div>
   );
 }

@@ -2,6 +2,7 @@
 
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { QueryError } from '@/components/ui/query-error';
 import { trpc } from '@/lib/trpc';
 import { formatBytes, formatDate } from '@/lib/utils';
 import {
@@ -64,10 +65,16 @@ export function DiagnosticsView() {
         </Button>
       </div>
 
-      {!data ? (
+      {health.isLoading ? (
         <div className="flex items-center justify-center p-12 text-muted-foreground">
           <Loader2 className="h-6 w-6 animate-spin" />
         </div>
+      ) : health.isError || !data ? (
+        <QueryError
+          onRetry={() => health.refetch()}
+          title="Diagnostica non disponibile"
+          description="Impossibile leggere lo stato del sistema. Riprova."
+        />
       ) : (
         <>
           <Card className="space-y-3 p-5">

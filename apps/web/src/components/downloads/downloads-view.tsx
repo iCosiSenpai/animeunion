@@ -3,6 +3,7 @@
 import { useAnimationsOn } from '@/components/layout/animation-provider';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { QueryError } from '@/components/ui/query-error';
 import { trpc } from '@/lib/trpc';
 import { useDownloadSummary } from '@/lib/use-download-summary';
 import type { DownloadFilter, DownloadGroupSummary } from '@animeunion/shared';
@@ -224,6 +225,8 @@ export function DownloadsView() {
             <Card key={key} className="h-28 animate-pulse bg-muted" />
           ))}
         </div>
+      ) : summaryQuery.isError ? (
+        <QueryError onRetry={() => summaryQuery.refetch()} title="Impossibile caricare la coda" />
       ) : totalCount === 0 ? (
         <Card className="flex flex-col items-center gap-4 p-12 text-center">
           <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">

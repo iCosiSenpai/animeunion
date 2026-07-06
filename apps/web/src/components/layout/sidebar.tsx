@@ -7,11 +7,13 @@ import { navLinks, primaryNavLinks, secondaryNavLinks } from '@/lib/nav';
 import { useSidebar } from '@/lib/sidebar-store';
 import { cn } from '@/lib/utils';
 import {
+  Activity,
   BarChart3,
   Calendar,
   ChevronLeft,
   ChevronRight,
   Compass,
+  Download,
   Heart,
   Home,
   Info,
@@ -28,9 +30,11 @@ const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   '/catalog': Compass,
   '/follows': Heart,
   '/library': Library,
+  '/downloads': Download,
   '/calendar': Calendar,
   '/settings': Settings,
   '/statistiche': BarChart3,
+  '/diagnostica': Activity,
   '/about': Info,
 };
 

@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { PageHeader } from '@/components/ui/page-header';
+import { QueryError } from '@/components/ui/query-error';
 import {
   Select,
   SelectContent,
@@ -440,6 +441,11 @@ export function CatalogBrowser() {
 
       {browseQuery.isLoading && items.length === 0 ? (
         <AnimeGridSkeleton />
+      ) : browseQuery.isError ? (
+        <QueryError
+          onRetry={() => browseQuery.refetch()}
+          title="Impossibile caricare il catalogo"
+        />
       ) : items.length === 0 ? (
         <div className="py-24 text-center text-muted-foreground">Nessun anime trovato.</div>
       ) : (

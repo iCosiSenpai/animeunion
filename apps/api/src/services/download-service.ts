@@ -878,16 +878,21 @@ export function createDownloadService(deps: DownloadServiceDeps): DownloadServic
       let timedOut = false;
       // Timeout globale: evita che un blocco su getBySlug congeli il ciclo per ore.
       const TIMEOUT_MS = 120_000;
-      const timer = new Promise<void>((resolve) =>
-        setTimeout(() => {
+      // L'handle va tenuto per poterlo azzerare quando processAll vince la race: altrimenti il
+      // setTimeout resterebbe pendente e ~2min dopo ogni ciclo riuscito loggerebbe un timeout
+      // spurio (bug A3). unref: non deve tenere vivo il processo.
+      let timeoutHandle: NodeJS.Timeout | undefined;
+      const timer = new Promise<void>((resolve) => {
+        timeoutHandle = setTimeout(() => {
           timedOut = true;
           logger.warn(
             { total: eligible.length },
             'enqueueForAutoFollows: timeout 120s — ciclo interrotto (follow parzialmente processati)',
           );
           resolve();
-        }, TIMEOUT_MS),
-      );
+        }, TIMEOUT_MS);
+        timeoutHandle.unref?.();
+      });
 
       const processAll = async (): Promise<void> => {
         // Batch da 5: N getBySlug paralleli invece che seriali.
@@ -923,7 +928,14 @@ export function createDownloadService(deps: DownloadServiceDeps): DownloadServic
         }
       };
 
-      await Promise.race([processAll(), timer]);
+      try {
+        await Promise.race([processAll(), timer]);
+      } finally {
+        // processAll ha vinto (o il timeout è già scattato): azzera il timer in ogni caso.
+        if (timeoutHandle) {
+          clearTimeout(timeoutHandle);
+        }
+      }
 
       if (count > 0) {
         logger.info({ count }, 'Auto-enqueue follow: nuovi episodi accodati');

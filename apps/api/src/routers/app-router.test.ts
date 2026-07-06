@@ -115,6 +115,20 @@ describe('appRouter (integrazione)', () => {
     expect(ctx.services.config.get('telegramBotToken')).toBe('123:ABC');
   });
 
+  it('config.set ignora la maschera dei segreti (A4: non sovrascrive il valore reale)', async () => {
+    const { caller, ctx } = makeCaller();
+    ctx.services.config.set('telegramBotToken', '123:ABC');
+
+    // Il FE rimanda il placeholder mascherato: no-op, il token reale resta intatto.
+    const res = await caller.config.set({ key: 'telegramBotToken', value: SECRET_MASK });
+    expect(res.value).toBe(SECRET_MASK);
+    expect(ctx.services.config.get('telegramBotToken')).toBe('123:ABC');
+
+    // Un valore reale nuovo invece aggiorna davvero.
+    await caller.config.set({ key: 'telegramBotToken', value: '999:XYZ' });
+    expect(ctx.services.config.get('telegramBotToken')).toBe('999:XYZ');
+  });
+
   it('lock: passcode attivo blocca le procedure senza token e le sblocca col token', async () => {
     const { ctx } = makeCaller();
     ctx.services.lock.setPasscode('1234');

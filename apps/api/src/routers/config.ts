@@ -38,6 +38,15 @@ export const configRouter = router({
   }),
 
   set: publicProcedure.input(configSetInputSchema).mutation(({ ctx, input }) => {
+    // Guardia anti-maschera (bug A4): se il FE rimanda il placeholder di un segreto, non
+    // sovrascrivere il valore reale nel DB. Il contratto "se invariato non modificare" non puo'
+    // dipendere solo dal client. No-op: restituisci lo stato mascherato senza toccare il config.
+    if (
+      (SECRET_CONFIG_KEYS as readonly string[]).includes(input.key) &&
+      input.value === SECRET_MASK
+    ) {
+      return { key: input.key, value: SECRET_MASK };
+    }
     // Cambio di una cartella di download: i file gia' scaricati restano nella vecchia cartella
     // (non li spostiamo). Se ce ne sono, avvisa l'utente con una notifica.
     const isDownloadDir = (DOWNLOAD_DIR_KEYS as string[]).includes(input.key);

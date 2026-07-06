@@ -881,22 +881,6 @@ export function SettingsView() {
             </Field>
           </Section>
 
-          <Section id="avanzate" hidden={active !== 'avanzate'} title="Backup configurazione">
-            <Field
-              label="Esporta"
-              hint="Scarica un file JSON con le tue impostazioni (i token non sono inclusi)."
-            >
-              <Button variant="outline" onClick={onExport}>
-                Esporta configurazione
-              </Button>
-            </Field>
-            <Field label="Importa" hint="Ripristina le impostazioni da un file esportato.">
-              <Button variant="outline" onClick={() => setImportOpen(true)}>
-                Importa configurazione
-              </Button>
-            </Field>
-          </Section>
-
           <div className={cn(active !== 'home' && 'hidden')}>
             <HomeLayoutSection />
           </div>
@@ -905,8 +889,23 @@ export function SettingsView() {
             <SecuritySection />
           </div>
 
-          <div className={cn(active !== 'backup' && 'hidden')}>
+          <div className={cn('space-y-6', active !== 'backup' && 'hidden')}>
             <BackupSection />
+            <Section id="backup-config" title="Backup configurazione">
+              <Field
+                label="Esporta"
+                hint="Scarica un file JSON con le tue impostazioni (i token non sono inclusi)."
+              >
+                <Button variant="outline" onClick={onExport}>
+                  Esporta configurazione
+                </Button>
+              </Field>
+              <Field label="Importa" hint="Ripristina le impostazioni da un file esportato.">
+                <Button variant="outline" onClick={() => setImportOpen(true)}>
+                  Importa configurazione
+                </Button>
+              </Field>
+            </Section>
           </div>
 
           <div className={cn(active !== 'premium' && 'hidden')}>

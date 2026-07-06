@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { existsSync, statSync } from 'node:fs';
 import { readFile, readdir, rm, rmdir, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import type {
@@ -10,10 +11,11 @@ import type {
   TrashEntry,
   TrashList,
 } from '@animeunion/shared';
-import { and, eq, gte, lt, or } from 'drizzle-orm';
+import { and, eq, gte, inArray, lt, or } from 'drizzle-orm';
 import type { Db } from '../db';
 import { schema } from '../db';
 import { atomicMove, deleteFileAndPrune, ensureDir } from '../lib/download-fs';
+import { listEpisodeFilesInDir } from '../lib/episode-file-match';
 import { NotFoundError, PreconditionError } from '../lib/errors';
 import type { Logger } from '../lib/logger';
 import type { ConfigService } from './config-service';
@@ -144,11 +146,37 @@ export function parseEpisodeNumber(fileName: string): number | null {
   return null;
 }
 
+export interface DuplicateFile {
+  path: string;
+  size: number;
+}
+
+export interface DuplicateGroup {
+  animeId: string;
+  animeTitle: string;
+  episodeNumber: number;
+  language: Language;
+  /** Il file che viene tenuto (collegato nel DB o canonico). */
+  keep: string;
+  /** I file doppioni proposti per lo spostamento nel cestino. */
+  duplicates: DuplicateFile[];
+}
+
+export interface DuplicateReport {
+  groups: DuplicateGroup[];
+  totalDuplicates: number;
+  totalBytes: number;
+}
+
 export interface FileManagerService {
   list(path?: string): Promise<FileList>;
   rename(path: string, newName: string): Promise<FileOpResult>;
   move(path: string, destDir: string): Promise<FileOpResult>;
   remove(path: string): Promise<FileOpResult>;
+  /** Trova i file doppioni (stesso episodio, naming diverso) gia' presenti nella libreria. */
+  findDuplicates(): Promise<DuplicateReport>;
+  /** Sposta nel cestino i file indicati (duplicati confermati dall'utente). */
+  dedupeMove(paths: string[]): Promise<{ moved: number; failed: number }>;
   mkdir(parent: string, name: string): Promise<FileOpResult>;
   relink(path: string, episodeFileId: string): Promise<FileOpResult>;
   /**
@@ -360,6 +388,63 @@ export function createFileManagerService(deps: FileManagerDeps): FileManagerServ
     return null;
   }
 
+  function safeSize(p: string): number {
+    try {
+      return statSync(p).size;
+    } catch {
+      return 0;
+    }
+  }
+
+  // Corpo condiviso di `remove` (usato anche da `dedupeMove`): confina, protegge i file esterni,
+  // sposta nel cestino (se abilitato) e sincronizza il DB.
+  async function removePath(path: string): Promise<FileOpResult> {
+    const target = assertInside(path);
+    if (isRoot(target)) {
+      throw new PreconditionError('Non puoi eliminare una cartella radice.');
+    }
+    // Salvaguardia anti-perdita-dati: mai cancellare file collegati come esterni (di proprietà
+    // dell'utente, scaricati fuori app). Vanno prima scollegati ("Scollega esterno").
+    const externalUnder = db
+      .select({ localPath: schema.episodeFile.localPath })
+      .from(schema.episodeFile)
+      .where(and(eq(schema.episodeFile.downloadStatus, 'external'), trackedUnder(target)))
+      .all()
+      .filter((r) => {
+        if (!r.localPath) {
+          return false;
+        }
+        const lp = resolve(r.localPath);
+        return lp === target || lp.startsWith(target + sep);
+      });
+    if (externalUnder.length > 0) {
+      throw new PreconditionError(
+        `La cartella contiene ${externalUnder.length} file collegati come esterni: scollegali (Scollega esterno) prima di eliminarla.`,
+      );
+    }
+    const root = rootOf(target);
+    let isDir = false;
+    try {
+      isDir = (await stat(target)).isDirectory();
+    } catch {
+      isDir = false;
+    }
+    // Cestino (soft-delete): sposta in `.trash` invece di cancellare subito, così è recuperabile.
+    if (config.get('trashEnabled') && root) {
+      await moveToTrash(target, root, isDir);
+      syncDeletedPaths(target);
+      return { ok: true };
+    }
+    if (isDir) {
+      await rm(target, { recursive: true, force: true });
+      syncDeletedPaths(target);
+    } else if (root) {
+      await deleteFileAndPrune(target, root, logger);
+      syncDeletedPaths(target);
+    }
+    return { ok: true };
+  }
+
   return {
     async list(path) {
       if (!path || path.trim() === '' || !rootOf(path)) {
@@ -499,50 +584,99 @@ export function createFileManagerService(deps: FileManagerDeps): FileManagerServ
     },
 
     async remove(path) {
-      const target = assertInside(path);
-      if (isRoot(target)) {
-        throw new PreconditionError('Non puoi eliminare una cartella radice.');
-      }
-      // Salvaguardia anti-perdita-dati: mai cancellare file collegati come esterni (di proprietà
-      // dell'utente, scaricati fuori app). Vanno prima scollegati ("Scollega esterno").
-      const externalUnder = db
-        .select({ localPath: schema.episodeFile.localPath })
+      return removePath(path);
+    },
+
+    findDuplicates() {
+      // Ancora la ricerca agli episodi che il DB conosce come presenti: per ognuno cerca nella sua
+      // cartella altri file che rappresentano lo STESSO (stagione, numero) con naming diverso. Cosi'
+      // si segnalano solo veri doppioni (canonico + legacy), senza falsi positivi da parsing ingenuo.
+      const rows = db
+        .select({
+          language: schema.episodeFile.language,
+          localPath: schema.episodeFile.localPath,
+          number: schema.episode.number,
+          animeId: schema.anime.id,
+          animeTitle: schema.anime.title,
+        })
         .from(schema.episodeFile)
-        .where(and(eq(schema.episodeFile.downloadStatus, 'external'), trackedUnder(target)))
-        .all()
-        .filter((r) => {
-          if (!r.localPath) {
-            return false;
-          }
-          const lp = resolve(r.localPath);
-          return lp === target || lp.startsWith(target + sep);
+        .innerJoin(schema.episode, eq(schema.episode.id, schema.episodeFile.episodeId))
+        .innerJoin(schema.anime, eq(schema.anime.id, schema.episode.animeId))
+        .where(inArray(schema.episodeFile.downloadStatus, ['downloaded', 'external']))
+        .all();
+
+      const groups: DuplicateGroup[] = [];
+      const seen = new Set<string>();
+      for (const r of rows) {
+        if (!r.localPath) {
+          continue;
+        }
+        let canonical: string;
+        try {
+          canonical = renamer.computeEpisodePath({
+            animeId: r.animeId,
+            episodeNumber: r.number,
+            language: r.language as Language,
+          });
+        } catch {
+          continue;
+        }
+        const key = canonical.toLowerCase();
+        if (seen.has(key)) {
+          continue;
+        }
+        seen.add(key);
+        const matches = [
+          ...new Set(listEpisodeFilesInDir(canonical).map((p) => resolve(p))),
+        ].filter((p) => existsSync(p));
+        if (matches.length < 2) {
+          continue;
+        }
+        const linked = resolve(r.localPath);
+        const canonAbs = resolve(canonical);
+        // Tieni il file collegato nel DB (o il canonico); scarta gli altri. Cosi' il DB resta
+        // coerente e non serve ri-scaricare nulla.
+        const keep = matches.includes(linked)
+          ? linked
+          : matches.includes(canonAbs)
+            ? canonAbs
+            : matches[0];
+        const duplicates = matches
+          .filter((p) => p !== keep)
+          .map((p) => ({ path: p, size: safeSize(p) }));
+        if (duplicates.length === 0) {
+          continue;
+        }
+        groups.push({
+          animeId: r.animeId,
+          animeTitle: r.animeTitle,
+          episodeNumber: r.number,
+          language: r.language as Language,
+          keep: keep ?? '',
+          duplicates,
         });
-      if (externalUnder.length > 0) {
-        throw new PreconditionError(
-          `La cartella contiene ${externalUnder.length} file collegati come esterni: scollegali (Scollega esterno) prima di eliminarla.`,
-        );
       }
-      const root = rootOf(target);
-      let isDir = false;
-      try {
-        isDir = (await stat(target)).isDirectory();
-      } catch {
-        isDir = false;
+      const totalDuplicates = groups.reduce((n, g) => n + g.duplicates.length, 0);
+      const totalBytes = groups.reduce(
+        (n, g) => n + g.duplicates.reduce((s, d) => s + d.size, 0),
+        0,
+      );
+      return Promise.resolve({ groups, totalDuplicates, totalBytes });
+    },
+
+    async dedupeMove(paths) {
+      let moved = 0;
+      let failed = 0;
+      for (const p of paths) {
+        try {
+          await removePath(p);
+          moved += 1;
+        } catch (error) {
+          logger.warn({ err: error, path: p }, 'dedupeMove: impossibile spostare il duplicato');
+          failed += 1;
+        }
       }
-      // Cestino (soft-delete): sposta in `.trash` invece di cancellare subito, così è recuperabile.
-      if (config.get('trashEnabled') && root) {
-        await moveToTrash(target, root, isDir);
-        syncDeletedPaths(target);
-        return { ok: true };
-      }
-      if (isDir) {
-        await rm(target, { recursive: true, force: true });
-        syncDeletedPaths(target);
-      } else if (root) {
-        await deleteFileAndPrune(target, root, logger);
-        syncDeletedPaths(target);
-      }
-      return { ok: true };
+      return { moved, failed };
     },
 
     async mkdir(parent, name) {

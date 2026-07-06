@@ -14,7 +14,12 @@ import {
   trashListSchema,
   trashRestoreInputSchema,
 } from '@animeunion/shared';
+import { z } from 'zod';
 import { publicProcedure, router } from '../trpc';
+
+// Output/inputs dello scanner duplicati: contratto self-contained (non in shared), il client tRPC
+// ne inferisce comunque i tipi dal router.
+const dedupeMoveInputSchema = z.object({ paths: z.array(z.string()).max(5000) });
 
 /** Gestore file incorporato: naviga e modifica i file scaricati dentro le cartelle configurate. */
 export const filesRouter = router({
@@ -37,6 +42,12 @@ export const filesRouter = router({
     .input(fileDeleteInputSchema)
     .output(fileOpResultSchema)
     .mutation(({ ctx, input }) => ctx.services.files.remove(input.path)),
+
+  findDuplicates: publicProcedure.query(({ ctx }) => ctx.services.files.findDuplicates()),
+
+  dedupeMove: publicProcedure
+    .input(dedupeMoveInputSchema)
+    .mutation(({ ctx, input }) => ctx.services.files.dedupeMove(input.paths)),
 
   mkdir: publicProcedure
     .input(fileMkdirInputSchema)

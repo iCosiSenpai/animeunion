@@ -1,6 +1,7 @@
+import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { schema } from '../db';
@@ -149,6 +150,40 @@ describe('FileManagerService', () => {
 
     await service.move(join(root, 'b.mp4'), join(root, 'New'));
     expect((await stat(join(root, 'New', 'b.mp4'))).isFile()).toBe(true);
+  });
+
+  it('findDuplicates trova i doppioni per (stagione, numero) e dedupeMove li cestina', async () => {
+    // L'anime va seminato PRIMA di calcolare il path (il renamer usa il titolo dal DB).
+    seedEpisode(db, { status: 'downloaded' });
+    const config = createConfigService({ db });
+    const renamer = createRenamerService({ db, config });
+    const canonical = renamer.computeEpisodePath({
+      animeId: 'a-1',
+      episodeNumber: 1,
+      language: 'SUB_ITA',
+    });
+    db.update(schema.episodeFile)
+      .set({ localPath: canonical })
+      .where(eq(schema.episodeFile.id, 'ef-1'))
+      .run();
+    await mkdir(dirname(canonical), { recursive: true });
+    await writeFile(canonical, 'canonico');
+    // Doppione dello stesso episodio con nome diverso (stesso SxxExx e tag lingua) nella cartella.
+    const legacy = join(dirname(canonical), `Copia - ${basename(canonical)}`);
+    await writeFile(legacy, 'doppione');
+
+    const report = await service.findDuplicates();
+    expect(report.totalDuplicates).toBe(1);
+    expect(report.groups).toHaveLength(1);
+    expect(resolve(report.groups[0]?.keep ?? '')).toBe(resolve(canonical));
+    expect(report.groups[0]?.duplicates.map((d) => resolve(d.path))).toEqual([resolve(legacy)]);
+
+    const res = await service.dedupeMove([legacy]);
+    expect(res.moved).toBe(1);
+    expect(res.failed).toBe(0);
+    // Il doppione e' stato spostato nel cestino, il canonico resta.
+    expect(existsSync(legacy)).toBe(false);
+    expect(existsSync(canonical)).toBe(true);
   });
 
   it('rename e move rifiutano la sovrascrittura di un elemento esistente (anti-perdita-dati)', async () => {

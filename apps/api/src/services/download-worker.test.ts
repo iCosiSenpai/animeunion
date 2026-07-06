@@ -1122,4 +1122,119 @@ describe('DownloadWorker (FSM)', () => {
       await new Promise<void>((resolve) => server.close(() => resolve()));
     }
   });
+
+  it('backoff (A1): un job con retry_at nel futuro non viene ripescato finché non scade', async () => {
+    const body = mp4('ok');
+    const server = createServer((_req, res) => {
+      res.writeHead(200, { 'content-type': 'video/mp4', 'content-length': String(body.length) });
+      res.end(body);
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const { port } = server.address() as AddressInfo;
+    const url = `http://127.0.0.1:${port}/ep.mp4`;
+
+    const config = createConfigService({ db });
+    config.set('seriesPathSub', animePath);
+    const worker = makeWorker(
+      db,
+      buildStubCatalog(
+        new Map([
+          ['ef-1', url],
+          ['ef-2', url],
+        ]),
+      ),
+      config,
+    );
+    seedEpisodeFiles(db, ['ef-1', 'ef-2']);
+
+    const t = new Date().toISOString();
+    const future = new Date(Date.now() + 3_600_000).toISOString();
+    // ef-1 è in backoff (retry_at nel futuro) e sarebbe il più vecchio: senza il gate verrebbe
+    // ripescato subito. ef-2 è eleggibile (retry_at nullo).
+    db.insert(schema.downloadQueue)
+      .values({
+        id: 'q-gated',
+        episodeFileId: 'ef-1',
+        status: 'queued',
+        retryAt: future,
+        priority: 50,
+        createdAt: '2026-01-01T00:00:00.000Z',
+      })
+      .run();
+    db.insert(schema.downloadQueue)
+      .values({
+        id: 'q-ready',
+        episodeFileId: 'ef-2',
+        status: 'queued',
+        priority: 50,
+        createdAt: t,
+      })
+      .run();
+
+    try {
+      worker.start();
+      const deadline = Date.now() + 4000;
+      let ready = db
+        .select()
+        .from(schema.downloadQueue)
+        .where(eq(schema.downloadQueue.id, 'q-ready'))
+        .get();
+      while (ready && ready.status !== 'completed' && ready.status !== 'failed') {
+        if (Date.now() > deadline) {
+          throw new Error(`timeout: q-ready fermo su '${ready.status}'`);
+        }
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        ready = db
+          .select()
+          .from(schema.downloadQueue)
+          .where(eq(schema.downloadQueue.id, 'q-ready'))
+          .get();
+      }
+      expect(ready?.status).toBe('completed');
+      // Il finally di runOne ha richiamato tryStartNext, ma q-gated resta bloccato dal backoff.
+      const gated = db
+        .select()
+        .from(schema.downloadQueue)
+        .where(eq(schema.downloadQueue.id, 'q-gated'))
+        .get();
+      expect(gated?.status).toBe('queued');
+      expect(gated?.startedAt).toBeNull();
+    } finally {
+      worker.stop();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+
+  it('re-enqueue (A2): riattiva una riga terminale invece di restituirla inerte', () => {
+    const config = createConfigService({ db });
+    config.set('seriesPathSub', animePath);
+    const worker = makeWorker(db, buildStubCatalog(new Map()), config);
+    // In pausa: la riattivazione non deve avviare un download reale in questo test.
+    worker.pause();
+
+    const t = new Date().toISOString();
+    seedEpisodeFiles(db, ['ef-1']);
+    db.insert(schema.downloadQueue)
+      .values({
+        id: 'q-cancelled',
+        episodeFileId: 'ef-1',
+        status: 'cancelled',
+        retryCount: 2,
+        error: 'annullato',
+        completedAt: t,
+        priority: 50,
+        createdAt: t,
+      })
+      .run();
+
+    const id = worker.enqueue('ef-1');
+    // Riusa la stessa riga (nessun duplicato) e la rimette in coda pulita.
+    expect(id).toBe('q-cancelled');
+    const rows = db.select().from(schema.downloadQueue).all();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.status).toBe('queued');
+    expect(rows[0]?.retryCount).toBe(0);
+    expect(rows[0]?.error).toBeNull();
+    expect(rows[0]?.completedAt).toBeNull();
+  });
 });

@@ -1,0 +1,1 @@
+ALTER TABLE `download_queue` ADD `retry_at` text;

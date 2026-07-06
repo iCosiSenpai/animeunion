@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events';
 import { rm, stat } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import type { Language } from '@animeunion/shared';
-import { and, asc, desc, eq, inArray, max, min } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, lte, max, min, or } from 'drizzle-orm';
 import type { Db } from '../db';
 import { schema } from '../db';
 import type { CatalogService } from '../services/catalog-service';
@@ -122,6 +122,13 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
   }
 
   function pickNext(): { id: string; animeId: string } | null {
+    // Solo i job accodati e fuori dal backoff: retry_at nel futuro = ancora in attesa (evita il
+    // retry a raffica in single-flight). retry_at nullo = mai fallito, quindi eleggibile.
+    const now = new Date().toISOString();
+    const eligible = and(
+      eq(schema.downloadQueue.status, 'queued'),
+      or(isNull(schema.downloadQueue.retryAt), lte(schema.downloadQueue.retryAt, now)),
+    );
     // Riepilogo per anime dei job in coda (O(#anime), non O(#coda)): priorità massima e job più
     // vecchio di ciascuno. Il join risale download_queue→episode_file→episode→anime (indice 17.1).
     const candidates = db
@@ -133,7 +140,7 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
       .from(schema.downloadQueue)
       .innerJoin(schema.episodeFile, eq(schema.episodeFile.id, schema.downloadQueue.episodeFileId))
       .innerJoin(schema.episode, eq(schema.episode.id, schema.episodeFile.episodeId))
-      .where(eq(schema.downloadQueue.status, 'queued'))
+      .where(eligible)
       .groupBy(schema.episode.animeId)
       .all();
     if (candidates.length === 0) {
@@ -158,15 +165,13 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
     if (!chosenAnime) {
       return null;
     }
-    // Il job più prioritario/vecchio dell'anime scelto.
+    // Il job più prioritario/vecchio dell'anime scelto (sempre fuori dal backoff).
     const job = db
       .select({ id: schema.downloadQueue.id })
       .from(schema.downloadQueue)
       .innerJoin(schema.episodeFile, eq(schema.episodeFile.id, schema.downloadQueue.episodeFileId))
       .innerJoin(schema.episode, eq(schema.episode.id, schema.episodeFile.episodeId))
-      .where(
-        and(eq(schema.downloadQueue.status, 'queued'), eq(schema.episode.animeId, chosenAnime)),
-      )
+      .where(and(eligible, eq(schema.episode.animeId, chosenAnime)))
       .orderBy(desc(schema.downloadQueue.priority), asc(schema.downloadQueue.createdAt))
       .limit(1)
       .get();
@@ -396,6 +401,7 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
       // Errore permanente (4xx, link scaduto, contenuto non video): niente retry.
       const permanent = error instanceof PermanentDownloadError;
       if (!permanent && nextRetry < retryMax) {
+        const wait = backoffMs(nextRetry);
         updateQueue(queueId, {
           status: 'queued',
           retryCount: nextRetry,
@@ -403,6 +409,9 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
           progress: 0,
           bytesDownloaded: 0,
           speedBps: null,
+          // Gate del backoff: pickNext non ripescherà questo job finché retry_at non è passato,
+          // così il tryStartNext del finally (e i tick) non lo rilanciano a raffica.
+          retryAt: new Date(Date.now() + wait).toISOString(),
         });
         emitter.emit('failed', {
           queueId,
@@ -410,7 +419,7 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
           error: message,
           retry: true,
         });
-        const wait = backoffMs(nextRetry);
+        // Sveglia puntuale allo scadere del backoff (i tick da 60s sarebbero troppo lenti).
         setTimeout(() => {
           void tryStartNext();
         }, wait).unref?.();
@@ -635,6 +644,37 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
         .where(eq(schema.downloadQueue.episodeFileId, episodeFileId))
         .get();
       if (existing) {
+        // Se la riga è in uno stato terminale, riattivala invece di restituirla inerte: altrimenti
+        // ri-scaricare un episodio cancellato/fallito/completato tornerebbe il vecchio queueId senza
+        // accodare nulla (bug A2). Un job ancora attivo (queued/downloading/processing) resta com'è.
+        const terminal =
+          existing.status === 'cancelled' ||
+          existing.status === 'failed' ||
+          existing.status === 'completed';
+        if (terminal) {
+          updateQueue(existing.id, {
+            status: 'queued',
+            progress: 0,
+            bytesDownloaded: 0,
+            totalBytes: null,
+            speedBps: null,
+            error: null,
+            retryCount: 0,
+            retryAt: null,
+            startedAt: null,
+            completedAt: null,
+            // Ripartenza pulita: scarta lo stato di resume del tentativo precedente (l'eventuale
+            // .part verrà rimosso da runOne perché sourceUrl non coinciderà).
+            targetPath: null,
+            expectedBytes: null,
+            sourceUrl: null,
+          });
+          if (priority != null) {
+            updateQueue(existing.id, { priority });
+          }
+          emitter.emit('enqueue', { queueId: existing.id, episodeFileId });
+          void tryStartNext();
+        }
         return existing.id;
       }
       const id = crypto.randomUUID();
@@ -697,6 +737,8 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
         progress: 0,
         bytesDownloaded: 0,
         speedBps: null,
+        // Retry manuale: riparte subito, nessun gate di backoff residuo.
+        retryAt: null,
       });
       emitter.emit('enqueue', { queueId, episodeFileId: item.episodeFileId });
       void tryStartNext();

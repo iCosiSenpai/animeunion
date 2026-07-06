@@ -192,6 +192,10 @@ export const downloadQueue = sqliteTable(
     // URL usato per l'ultimo tentativo: il resume del .part avviene solo se l'URL ri-risolto
     // coincide (gli URL AnimeUnion scadono; riprendere un URL diverso corromperebbe il file).
     sourceUrl: text('source_url'),
+    // Istante (ISO) prima del quale il job non deve ripartire: gate del backoff esponenziale.
+    // pickNext ignora le righe queued con retry_at nel futuro, evitando il retry a raffica in
+    // single-flight (il finally chiamava tryStartNext ri-selezionando subito il job appena fallito).
+    retryAt: text('retry_at'),
     createdAt: text('created_at').notNull(),
   },
   (table) => [

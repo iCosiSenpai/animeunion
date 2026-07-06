@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -98,5 +98,35 @@ describe('DbBackupService', () => {
     await expect(service.restoreBackup('../etc/passwd')).rejects.toThrow();
     await expect(service.restoreBackup('random.txt')).rejects.toThrow();
     db.$client.close();
+  });
+
+  it('restoreBackup rifiuta un backup corrotto (B5)', async () => {
+    const { db, backupDir, service } = setup();
+    mkdirSync(backupDir, { recursive: true });
+    writeFileSync(join(backupDir, 'animeunion-corrotto.db'), 'non-e-un-database-sqlite');
+    await expect(service.restoreBackup('animeunion-corrotto.db')).rejects.toThrow();
+    db.$client.close();
+  });
+
+  it('applyPendingRestore mette in quarantena un pending corrotto e non tocca il DB buono (B5)', () => {
+    const { db, dbPath } = setup();
+    db.$client.close();
+    const pending = `${dbPath}.pending-restore`;
+    writeFileSync(pending, 'questo-non-e-un-database-sqlite');
+
+    applyPendingRestore(dbPath, testLogger);
+
+    // Il pending e' stato spostato in quarantena (niente swap, niente crash-loop ai riavvii)...
+    expect(existsSync(pending)).toBe(false);
+    // ...e il DB originale (con x1) e' rimasto intatto.
+    const db2 = createDb(dbPath);
+    expect(
+      db2
+        .select()
+        .from(schema.anime)
+        .all()
+        .find((r) => r.id === 'x1'),
+    ).toBeDefined();
+    db2.$client.close();
   });
 });

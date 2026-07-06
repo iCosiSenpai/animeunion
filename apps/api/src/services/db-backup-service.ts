@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, renameSync, rmSync } from 'node:fs';
 import { copyFile, readdir, rm, stat } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
 import type { BackupList, BackupRestoreResult, BackupRunResult } from '@animeunion/shared';
+import Database from 'better-sqlite3';
 import type { Db } from '../db';
 import { PreconditionError } from '../lib/errors';
 import type { Logger } from '../lib/logger';
@@ -37,6 +38,29 @@ export interface DbBackupDeps {
 }
 
 /**
+ * Verifica che un file sia un DB SQLite integro: apribile in sola lettura e `integrity_check` = ok.
+ * Serve a non sostituire il DB buono con un backup corrotto/incompatibile (che manderebbe in
+ * crash-loop `createDb`/le migrazioni all'avvio).
+ */
+export function isValidSqliteDb(path: string, logger?: Logger): boolean {
+  let probe: Database.Database | undefined;
+  try {
+    probe = new Database(path, { readonly: true, fileMustExist: true });
+    const rows = probe.pragma('integrity_check') as Array<{ integrity_check: string }>;
+    const ok = Array.isArray(rows) && rows.length === 1 && rows[0]?.integrity_check === 'ok';
+    if (!ok) {
+      logger?.error({ rows }, 'Validazione backup: integrity_check fallito');
+    }
+    return ok;
+  } catch (error) {
+    logger?.error({ err: error }, 'Validazione backup: file non apribile come SQLite valido');
+    return false;
+  } finally {
+    probe?.close();
+  }
+}
+
+/**
  * Applica un ripristino in attesa: se esiste `<dbPath>.pending-restore`, lo sposta su `dbPath`
  * (rimuovendo i sidecar -wal/-shm del WAL) PRIMA che il DB venga aperto. Da chiamare all'avvio,
  * prima di `createDb`. No-op per `:memory:` o se non c'è niente in attesa.
@@ -47,6 +71,26 @@ export function applyPendingRestore(dbPath: string, logger?: Logger): void {
   }
   const pending = `${dbPath}${PENDING_SUFFIX}`;
   if (!existsSync(pending)) {
+    return;
+  }
+  // Valida PRIMA di toccare il DB corrente (B5): se il backup e' corrotto non deve sostituire il
+  // DB buono ne' ritentare in loop ad ogni avvio. Lo mette in quarantena e prosegue col DB attuale.
+  if (!isValidSqliteDb(pending, logger)) {
+    const quarantine = `${pending}.invalid-${Date.now()}`;
+    try {
+      renameSync(pending, quarantine);
+      logger?.error(
+        { quarantine },
+        'Ripristino DB annullato: backup non valido messo in quarantena',
+      );
+    } catch {
+      try {
+        rmSync(pending);
+      } catch {
+        // best-effort: se non si riesce a spostarlo ne' a rimuoverlo, non swappare comunque.
+      }
+      logger?.error('Ripristino DB annullato: backup non valido rimosso');
+    }
     return;
   }
   try {
@@ -129,6 +173,11 @@ export function createDbBackupService(deps: DbBackupDeps): DbBackupService {
       const src = join(backupDir, name);
       if (!existsSync(src)) {
         throw new PreconditionError('Backup non trovato.');
+      }
+      // Rifiuta subito un backup corrotto (B5): meglio un errore chiaro qui che un file inutile in
+      // stage. La stessa verifica viene rifatta al riavvio da applyPendingRestore (rete di sicurezza).
+      if (!isValidSqliteDb(src, logger)) {
+        throw new PreconditionError('Backup corrotto o non valido: ripristino annullato.');
       }
       // Copia (non move) così il backup resta disponibile; lo swap avviene al riavvio.
       await copyFile(src, `${dbPath}${PENDING_SUFFIX}`);

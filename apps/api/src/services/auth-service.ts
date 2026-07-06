@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Db } from '../db';
 import { schema } from '../db';
-import { decryptPassword, encryptPassword } from '../lib/crypto';
+import { decryptPassword, decryptSecret, encryptPassword, encryptSecret } from '../lib/crypto';
 import { AuthError, createHttpClient } from '../lib/http-client';
 import type { Logger } from '../lib/logger';
 import {
@@ -112,8 +112,11 @@ export function createAuthService(options: AuthServiceOptions): AuthService {
     const parsedUser = loginUserSchema.safeParse(user);
     const userEmail = (parsedUser.success ? parsedUser.data.email : null) ?? options.email ?? null;
     const userName = (parsedUser.success ? parsedUser.data.name : null) ?? null;
+    // Il token di accesso e' un segreto: cifralo a riposo (se c'e' la chiave) cosi' non finisce in
+    // chiaro nei backup del DB. La cache in memoria resta il token in chiaro.
+    const storedToken = options.encryptKey ? encryptSecret(token, options.encryptKey) : token;
     const set: Record<string, string | null> = {
-      accessToken: token,
+      accessToken: storedToken,
       refreshToken: '',
       tokenExpires: expires.toISOString(),
       userEmail,
@@ -137,7 +140,7 @@ export function createAuthService(options: AuthServiceOptions): AuthService {
       .insert(schema.auth)
       .values({
         id: AUTH_ROW_ID,
-        accessToken: token,
+        accessToken: storedToken,
         refreshToken: '',
         tokenExpires: expires.toISOString(),
         userEmail,
@@ -195,7 +198,9 @@ export function createAuthService(options: AuthServiceOptions): AuthService {
       }
       const row = readRow();
       if (row?.accessToken && row.tokenExpires && isValid(new Date(row.tokenExpires))) {
-        cachedToken = row.accessToken;
+        cachedToken = options.encryptKey
+          ? decryptSecret(row.accessToken, options.encryptKey)
+          : row.accessToken;
         cachedExpires = new Date(row.tokenExpires);
         return cachedToken;
       }

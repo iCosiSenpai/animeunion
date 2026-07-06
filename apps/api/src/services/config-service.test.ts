@@ -183,6 +183,27 @@ describe('ConfigService', () => {
     expect(service.resolveDownloadRoot(true, 'SUB_ITA')).toBe('/media/Anime');
   });
 
+  it('con encryptKey cifra i segreti a riposo ma get li restituisce in chiaro (B3)', () => {
+    const db = createTestDb();
+    const service = createConfigService({ db, encryptKey: 'chiave-test' });
+    service.set('telegramBotToken', '123:ABC-DEF');
+
+    // Lettura interna in chiaro (la usano notifier/Jellyfin).
+    expect(service.get('telegramBotToken')).toBe('123:ABC-DEF');
+    // Nel DB il valore e' cifrato (JSON di un ciphertext) e non contiene il segreto in chiaro.
+    const row = db
+      .select()
+      .from(schema.config)
+      .where(eq(schema.config.key, 'telegramBotToken'))
+      .get();
+    expect(row?.value).toMatch(/^"aes256gcm:/);
+    expect(row?.value).not.toContain('123:ABC-DEF');
+
+    // Backward compat: un service senza chiave non decifra (restituisce il ciphertext grezzo).
+    const noKey = createConfigService({ db });
+    expect(noKey.get('telegramBotToken')).toMatch(/^aes256gcm:/);
+  });
+
   describe('browseDir (B6: confinamento del folder picker)', () => {
     const created: string[] = [];
     afterEach(async () => {

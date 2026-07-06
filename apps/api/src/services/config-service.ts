@@ -1,8 +1,15 @@
 import { mkdir, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve, sep } from 'node:path';
-import { type AppConfig, type ConfigKey, type Language, appConfigSchema } from '@animeunion/shared';
+import {
+  type AppConfig,
+  type ConfigKey,
+  type Language,
+  SECRET_CONFIG_KEYS,
+  appConfigSchema,
+} from '@animeunion/shared';
 import type { Db } from '../db';
 import { schema } from '../db';
+import { decryptSecret, encryptSecret } from '../lib/crypto';
 
 export type DownloadDirKey = 'seriesPathSub' | 'seriesPathDub' | 'moviePathSub' | 'moviePathDub';
 
@@ -69,7 +76,9 @@ async function isWritable(path: string): Promise<boolean> {
   }
 }
 
-export function createConfigService(deps: { db: Db }): ConfigService {
+export function createConfigService(deps: { db: Db; encryptKey?: string }): ConfigService {
+  const secretKeys = SECRET_CONFIG_KEYS as readonly string[];
+
   function getAll(): AppConfig {
     const rows = deps.db.select().from(schema.config).all();
     const raw: Record<string, unknown> = {};
@@ -80,7 +89,18 @@ export function createConfigService(deps: { db: Db }): ConfigService {
         // valore corrotto: lascia il default del contratto
       }
     }
-    return appConfigSchema.parse(raw);
+    const config = appConfigSchema.parse(raw);
+    // Decifra i segreti salvati cifrati (transparente sui valori legacy in chiaro). Il FE riceve
+    // comunque la maschera: la decifratura serve solo alle letture interne (notifier, Jellyfin).
+    if (deps.encryptKey) {
+      for (const key of SECRET_CONFIG_KEYS) {
+        const value = config[key];
+        if (typeof value === 'string' && value) {
+          (config[key] as string) = decryptSecret(value, deps.encryptKey);
+        }
+      }
+    }
+    return config;
   }
 
   /** Percorsi risolti per le 4 categorie (con fallback a cascata). */
@@ -120,7 +140,13 @@ export function createConfigService(deps: { db: Db }): ConfigService {
 
     set<K extends ConfigKey>(key: K, value: unknown): AppConfig[K] {
       const parsed = appConfigSchema.shape[key].parse(value) as AppConfig[K];
-      const serialized = JSON.stringify(parsed);
+      // Cifra a riposo i segreti (Telegram/Jellyfin) se c'e' la chiave: cosi' non finiscono in chiaro
+      // nel DB e nei backup. Restituisce comunque il valore in chiaro al chiamante.
+      const toStore =
+        deps.encryptKey && secretKeys.includes(key) && typeof parsed === 'string' && parsed
+          ? encryptSecret(parsed, deps.encryptKey)
+          : parsed;
+      const serialized = JSON.stringify(toStore);
       const timestamp = new Date().toISOString();
       deps.db
         .insert(schema.config)

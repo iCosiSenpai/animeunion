@@ -21,11 +21,24 @@ const envSchema = z.object({
   TELEGRAM_CHAT_ID: z.string().optional(),
   // Escape hatch: 'true' disabilita il blocco passcode della web UI (recupero).
   WEB_LOCK_DISABLED: z.string().optional(),
-  // Chiave per cifrare la password AnimeUnion salvata nel DB (AES-256-GCM).
-  // Se assente, la password è salvata in chiaro con un warning nel log.
+  // Chiave per cifrare i segreti a riposo nel DB (password AnimeUnion, token di accesso, token
+  // Telegram, API key Jellyfin) con AES-256-GCM. In production e' obbligatoria (vedi superRefine):
+  // senza, i segreti finirebbero in chiaro nel DB e nei backup.
   AUTH_ENCRYPT_KEY: z.string().optional(),
+  NODE_ENV: z.string().optional(),
+});
+
+const parsedEnvSchema = envSchema.superRefine((value, ctx) => {
+  if (value.NODE_ENV === 'production' && !value.AUTH_ENCRYPT_KEY?.trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['AUTH_ENCRYPT_KEY'],
+      message:
+        'AUTH_ENCRYPT_KEY obbligatoria in production: senza, i segreti (password AnimeUnion, token, Telegram, Jellyfin) verrebbero salvati in chiaro nel DB e nei backup. Impostala in .env (vedi .env.example).',
+    });
+  }
 });
 
 export type Env = z.infer<typeof envSchema>;
 
-export const env: Env = envSchema.parse(process.env);
+export const env: Env = parsedEnvSchema.parse(process.env);

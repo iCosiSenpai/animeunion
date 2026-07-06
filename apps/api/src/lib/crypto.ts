@@ -47,3 +47,9 @@ export function decryptPassword(stored: string, key: string): string {
   decipher.setAuthTag(tag);
   return decipher.update(ct).toString('utf8') + decipher.final('utf8');
 }
+
+// Alias generici: le stesse primitive AES-256-GCM valgono per qualunque segreto a riposo (token
+// di accesso, chiavi API Telegram/Jellyfin), non solo per la password. Il fallback trasparente al
+// plaintext (nessun prefisso `aes256gcm:`) permette la migrazione dei valori gia' salvati in chiaro.
+export const encryptSecret = encryptPassword;
+export const decryptSecret = decryptPassword;

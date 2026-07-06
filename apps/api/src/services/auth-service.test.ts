@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { MockAgent, setGlobalDispatcher } from 'undici';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { schema } from '../db';
-import { decryptPassword, encryptPassword } from '../lib/crypto';
+import { decryptPassword, decryptSecret, encryptPassword } from '../lib/crypto';
 import { createTestDb, testLogger } from '../test/helpers';
 import { createAuthService } from './auth-service';
 
@@ -305,6 +305,43 @@ describe('cifratura password (AES-256-GCM)', () => {
     // La password nel DB deve essere cifrata (non in chiaro).
     expect(row?.password).toMatch(/^aes256gcm:/);
     expect(row?.password).not.toContain('pw-segreta');
+  });
+
+  it('con encryptKey cifra il token a riposo ma lo restituisce in chiaro (B3)', async () => {
+    const db = createTestDb();
+    const jwt = makeJwt(
+      new Date(Math.floor((Date.now() + 60 * 24 * 60 * 60 * 1000) / 1000) * 1000),
+    );
+    interceptLogin(jwt);
+    const service = createAuthService({
+      db,
+      baseUrl: BASE,
+      email: 'user@test.it',
+      password: 'segreta',
+      logger: testLogger,
+      rateLimitMs: 1,
+      encryptKey: 'chiave-test',
+    });
+
+    // getToken (login) ritorna il token in chiaro al chiamante...
+    expect(await service.getToken()).toBe(jwt);
+    // ...ma nel DB e' cifrato (non finisce in chiaro nei backup).
+    const row = db.select().from(schema.auth).where(eq(schema.auth.id, 'default')).get();
+    expect(row?.accessToken).toMatch(/^aes256gcm:/);
+    expect(row?.accessToken).not.toContain(jwt);
+    expect(decryptSecret(row?.accessToken ?? '', 'chiave-test')).toBe(jwt);
+
+    // Un'istanza nuova (nessuna cache) rilegge dal DB e decifra correttamente.
+    const fresh = createAuthService({
+      db,
+      baseUrl: BASE,
+      email: 'user@test.it',
+      password: 'segreta',
+      logger: testLogger,
+      rateLimitMs: 1,
+      encryptKey: 'chiave-test',
+    });
+    expect(await fresh.getToken()).toBe(jwt);
   });
 
   it('re-login funziona con password cifrata nel DB (resolveCredentials decifra)', async () => {

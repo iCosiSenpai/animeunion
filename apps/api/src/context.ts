@@ -53,7 +53,7 @@ export function createAppContext(options: { env?: Env; databasePath?: string } =
     getToken: () => auth.getToken(),
     onAuthError: () => auth.invalidateAndRelogin(),
   });
-  const config = createConfigService({ db });
+  const config = createConfigService({ db, encryptKey: resolvedEnv.AUTH_ENCRYPT_KEY });
   const telegram = createTelegramNotifier({
     // Config-DB (Impostazioni) ha precedenza; env resta fallback per i deploy esistenti.
     getCredentials: () => ({

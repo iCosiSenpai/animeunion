@@ -27,6 +27,7 @@ import type { FileEntry } from '@animeunion/shared';
 import {
   AlertTriangle,
   ChevronLeft,
+  Copy,
   ExternalLink,
   FileSymlink,
   FileVideo,
@@ -533,6 +534,93 @@ function TrashDialog({ onClose, onChanged }: { onClose: () => void; onChanged: (
   );
 }
 
+function DuplicatesDialog({ onClose, onChanged }: { onClose: () => void; onChanged: () => void }) {
+  const utils = trpc.useUtils();
+  const dup = trpc.files.findDuplicates.useQuery(undefined, { refetchOnWindowFocus: false });
+  const move = trpc.files.dedupeMove.useMutation({
+    onSuccess: (r) => {
+      toast.success(
+        r.moved
+          ? `${r.moved} duplicati spostati nel cestino${r.failed ? ` (${r.failed} non riusciti)` : ''}.`
+          : 'Nessun file spostato.',
+      );
+      void utils.files.findDuplicates.invalidate();
+      onChanged();
+    },
+    onError: (e) => toastError(e, 'Spostamento non riuscito'),
+  });
+  const groups = dup.data?.groups ?? [];
+  const allDupPaths = groups.flatMap((g) => g.duplicates.map((d) => d.path));
+  return (
+    <Dialog open onOpenChange={(o) => (o ? null : onClose())}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Duplicati nella libreria</DialogTitle>
+          <DialogDescription>
+            Stesso episodio presente più volte con nomi diversi. Il file collegato/canonico viene
+            tenuto; gli altri si spostano nel cestino (recuperabile).
+          </DialogDescription>
+        </DialogHeader>
+        {dup.isLoading ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">Scansione in corso…</p>
+        ) : dup.isError ? (
+          <EmptyState
+            icon={AlertTriangle}
+            title="Scansione non riuscita"
+            description="Riprova più tardi."
+          />
+        ) : groups.length === 0 ? (
+          <EmptyState
+            icon={Copy}
+            title="Nessun duplicato"
+            description="La libreria non ha doppioni."
+          />
+        ) : (
+          <ul className="max-h-[50vh] divide-y overflow-y-auto rounded-lg border">
+            {groups.map((g) => (
+              <li
+                key={`${g.animeId}-${g.language}-${g.episodeNumber}`}
+                className="space-y-1 p-2 text-sm"
+              >
+                <p className="font-medium">
+                  {g.animeTitle} · Ep. {g.episodeNumber}{' '}
+                  <span className="text-xs text-muted-foreground">
+                    {g.language === 'DUB_ITA' ? 'DUB' : 'SUB'}
+                  </span>
+                </p>
+                {g.duplicates.map((d) => (
+                  <p key={d.path} className="truncate font-mono text-xs text-muted-foreground">
+                    {d.path.split(/[\\/]/).pop()} · {formatSize(d.size)}
+                  </p>
+                ))}
+              </li>
+            ))}
+          </ul>
+        )}
+        <DialogFooter className="gap-2 sm:justify-between">
+          <p className="self-center text-xs text-muted-foreground">
+            {dup.data
+              ? `${dup.data.totalDuplicates} duplicati · ${formatSize(dup.data.totalBytes)}`
+              : ''}
+          </p>
+          <div className="flex gap-2">
+            <Button variant="ghost" onClick={onClose}>
+              Chiudi
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={move.isPending || allDupPaths.length === 0}
+              onClick={() => move.mutate({ paths: allDupPaths })}
+            >
+              <Trash2 className="mr-2 h-4 w-4" /> Sposta nel cestino
+            </Button>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function FileManager() {
   const utils = trpc.useUtils();
   const [path, setPath] = useState('');
@@ -572,6 +660,7 @@ export function FileManager() {
   const [franchise, setFranchise] = useState<{ slug: string } | null>(null);
   const [toolsAction, setToolsAction] = useState<'rename-scheme' | 'prune' | null>(null);
   const [trashOpen, setTrashOpen] = useState(false);
+  const [dupOpen, setDupOpen] = useState(false);
 
   const refresh = () => {
     void utils.files.list.invalidate();
@@ -694,6 +783,9 @@ export function FileManager() {
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setDupOpen(true)}>
+            <Copy className="h-4 w-4" /> Duplicati
+          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -734,6 +826,7 @@ export function FileManager() {
         </div>
       </div>
 
+      {dupOpen ? <DuplicatesDialog onClose={() => setDupOpen(false)} onChanged={refresh} /> : null}
       {trashOpen ? <TrashDialog onClose={() => setTrashOpen(false)} onChanged={refresh} /> : null}
 
       {list.isLoading ? (

@@ -1,7 +1,9 @@
-import { resolve } from 'node:path';
+import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
 import { appConfigSchema } from '@animeunion/shared';
 import { eq } from 'drizzle-orm';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { ZodError } from 'zod';
 import { schema } from '../db';
 import { createTestDb } from '../test/helpers';
@@ -179,5 +181,37 @@ describe('ConfigService', () => {
     // DUB e film ereditano dalla base finché non hanno una cartella propria.
     expect(service.resolveDownloadRoot(false, 'DUB_ITA')).toBe('/media/Anime');
     expect(service.resolveDownloadRoot(true, 'SUB_ITA')).toBe('/media/Anime');
+  });
+
+  describe('browseDir (B6: confinamento del folder picker)', () => {
+    const created: string[] = [];
+    afterEach(async () => {
+      await Promise.all(created.map((p) => rm(p, { recursive: true, force: true })));
+      created.length = 0;
+    });
+
+    it('naviga dentro la radice configurata ma non risale sopra di essa', async () => {
+      const root = await mkdtemp(join(tmpdir(), 'au-browse-'));
+      created.push(root);
+      await mkdir(join(root, 'Serie A'), { recursive: true });
+      const service = createConfigService({ db: createTestDb() });
+      service.set('seriesPathSub', root);
+
+      // La radice configurata è navigabile ed è il limite superiore (parent null: non si risale sopra).
+      const atRoot = await service.browseDir(root);
+      expect(atRoot.path).toBe(resolve(root));
+      expect(atRoot.parent).toBeNull();
+      expect(atRoot.dirs).toContain('Serie A');
+
+      // Una sottocartella è navigabile e il suo parent è la radice.
+      const sub = await service.browseDir(join(root, 'Serie A'));
+      expect(sub.path).toBe(resolve(join(root, 'Serie A')));
+      expect(sub.parent).toBe(resolve(root));
+
+      // Un path fuori dalle radici consentite non fa uscire dal confine.
+      const outside = resolve(dirname(root));
+      const escaped = await service.browseDir(outside);
+      expect(escaped.path).not.toBe(outside);
+    });
   });
 });

@@ -203,16 +203,33 @@ export function createConfigService(deps: { db: Db }): ConfigService {
     },
 
     async browseDir(path?: string): Promise<BrowseResult> {
-      // Punto di partenza: il path richiesto, altrimenti il mount media tipico, poi /data.
-      const candidates = [path?.trim(), '/media', '/data', resolve('.')].filter(
-        (p): p is string => !!p,
-      );
-      let target = resolve('.');
-      for (const c of candidates) {
-        const abs = resolve(c);
-        if (await isDir(abs)) {
+      // Confinamento (B6): il folder picker puo' navigare solo dentro i mount previsti (/media,
+      // /data) e le cartelle di download gia' configurate. Prima si poteva risalire fino a / e
+      // listare qualunque cartella: browseDir diventava una primitiva di enumerazione del filesystem
+      // (raggiungibile solo passando il lock, ma comunque da confinare).
+      const rawRoots = ['/media', '/data', ...distinctDownloadRoots()]
+        .filter(Boolean)
+        .map((p) => resolve(p));
+      const allowedRoots: string[] = [];
+      for (const r of [...new Set(rawRoots)]) {
+        if (await isDir(r)) {
+          allowedRoots.push(r);
+        }
+      }
+      // Nessun mount previsto (es. ambiente di sviluppo): ripiega sulla cwd.
+      if (allowedRoots.length === 0) {
+        allowedRoots.push(resolve('.'));
+      }
+      const containingRoot = (t: string): string | null =>
+        allowedRoots.find((r) => t === r || t.startsWith(r + sep)) ?? null;
+
+      let target = allowedRoots[0] as string;
+      const requested = path?.trim();
+      if (requested) {
+        const abs = resolve(requested);
+        // Solo se il path richiesto e' dentro una radice consentita ed e' una cartella reale.
+        if (containingRoot(abs) && (await isDir(abs))) {
           target = abs;
-          break;
         }
       }
       const entries = await readdir(target, { withFileTypes: true }).catch(() => []);
@@ -220,7 +237,9 @@ export function createConfigService(deps: { db: Db }): ConfigService {
         .filter((e) => e.isDirectory() && !e.name.startsWith('.'))
         .map((e) => e.name)
         .sort((a, b) => a.localeCompare(b, 'it'));
-      const parent = dirname(target) !== target ? dirname(target) : null;
+      // Il parent e' navigabile solo se resta dentro una radice consentita: niente risalita oltre i mount.
+      const parentDir = dirname(target);
+      const parent = parentDir !== target && containingRoot(parentDir) ? parentDir : null;
       return { path: target, parent, dirs };
     },
   };

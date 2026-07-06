@@ -8,9 +8,25 @@ import { logger } from './lib/logger';
 import { type AppRouter, appRouter } from './routers';
 import { createScheduler } from './scheduler';
 
+// Interpreta TRUST_PROXY: 'true'/'false' → booleano, un intero → numero di hop, altrimenti la
+// stringa (lista di IP/CIDR passata a Fastify così com'è). Default: false.
+function parseTrustProxy(raw: string | undefined): boolean | number | string {
+  if (!raw) {
+    return false;
+  }
+  if (raw === 'true') {
+    return true;
+  }
+  if (raw === 'false') {
+    return false;
+  }
+  const n = Number(raw);
+  return Number.isInteger(n) && String(n) === raw.trim() ? n : raw;
+}
+
 async function main(): Promise<void> {
   const ctx = createAppContext();
-  const app = fastify({ loggerInstance: logger });
+  const app = fastify({ loggerInstance: logger, trustProxy: parseTrustProxy(env.TRUST_PROXY) });
 
   // Header di sicurezza su ogni risposta (API JSON: niente sniffing, niente framing).
   app.addHook('onRequest', async (_req, reply) => {
@@ -25,9 +41,15 @@ async function main(): Promise<void> {
   const corsOrigins = env.CORS_ORIGINS?.split(',')
     .map((origin) => origin.trim())
     .filter(Boolean);
-  await app.register(cors, {
-    origin: corsOrigins && corsOrigins.length > 0 ? corsOrigins : true,
-  });
+  // Default sicuro: nega gli origin cross-site (same-origin only). Il web server fa da proxy verso
+  // l'API, quindi il browser non chiama mai l'API cross-origin. `CORS_ORIGINS=*` riabilita il
+  // reflect-all per chi accede all'API direttamente da un altro origin; una lista li restringe.
+  const corsOrigin = corsOrigins?.includes('*')
+    ? true
+    : corsOrigins && corsOrigins.length > 0
+      ? corsOrigins
+      : false;
+  await app.register(cors, { origin: corsOrigin });
   await app.register(fastifyTRPCPlugin, {
     prefix: '/trpc',
     trpcOptions: {

@@ -31,34 +31,43 @@ Shared: `packages/shared` (zod + interfaccia `AnimeSource`). Video: ffmpeg-stati
 Scheduler: setInterval (node-cron non usato). Lint: Biome. Test: Vitest (+ Playwright in futuro).
 Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
 
-## Roadmap verso v0.13.0 — "Mobile First + Rinforzo" (COMPLETO)
+## Roadmap verso v0.14.0 — "Affidabilità + Hardening + Anti-duplicati" (COMPLETO)
 
-> Piano archivio: **[plan/mobile-first-rinforzo.md](plan/mobile-first-rinforzo.md)**
-> Branch: `feat/mobile-first-rinforzo` — ff-merged in `main` come `v0.13.0`.
+> Piano archivio: **[plan/affidabilita-hardening.md](plan/affidabilita-hardening.md)**
+> Branch: `feat/affidabilita-hardening` — ff-merged in `main` come `v0.14.0`.
 
-- [x] **Step 0** — Governance: branch, piano in `plan/`, Regola #16 aggiunta, CLAUDE.md trimmed
-- [x] **Step 1** — CLAUDE.md trimming: archivio in `docs/history/`, file ridotto da 94k a ~18k
-- [x] **Step 2** — Toast mobile fix (status bar overlap, safe-area CSS definitivo)
-- [x] **Step 3** — Bottom sheet mobile (`<ResponsiveDialog>` wrapper per i dialog principali)
-- [x] **Step 4** — Polling condizionale + error states + `useDownloadSummary` hook + `100dvh`
-- [x] **Step 5** — Hardening P0: password cifratura, VAPID guard, `FALLBACK_TOKEN_TTL` 1h, uncaught handler
-- [x] **Step 6** — Hardening P1: `enqueueForAutoFollows` batch, `addMissing` inArray, `scan` concorrenza, `likeNeedle` escape
-- [x] **Step 7** — Hardening P2: `removeSeriesFolders` realpath, `walk()` depth limit, episodi cache, Map LRU
-- [x] **Step 8** — Release v0.13.0
+- [x] **Step 1** — Bug download engine: backoff reale (`retry_at`, migr. 0016) + re-download dopo stato terminale
+- [x] **Step 2** — Bug config/settings: timer auto-download, guardia maschera-segreti, doppio id impostazioni
+- [x] **Step 3** — Hardening rete: CORS same-origin, `trustProxy`, `browseDir` confinato
+- [x] **Step 4** — Cifratura a riposo: token + segreti config, `AUTH_ENCRYPT_KEY` obbligatoria in prod
+- [x] **Step 5** — Validazione backup pre-ripristino (anti crash-loop)
+- [x] **Step 6** — Scanner duplicati (backend + UI gestore file)
+- [x] **Step 7** — UX: move su touch, error states (`<QueryError>`), `/downloads`+`/diagnostica` nel dock
+- [x] **Step 7.5** — Fix auto-download: soglia forward-only ancorata agli episodi già usciti (migr. 0017)
+- [x] **Step 8** — Release v0.14.0
 
-## Batch successivo pianificato: v0.14.0 — "Quality + GPU Upscaling Bridge"
+## Batch successivo pianificato: v0.15.0 — "Quality + GPU Upscaling Bridge"
 
 > Piano separato in `plan/quality-gpu-bridge.md` (da creare quando si inizia il batch).
 > **Dipendenze esterne:** endpoint XQ/XQ+ dall'admin AnimeUnion + Windows GPU service sul PC.
 
 Step pianificati: GPU service Windows (Python FastAPI + real-esrgan-ncnn-vulkan) → DB upscale →
 backend bridge NAS↔GPU (ibrido locale/cloud) → quality nel download engine (XQ/XQ+) → UI quality
-+ upscale per-serie → premium gate → release v0.14.0.
++ upscale per-serie → premium gate → release v0.15.0.
 
-## Stato attuale (2026-07-04)
+## Stato attuale (2026-07-06)
 
-**Versione corrente: v0.13.8 — anti-duplicati: healPresent riconosce le librerie con naming legacy.**
-- 369 test verdi, lint/typecheck verdi, build web ok
+**Versione corrente: v0.14.0 — affidabilità + hardening + anti-duplicati + fix auto-download.**
+- 380 test verdi, lint/typecheck verdi, build web ok
+- v0.14.0: fix **auto-download che saltava gli episodi appena usciti** — la soglia forward-only era
+  ancorata al max episodio su TUTTI gli episodi (inclusi quelli in arrivo con airDate futura), quindi
+  attivandolo mentre l'ep1 era annunciato la soglia diventava 1 e l'ep1 restava escluso per sempre.
+  Ora `maxReleasedEpisode` ancora solo agli episodi usciti (airDate<=now); migr. 0017 ripara i follow
+  già rotti. Recupero manuale: "Scarica mancanti" non applica la soglia. Inoltre: backoff download
+  reale (`retry_at`, migr. 0016), re-download dopo stato terminale, cifratura a riposo di
+  token/segreti (`AUTH_ENCRYPT_KEY` obbligatoria in prod), CORS same-origin, `trustProxy`, `browseDir`
+  confinato, validazione backup pre-ripristino, **scanner duplicati** nel gestore file, move file su
+  touch, error states uniformi, `/downloads`+`/diagnostica` nel dock mobile.
 - v0.13.8: `healPresent` (`download-service`) riconosce un episodio gia' su disco per
   **(stagione, numero)** nella cartella, non solo al nome canonico `<Titolo> - SxxExx.mp4`. Chiude la
   causa radice dei duplicati: le serie gia' possedute con naming diverso (`S01E05.mp4`, `01.mp4`,
@@ -96,7 +105,8 @@ backend bridge NAS↔GPU (ibrido locale/cloud) → quality nel download engine (
 - Diagnosi download lento: contesa I/O sull'HDD pool2 condiviso con Jellyfin, NON un bug (vedi
   memoria `download-slow-jellyfin-io-contention`); mitigato col refresh Jellyfin per-libreria.
 - Premium: `GET /me` ancora `role: USER`, nessun endpoint premium lato API (`/me/subscription` 404).
-- **Batch attivo:** nessuno. Prossimo: `v0.14.0 "Quality + GPU Upscaling Bridge"`
+- **Batch attivo:** nessuno. Prossimo: `v0.15.0 "Quality + GPU Upscaling Bridge"` (bloccato su
+  dipendenze esterne: endpoint XQ/XQ+ dall'admin + servizio GPU Windows)
 
 Funzioni principali operative: download automatico (1 episodio alla volta), FTS5 search, cestino
 recuperabile, backup automatico DB, verifica integrità video, Jellyfin integration, nfo sidecar,
@@ -108,6 +118,7 @@ gestore file con collega-senza-scaricare, home personalizzabile, calendario, wal
 
 | Versione | Batch | Data |
 |---|---|---|
+| v0.14.0 | Affidabilità + Hardening + Anti-duplicati | 2026-07-06 |
 | v0.13.0 | Mobile First + Rinforzo | 2026-07-01 |
 | v0.12.0 | [Super rinforzo](docs/history/batch-super-rinforzo-v0.12.0.md) | 2026-06-29 |
 | v0.10.0 | [Potenziamenti diffusi](docs/history/batch-potenziamenti-diffusi-v0.10.0.md) | 2026-06|

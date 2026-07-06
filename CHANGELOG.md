@@ -14,6 +14,56 @@ e il progetto aderisce al [Semantic Versioning](https://semver.org/lang/it/).
 - Gating reale del Premium (collegamento all'account del sito, da definire con l'admin).
 - Update ottimistici e routing del cestino anche per `library.deleteSeries` (rimandati).
 
+## [0.14.0] - 2026-07-06
+
+Affidabilita + hardening + anti-duplicati: fix del download engine e dell'auto-download, cifratura
+dei segreti a riposo, scanner duplicati e rifiniture UX mobile.
+
+### Fixed
+- **Auto-download che saltava gli episodi appena usciti:** la soglia forward-only era ancorata al max
+  numero episodio su TUTTI gli episodi in DB, inclusi quelli listati ma non ancora usciti (AnimeUnion
+  annuncia gli episodi in arrivo con airDate futura). Attivando l'auto-download mentre l'ep1 era gia'
+  annunciato, la soglia diventava 1 e l'ep1 restava escluso per sempre. Ora la soglia si ancora solo
+  agli episodi GIA' USCITI (airDate <= adesso). La migration 0017 ripara i follow gia' mal-ancorati.
+  Recupero immediato: "Scarica tutti gli episodi mancanti" non applica la soglia.
+- **Backoff dei download annullato in single-flight:** dopo un errore transiente il job veniva
+  ri-selezionato all'istante (retry a raffica), ignorando il backoff. Nuova colonna `retry_at`
+  (migration 0016): `pickNext` salta i job in backoff finche' non scade.
+- **Ri-download impossibile dopo cancel/failed:** `enqueue` restituiva la riga esistente per qualsiasi
+  stato, anche terminale; ri-scaricare un episodio annullato non accodava nulla. Ora la riga terminale
+  viene riattivata.
+- **Timer spurio dell'auto-download:** il timeout 120s del ciclo non veniva azzerato, generando un
+  warning ~2 min dopo ogni ciclo riuscito.
+- **Impostazioni: doppio `id` "avanzate"** (HTML invalido); la sezione "Backup configurazione" e' stata
+  spostata nel tab Backup, accanto al backup del DB.
+- **Diagnostica:** spinner infinito su errore -> ora messaggio + "Riprova".
+
+### Added
+- **Scanner duplicati** nel gestore file: il bottone "Duplicati" elenca gli episodi presenti piu' volte
+  con nomi diversi e li sposta nel cestino con un click, tenendo il file collegato/canonico. Chiude lo
+  storico dei ~45 GB di doppioni sul NAS.
+- **Spostamento file su touch:** nuovo folder picker (bottom sheet) per spostare file/cartelle anche su
+  mobile, dove il drag-and-drop non e' disponibile (il drag su desktop resta).
+- **Error states uniformi** (messaggio + "Riprova") nelle pagine Download, Libreria, Catalogo, Home e
+  Diagnostica.
+- **Download e Diagnostica nel menu mobile** ("Altro"): prima erano irraggiungibili da telefono.
+
+### Security
+- **Cifratura a riposo di tutti i segreti** (AES-256-GCM): oltre alla password AnimeUnion, ora anche i
+  token di accesso e i segreti Telegram/Jellyfin sono cifrati nel DB (e quindi nei backup).
+  `AUTH_ENCRYPT_KEY` e' obbligatoria in production (fail-closed).
+- **CORS same-origin di default:** l'API non riflette piu' qualunque origin (`CORS_ORIGINS=*` per
+  riabilitare il vecchio comportamento; una lista per restringere).
+- **`TRUST_PROXY`:** il rate-limit REST per-IP vede l'IP reale del chiamante dietro un reverse proxy.
+- **`browseDir` confinato** ai mount previsti (`/media`, `/data`) e alle cartelle di download
+  configurate: non e' piu' una primitiva per enumerare l'intero filesystem.
+- **Validazione dei backup prima del ripristino** (`PRAGMA integrity_check`): un backup corrotto viene
+  messo in quarantena invece di mandare in crash-loop l'avvio.
+
+### Changed
+- Roadmap "Quality + GPU Upscaling Bridge" rinumerata a **v0.15.0** (bloccata su dipendenze esterne:
+  endpoint XQ/XQ+ dall'admin + servizio GPU Windows).
+
 ## [0.13.8] - 2026-07-04
 
 Anti-duplicati: il self-heal riconosce le librerie pre-esistenti con naming diverso.

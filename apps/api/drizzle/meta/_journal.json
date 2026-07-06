@@ -120,6 +120,13 @@
       "when": 1783000000000,
       "tag": "0016_retry_at",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1783100000000,
+      "tag": "0017_fix_autodownload_anchor",
+      "breakpoints": true
     }
   ]
 }

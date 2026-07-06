@@ -13,10 +13,15 @@ function insertEpisode(
   id: string,
   animeId: string,
   number: number,
+  airDate?: string,
 ) {
   const ts = new Date().toISOString();
-  db.insert(schema.episode).values({ id, animeId, number, createdAt: ts, updatedAt: ts }).run();
+  db.insert(schema.episode)
+    .values({ id, animeId, number, airDate: airDate ?? null, createdAt: ts, updatedAt: ts })
+    .run();
 }
+
+const daysFromNow = (n: number) => new Date(Date.now() + n * 86_400_000).toISOString();
 
 function followRow(db: ReturnType<typeof createTestDb>, animeId: string) {
   return db.select().from(schema.follow).where(eq(schema.follow.animeId, animeId)).get();
@@ -71,6 +76,30 @@ describe('FollowService', () => {
     service.setAutoDownload({ animeId, autoDownload: true });
 
     expect(followRow(db, animeId)?.autoDownloadFromEp).toBe(3);
+  });
+
+  it('la soglia NON conta un episodio ancora in arrivo (airDate futura) — bug Grand Blue S3', async () => {
+    const { db, service, animeId } = await setup();
+    // ep1 gia' listato ma in uscita fra giorni: non deve alzare la soglia, altrimenti alla sua
+    // uscita resterebbe escluso per sempre (1 <= 1).
+    insertEpisode(db, 'e-1', animeId, 1, daysFromNow(7));
+
+    service.add({ animeId, status: 'watching' });
+
+    // Soglia 0: quando l'ep1 esce verra' scaricato (1 > 0).
+    expect(followRow(db, animeId)?.autoDownloadFromEp).toBe(0);
+  });
+
+  it('la soglia conta gli episodi gia usciti e ignora quelli in arrivo', async () => {
+    const { db, service, animeId } = await setup();
+    insertEpisode(db, 'e-1', animeId, 1, daysFromNow(-7)); // uscito
+    insertEpisode(db, 'e-2', animeId, 2, daysFromNow(-1)); // uscito
+    insertEpisode(db, 'e-3', animeId, 3, daysFromNow(7)); // in arrivo
+
+    service.add({ animeId, status: 'watching' });
+
+    // Ancorata al 2 (ultimo uscito): l'ep3 verra' scaricato (3 > 2), l'ep1/2 restano backlog.
+    expect(followRow(db, animeId)?.autoDownloadFromEp).toBe(2);
   });
 
   it('add su anime gia seguito aggiorna lo status (idempotente)', async () => {

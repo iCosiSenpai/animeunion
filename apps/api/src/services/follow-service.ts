@@ -7,7 +7,7 @@ import {
   type FollowWithAnime,
   followStatusSchema,
 } from '@animeunion/shared';
-import { eq, max } from 'drizzle-orm';
+import { and, eq, isNull, lte, max, or } from 'drizzle-orm';
 import type { Db } from '../db';
 import { schema } from '../db';
 import { NotFoundError } from '../lib/errors';
@@ -75,13 +75,24 @@ export function createFollowService(deps: FollowServiceDeps): FollowService {
     );
   }
 
-  // Massimo numero episodio noto a catalogo per l'anime: e' la "soglia forward-only" da cui far
-  // partire l'auto-download (cosi' il backlog gia' uscito non viene ri-scaricato in massa).
-  function maxEpisode(animeId: string): number {
+  // Massimo numero episodio GIA' USCITO per l'anime: e' la "soglia forward-only" da cui far partire
+  // l'auto-download. Solo gli episodi con airDate passata (o assente) contano: cosi' il backlog gia'
+  // uscito non viene ri-scaricato in massa, ma un episodio ancora IN ARRIVO (airDate futura, listato
+  // in anticipo da AnimeUnion) NON alza la soglia e verra' quindi scaricato quando esce. Senza questo
+  // filtro, attivare l'auto-download mentre l'ep1 e' gia' annunciato fissava la soglia a 1 e l'ep1
+  // restava escluso per sempre. airDate nullo = trattato come uscito (conservativo contro i
+  // ri-download di massa). airDate e now sono stringhe ISO: il confronto lessicografico e' corretto.
+  function maxReleasedEpisode(animeId: string): number {
+    const nowIso = new Date().toISOString();
     const row = db
       .select({ value: max(schema.episode.number) })
       .from(schema.episode)
-      .where(eq(schema.episode.animeId, animeId))
+      .where(
+        and(
+          eq(schema.episode.animeId, animeId),
+          or(isNull(schema.episode.airDate), lte(schema.episode.airDate, nowIso)),
+        ),
+      )
       .get();
     return row?.value ?? 0;
   }
@@ -131,7 +142,7 @@ export function createFollowService(deps: FollowServiceDeps): FollowService {
         autoDownload,
         // Forward-only: cattura il backlog gia' uscito al momento del follow, cosi' l'auto-download
         // accodera' solo gli episodi futuri (anche se piu' tardi si passa a "In corso").
-        autoDownloadFromEp: maxEpisode(input.animeId),
+        autoDownloadFromEp: maxReleasedEpisode(input.animeId),
         addedAt: timestamp,
         updatedAt: timestamp,
         lastCheckAt: null,
@@ -163,7 +174,7 @@ export function createFollowService(deps: FollowServiceDeps): FollowService {
       // auto-scarichi l'intero backlog gia' uscito.
       const fromEp =
         input.status === 'watching' && existing.autoDownloadFromEp == null
-          ? maxEpisode(existing.animeId)
+          ? maxReleasedEpisode(existing.animeId)
           : existing.autoDownloadFromEp;
       db.update(schema.follow)
         .set({ status: input.status, autoDownloadFromEp: fromEp, updatedAt: timestamp })
@@ -187,7 +198,7 @@ export function createFollowService(deps: FollowServiceDeps): FollowService {
       // Accendendo l'auto-download la soglia forward-only si allinea al max episodio attuale: da qui
       // in poi solo i nuovi. Spegnendolo resta com'e' (irrilevante: non si auto-accoda).
       const fromEp = input.autoDownload
-        ? maxEpisode(existing.animeId)
+        ? maxReleasedEpisode(existing.animeId)
         : existing.autoDownloadFromEp;
       db.update(schema.follow)
         .set({ autoDownload, autoDownloadFromEp: fromEp, updatedAt: timestamp })

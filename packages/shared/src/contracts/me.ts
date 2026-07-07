@@ -43,7 +43,25 @@ export const historyEntrySchema = historyItemSchema.extend({
 });
 export type HistoryEntry = z.infer<typeof historyEntrySchema>;
 
-// A.4 — Profilo utente.
+// A.4 — Stato Premium (da `/me`). `active` e' l'unico campo autorevole per "premium adesso":
+// mai ricalcolarlo dall'expiresAt lato client (fusi/clock skew). Il tier non guida mai la policy.
+export const premiumTierSchema = z.enum(['FAN', 'MEGA_FAN', 'ULTRA_FAN']);
+export type PremiumTier = z.infer<typeof premiumTierSchema>;
+
+export const premiumStatusSchema = z.object({
+  tier: premiumTierSchema,
+  active: z.boolean(),
+  expiresAt: z.string(),
+});
+export type PremiumStatus = z.infer<typeof premiumStatusSchema>;
+
+// Flag delle funzioni sbloccate dal server. Tollerante: chiavi ignote passano, un flag assente
+// e' trattato come false a valle (fail-closed).
+export const userFeaturesSchema = z.object({ neuralExport: z.boolean() }).partial().passthrough();
+export type UserFeatures = z.infer<typeof userFeaturesSchema>;
+
+// A.4 — Profilo utente. `premium`/`features` sono difensivi: se lo shape del server cambia, il
+// campo degrada (null / {}) senza far fallire l'intero parse di `/me` (fail-closed sul gating).
 export const userProfileSchema = z.object({
   id: z.string(),
   username: z.string(),
@@ -51,8 +69,20 @@ export const userProfileSchema = z.object({
   avatarUrl: z.string().nullable(),
   role: z.string().nullable(),
   createdAt: z.string(),
+  premium: premiumStatusSchema.nullable().default(null).catch(null),
+  features: userFeaturesSchema.default({}).catch({}),
 });
 export type UserProfile = z.infer<typeof userProfileSchema>;
+
+/** Vero solo se l'abbonamento e' attivo adesso (campo autorevole del server). */
+export function isPremiumActive(profile: UserProfile | null | undefined): profile is UserProfile {
+  return profile?.premium?.active === true;
+}
+
+/** Vero solo se il server ha sbloccato il download neurale XQ/XQ+ per questo utente. */
+export function hasNeuralExport(profile: UserProfile | null | undefined): boolean {
+  return profile?.features?.neuralExport === true;
+}
 
 // B.1 — Ultimi episodi usciti.
 export const latestEpisodeSchema = z.object({

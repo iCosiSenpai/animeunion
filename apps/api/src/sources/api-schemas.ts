@@ -2,8 +2,10 @@ import {
   animeStatusSchema,
   animeTypeSchema,
   languageSchema,
+  premiumStatusSchema,
   seasonSchema,
   serverWatchStatusSchema,
+  userFeaturesSchema,
 } from '@animeunion/shared';
 import { z } from 'zod';
 
@@ -248,6 +250,8 @@ export const apiMeSchema = z.object({
   avatarUrl: nullableString,
   role: nullableString,
   createdAt: z.string(),
+  premium: premiumStatusSchema.nullable().default(null).catch(null),
+  features: userFeaturesSchema.default({}).catch({}),
 });
 
 export const apiLatestEpisodeSchema = z.object({

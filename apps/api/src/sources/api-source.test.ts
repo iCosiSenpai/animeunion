@@ -1,3 +1,4 @@
+import { hasNeuralExport, isPremiumActive } from '@animeunion/shared';
 import { MockAgent, setGlobalDispatcher } from 'undici';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createApiSource } from './api-source';
@@ -305,6 +306,104 @@ describe('ApiSource', () => {
     expect(domenica?.anime[0]?.slug).toBe('domenica-anime');
     expect(domenica?.anime[0]?.airTime).toBeNull();
     expect(week[0]?.day).toBe('LUNEDI');
+  });
+
+  it('getMe legge premium attivo + neuralExport (utente premium)', async () => {
+    pool()
+      .intercept({ path: '/me', method: 'GET' })
+      .reply(
+        200,
+        {
+          id: 'u1',
+          username: 'cosi',
+          email: 'a@b.it',
+          avatarUrl: null,
+          role: 'USER',
+          createdAt: '2026-01-01T00:00:00.000Z',
+          premium: { tier: 'MEGA_FAN', active: true, expiresAt: '2026-08-06T00:00:00.000Z' },
+          features: { neuralExport: true },
+        },
+        JSON_HEADERS,
+      );
+
+    const me = await createSource().getMe?.();
+    expect(me?.premium).toEqual({
+      tier: 'MEGA_FAN',
+      active: true,
+      expiresAt: '2026-08-06T00:00:00.000Z',
+    });
+    expect(isPremiumActive(me)).toBe(true);
+    expect(hasNeuralExport(me)).toBe(true);
+  });
+
+  it('getMe tratta premium null come non abbonato', async () => {
+    pool().intercept({ path: '/me', method: 'GET' }).reply(
+      200,
+      {
+        id: 'u2',
+        username: 'free',
+        email: 'c@d.it',
+        avatarUrl: null,
+        role: 'USER',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        premium: null,
+      },
+      JSON_HEADERS,
+    );
+
+    const me = await createSource().getMe?.();
+    expect(me?.premium).toBeNull();
+    expect(isPremiumActive(me)).toBe(false);
+    expect(hasNeuralExport(me)).toBe(false);
+  });
+
+  it('getMe: premium scaduto (active:false) non da diritti pur mantenendo il tier', async () => {
+    pool()
+      .intercept({ path: '/me', method: 'GET' })
+      .reply(
+        200,
+        {
+          id: 'u3',
+          username: 'lapsed',
+          email: 'e@f.it',
+          avatarUrl: null,
+          role: 'USER',
+          createdAt: '2026-01-01T00:00:00.000Z',
+          premium: { tier: 'FAN', active: false, expiresAt: '2026-06-01T00:00:00.000Z' },
+          features: { neuralExport: false },
+        },
+        JSON_HEADERS,
+      );
+
+    const me = await createSource().getMe?.();
+    expect(me?.premium?.tier).toBe('FAN');
+    expect(isPremiumActive(me)).toBe(false);
+    expect(hasNeuralExport(me)).toBe(false);
+  });
+
+  it('getMe tollera chiavi ignote in features e flag assente (=> false)', async () => {
+    pool()
+      .intercept({ path: '/me', method: 'GET' })
+      .reply(
+        200,
+        {
+          id: 'u4',
+          username: 'future',
+          email: 'g@h.it',
+          avatarUrl: null,
+          role: 'USER',
+          createdAt: '2026-01-01T00:00:00.000Z',
+          premium: { tier: 'ULTRA_FAN', active: true, expiresAt: '2026-09-01T00:00:00.000Z' },
+          features: { someFutureFlag: true },
+        },
+        JSON_HEADERS,
+      );
+
+    const me = await createSource().getMe?.();
+    // La chiave ignota passa (passthrough) ma non attiva l'entitlement neurale.
+    expect((me?.features as Record<string, unknown>).someFutureFlag).toBe(true);
+    expect(hasNeuralExport(me)).toBe(false);
+    expect(isPremiumActive(me)).toBe(true);
   });
 
   it('propaga errore su risposta non ok', async () => {

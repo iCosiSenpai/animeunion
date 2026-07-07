@@ -5,6 +5,7 @@ import { BackupSection } from '@/components/settings/backup-section';
 import { FolderInput } from '@/components/settings/folder-picker';
 import { HomeLayoutSection } from '@/components/settings/home-layout-section';
 import { InstallButton } from '@/components/settings/install-button';
+import { PremiumStatusPanel } from '@/components/settings/premium-status';
 import { PREMIUM_URL, PremiumUpsell } from '@/components/settings/premium-upsell';
 import { PushToggle } from '@/components/settings/push-toggle';
 import { RequestsSection } from '@/components/settings/requests-section';
@@ -32,7 +33,7 @@ import {
 import { Separator } from '@/components/ui/separator';
 import { trpc } from '@/lib/trpc';
 import { cn } from '@/lib/utils';
-import { type AppConfig, SECRET_MASK } from '@animeunion/shared';
+import { type AppConfig, SECRET_MASK, isPremiumActive } from '@animeunion/shared';
 import {
   Bell,
   CalendarClock,
@@ -197,6 +198,7 @@ export function SettingsView() {
   const syncMutation = trpc.catalog.sync.useMutation();
   const testTelegramMutation = trpc.notifications.testTelegram.useMutation();
   const testJellyfinMutation = trpc.jellyfin.testConnection.useMutation();
+  const profileQuery = trpc.profile.me.useQuery(undefined, { retry: false });
   const { theme, setTheme } = useTheme();
 
   // Sezione iniziale da deep-link (`/settings?section=notifiche`, usato dalla palette).
@@ -909,7 +911,11 @@ export function SettingsView() {
           </div>
 
           <div className={cn(active !== 'premium' && 'hidden')}>
-            <PremiumUpsell />
+            {isPremiumActive(profileQuery.data) ? (
+              <PremiumStatusPanel profile={profileQuery.data} />
+            ) : (
+              <PremiumUpsell />
+            )}
           </div>
 
           <Section id="integrazioni" hidden={active !== 'integrazioni'} title="Jellyfin / Plex">

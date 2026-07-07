@@ -46,19 +46,38 @@ Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
 - [x] **Step 7.5** — Fix auto-download: soglia forward-only ancorata agli episodi già usciti (migr. 0017)
 - [x] **Step 8** — Release v0.14.0
 
-## Batch successivo pianificato: v0.15.0 — "Quality + GPU Upscaling Bridge"
+## Roadmap verso v0.15.0 — "Quality + Neural Export (Anime4K)" (ATTIVO)
 
-> Piano separato in `plan/quality-gpu-bridge.md` (da creare quando si inizia il batch).
-> **Dipendenze esterne:** endpoint XQ/XQ+ dall'admin AnimeUnion + Windows GPU service sul PC.
+> Piano vivo: **[plan/quality-gpu-bridge.md](plan/quality-gpu-bridge.md)** (fonte canonica).
+> **Cadenza concordata: un solo step per sessione** (nuova sessione per ogni step, per non bruciare
+> token). All'inizio di ogni sessione: leggi CLAUDE.md → apri il piano → riprendi dal primo `[ ]`.
 
-Step pianificati: GPU service Windows (Python FastAPI + real-esrgan-ncnn-vulkan) → DB upscale →
-backend bridge NAS↔GPU (ibrido locale/cloud) → quality nel download engine (XQ/XQ+) → UI quality
-+ upscale per-serie → premium gate → release v0.15.0.
+Architettura **rivista** dopo i due contratti dell'admin (`INTEGRATION_PREMIUM.md`,
+`INTEGRATION_NEURAL_EXPORT.md`): NON più real-esrgan/Python, ma **Premium LIVE** su `/me`
+(`premium`+`features.neuralExport`) e upscale con **ffmpeg + libplacebo + shader Anime4K (MIT)**,
+identico al player del sito. Il NAS non ha GPU: il render gira su un **worker nativo Windows** (RTX
+5070 Ti) via bridge LAN. App nativa Windows/macOS = **roadmap separata**, fuori scope. Dettagli e
+razionale (incl. worker nativo vs container, nota CUDA/NVENC) nel piano.
 
-## Stato attuale (2026-07-06)
+- [x] **Step 1** — Wiring Premium + gate UI (estende `apiMeSchema`/`userProfileSchema` con
+  `premium`+`features`; gate reale al posto dell'upsell statico). Fatto 2026-07-07.
+- [ ] **Step 2** — Schema "quality" (migr. **0018**): `episode_file` UNIQUE `(episode_id, language, quality)`
+- [ ] **Step 3+** — Engine Neural Export (Anime4K) — decision-gated (verifica endpoint `/neural-export/profile` + `/static/anime4k/` col token reale)
+- [ ] **Step finale** — Release v0.15.0
+
+## Stato attuale (2026-07-07)
 
 **Versione corrente: v0.14.1 — affidabilità + hardening + anti-duplicati + fix auto-download.**
-- 382 test verdi, lint/typecheck verdi, build web ok
+**Batch v0.15.0 in corso: Step 1 (wiring Premium + gate UI) COMPLETO 2026-07-07.**
+- 386 test verdi, lint/typecheck verdi, build web ok
+- v0.15.0 Step 1: `userProfileSchema`/`apiMeSchema` ora leggono `premium`
+  (`{tier,active,expiresAt}` nullable) e `features` (passthrough tollerante, flag assente = false);
+  campi difensivi (`.default().catch()` → fail-closed sul gating se lo shape del server cambia).
+  Helper entitlement in shared: `isPremiumActive` (type-guard, usa solo `active`) e `hasNeuralExport`
+  (usa solo `features`, mai i tier). Gate UI reale: nuova `PremiumStatusPanel` (stato attivo +
+  entitlement) sostituisce l'upsell statico quando `premium.active`; `PremiumUpsell` resta fallback.
+  Nessuna migrazione DB (il profilo è solo cache 5 min in `profile-service`). Prossimo: Step 2
+  (schema "quality", migr. 0018). Piano: [plan/quality-gpu-bridge.md](plan/quality-gpu-bridge.md).
 - v0.14.1: rifinitura del fix auto-download dopo diagnostica sul NAS — gli episodi in arrivo su
   AnimeUnion hanno `airDate` **nulla** (non futura), quindi `maxReleasedEpisode` ora conta come
   backlog solo gli episodi **già scaricati/external O con airDate passata**; un episodio listato in
@@ -109,9 +128,13 @@ backend bridge NAS↔GPU (ibrido locale/cloud) → quality nel download engine (
   HTTPS. Vedi memoria `autodownload-eligibility-and-push-https`.
 - Diagnosi download lento: contesa I/O sull'HDD pool2 condiviso con Jellyfin, NON un bug (vedi
   memoria `download-slow-jellyfin-io-contention`); mitigato col refresh Jellyfin per-libreria.
-- Premium: `GET /me` ancora `role: USER`, nessun endpoint premium lato API (`/me/subscription` 404).
-- **Batch attivo:** nessuno. Prossimo: `v0.15.0 "Quality + GPU Upscaling Bridge"` (bloccato su
-  dipendenze esterne: endpoint XQ/XQ+ dall'admin + servizio GPU Windows)
+- Premium: **ora LIVE** — `GET /integration/me` ritorna `premium` (`{tier,active,expiresAt}` o null) +
+  `features.neuralExport` (vedi `INTEGRATION_PREMIUM.md`/`INTEGRATION_NEURAL_EXPORT.md`). Il nostro
+  `apiMeSchema` oggi però SCARTA quei campi (da estendere nello Step 1). Account utente già premium
+  (grant da Matteo) → ramo premium testabile subito.
+- **Batch attivo:** `v0.15.0 "Quality + Neural Export (Anime4K)"` — piano
+  [plan/quality-gpu-bridge.md](plan/quality-gpu-bridge.md). Step 1 completo; prossimo lavoro:
+  **Step 2** (schema "quality", migr. 0018). Cadenza: un solo step per sessione.
 
 Funzioni principali operative: download automatico (1 episodio alla volta), FTS5 search, cestino
 recuperabile, backup automatico DB, verifica integrità video, Jellyfin integration, nfo sidecar,

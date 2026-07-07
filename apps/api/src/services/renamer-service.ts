@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import type { Language } from '@animeunion/shared';
+import type { Language, Quality } from '@animeunion/shared';
 import { and, eq, lt, sql } from 'drizzle-orm';
 import type { Db } from '../db';
 import { schema } from '../db';
@@ -13,6 +13,9 @@ export interface RenamerService {
     animeId: string;
     episodeNumber: number;
     language: Language;
+    // Default 'SD': il percorso della sorgente resta invariato. Le upscalate (XQ/XQPLUS) prendono
+    // un tag qualita' nel nome file, cosi' non sovrascrivono la sorgente SD.
+    quality?: Quality;
   }): string;
   /**
    * Calcola il percorso che AVREBBE l'episodio con i parametri di override passati, senza
@@ -22,6 +25,7 @@ export interface RenamerService {
     animeId: string;
     episodeNumber: number;
     language: Language;
+    quality?: Quality;
     override?: OverrideParams;
   }): string;
 }
@@ -34,6 +38,12 @@ export interface RenamerServiceDeps {
 
 function languageTag(language: Language): string {
   return language === 'DUB_ITA' ? 'DUB ITA' : 'SUB ITA';
+}
+
+// Suffisso qualita' nel nome file: vuoto per la sorgente SD (percorso invariato), tag tra parentesi
+// per le upscalate cosi' convivono con la sorgente nella stessa cartella senza sovrascriverla.
+function qualityTag(quality: Quality): string {
+  return quality === 'SD' ? '' : ` [${quality}]`;
 }
 
 export function createRenamerService(deps: RenamerServiceDeps): RenamerService {
@@ -153,6 +163,7 @@ export function createRenamerService(deps: RenamerServiceDeps): RenamerService {
     episodeNumber: number,
     language: Language,
     series: SeriesInfo,
+    quality: Quality,
   ): string {
     const isMovie = series.kind === 'movie';
     const root = config.resolveDownloadRoot(isMovie, language);
@@ -162,11 +173,12 @@ export function createRenamerService(deps: RenamerServiceDeps): RenamerService {
     const otherLang: Language = language === 'DUB_ITA' ? 'SUB_ITA' : 'DUB_ITA';
     const sameRoot = config.resolveDownloadRoot(isMovie, otherLang) === root;
     const tag = sameRoot ? ` - ${languageTag(language)}` : '';
+    const qTag = qualityTag(quality);
 
     if (isMovie) {
       // Film: cartella propria con il titolo dell'entry (layout Jellyfin per i film).
       const title = sanitizeTitleForFs(titleOf(animeId));
-      return join(root, title, `${title}${tag}.mp4`);
+      return join(root, title, `${title}${tag}${qTag}.mp4`);
     }
 
     // Serie: cartella del franchise (titolo della stagione "root") + Season NN.
@@ -181,18 +193,18 @@ export function createRenamerService(deps: RenamerServiceDeps): RenamerService {
     // Stagione 0 = speciali: cartella "Specials" (convenzione Jellyfin), nome file S00EXX.
     const seasonDir = seasonNumber === 0 ? 'Specials' : `Season ${pad2(seasonNumber)}`;
     const dir = join(root, title, seasonDir);
-    const file = `${title} - S${pad2(seasonNumber)}E${pad2(displayNumber)}${tag}.mp4`;
+    const file = `${title} - S${pad2(seasonNumber)}E${pad2(displayNumber)}${tag}${qTag}.mp4`;
     return join(dir, file);
   }
 
   return {
-    computeEpisodePath({ animeId, episodeNumber, language }) {
-      return pathFor(animeId, episodeNumber, language, resolver.resolve(animeId));
+    computeEpisodePath({ animeId, episodeNumber, language, quality = 'SD' }) {
+      return pathFor(animeId, episodeNumber, language, resolver.resolve(animeId), quality);
     },
 
-    previewPath({ animeId, episodeNumber, language, override }) {
+    previewPath({ animeId, episodeNumber, language, quality = 'SD', override }) {
       const series = override ? resolver.resolveWith(animeId, override) : resolver.resolve(animeId);
-      return pathFor(animeId, episodeNumber, language, series);
+      return pathFor(animeId, episodeNumber, language, series, quality);
     },
   };
 }

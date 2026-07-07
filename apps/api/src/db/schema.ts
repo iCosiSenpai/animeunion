@@ -122,6 +122,10 @@ export const episodeFile = sqliteTable(
       .notNull()
       .references(() => episode.id, { onDelete: 'cascade' }),
     language: text('language').notNull(),
+    // Qualita' dell'output: 'SD' = sorgente 720p (default), 'XQ'/'XQPLUS' = upscalate (Step 3).
+    // Fa parte dell'unique cosi' la sorgente SD e le upscalate coesistono per lo stesso (episodio,
+    // lingua) senza sovrascriversi.
+    quality: text('quality').notNull().default('SD'),
     downloadUrl: text('download_url'),
     urlExpiresAt: text('url_expires_at'),
     downloadStatus: text('download_status').notNull().default('not_downloaded'),
@@ -132,7 +136,7 @@ export const episodeFile = sqliteTable(
     updatedAt: text('updated_at').notNull(),
   },
   (table) => [
-    unique().on(table.episodeId, table.language),
+    unique().on(table.episodeId, table.language, table.quality),
     index('idx_episode_file_episode').on(table.episodeId),
     index('idx_episode_file_status').on(table.downloadStatus),
   ],

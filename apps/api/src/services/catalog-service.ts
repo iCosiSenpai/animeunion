@@ -403,7 +403,11 @@ export function createCatalogService(options: CatalogServiceOptions): CatalogSer
             updatedAt: timestamp,
           })
           .onConflictDoUpdate({
-            target: [schema.episodeFile.episodeId, schema.episodeFile.language],
+            target: [
+              schema.episodeFile.episodeId,
+              schema.episodeFile.language,
+              schema.episodeFile.quality,
+            ],
             set: {
               downloadUrl: entry.downloadUrl ?? null,
               urlExpiresAt: entry.expiresAt ?? null,

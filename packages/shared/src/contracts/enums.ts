@@ -3,6 +3,12 @@ import { z } from 'zod';
 export const languageSchema = z.enum(['SUB_ITA', 'DUB_ITA']);
 export type Language = z.infer<typeof languageSchema>;
 
+// Qualita' dell'output del file episodio. `SD` = sorgente 720p scaricata dalla source (default);
+// `XQ`/`XQPLUS` = versioni upscalate (Anime4K/libplacebo, engine Step 3). Distingue nell'unique di
+// `episode_file` la sorgente dalle upscalate per lo stesso (episodio, lingua): non si sovrascrivono.
+export const qualitySchema = z.enum(['SD', 'XQ', 'XQPLUS']);
+export type Quality = z.infer<typeof qualitySchema>;
+
 export const animeTypeSchema = z.enum([
   'TV',
   'TV_SHORT',

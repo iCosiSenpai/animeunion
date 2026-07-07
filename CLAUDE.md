@@ -72,17 +72,26 @@ razionale (incl. worker nativo vs container, nota CUDA/NVENC) nel piano.
 
 - [x] **Step 1** — Wiring Premium + gate UI (estende `apiMeSchema`/`userProfileSchema` con
   `premium`+`features`; gate reale al posto dell'upsell statico). Fatto 2026-07-07.
-- [ ] **Step 2** — Schema "quality" (migr. **0018**): `episode_file` UNIQUE `(episode_id, language, quality)`
+- [x] **Step 2** — Schema "quality" (migr. **0018**): `episode_file` UNIQUE `(episode_id, language, quality)`.
+  Fatto 2026-07-07 (enum `Quality`, renamer con tag qualità, DTO/config rimandati a Step 3 per Regola #1).
 - [ ] **Step 3+** — Engine Neural Export (Anime4K) — decision-gated (verifica endpoint `/neural-export/profile` + `/static/anime4k/` col token reale)
 - [ ] **Step finale** — Release v0.15.0
 
 ## Stato attuale (2026-07-07)
 
 **Versione corrente: v0.14.1 — affidabilità + hardening + anti-duplicati + fix auto-download.**
-**v0.15.0 Step 1 (wiring Premium + gate UI) COMPLETO. v0.15.0 IN PAUSA per il mini-batch
-"Rifiniture post-Step-1" (emerso dal collaudo): Step A+B fatti, restano C (download simultanei
-Premium) e D (backup Google Drive).**
-- 386 test verdi, lint/typecheck verdi, build web ok
+**v0.15.0 Step 1 (wiring Premium + gate UI) e Step 2 (schema "quality", migr. 0018) COMPLETI.
+Prossimo: Step 3+ (engine Neural Export, decision-gated). Mini-batch "Rifiniture post-Step-1":
+Step A+B fatti, restano C (download simultanei Premium) e D (backup Google Drive).**
+- 391 test verdi, lint/typecheck verdi, build web ok
+- v0.15.0 Step 2 (2026-07-07): **schema "quality"** — `episode_file` ora UNIQUE
+  `(episode_id, language, quality)` (migr. **0018**: `ADD COLUMN quality NOT NULL DEFAULT 'SD'` +
+  swap dell'indice unico, nessun rebuild). Enum `Quality` (`SD`/`XQ`/`XQPLUS`) in `shared/enums.ts`;
+  `catalog-service` `onConflict` target esteso a includere `quality`; renamer con param
+  `quality?` (default SD → path invariato) e tag ` [XQ]`/` [XQPLUS]` per le upscalate, così non
+  sovrascrivono la sorgente SD. Sorgente SD e future upscalate coesistono per lo stesso
+  (episodio, lingua). DTO `episodeSummary`/`download` e chiavi config quality **rimandati a Step 3**
+  (Regola #1: nessun consumer oggi). Solo schema+naming: nessun engine (Step 3, decision-gated).
 - Mini-batch Step A (2026-07-07): **modalità collaudo "nuovo utente"** — l'auto-login parte perché
   `.env` ha le credenziali (`auth.status`→`getToken`); per testare da utente pulito usa
   `npm run reset:newuser && npm run dev:newuser` (env `.env.newuser` senza creds + DB isolato in

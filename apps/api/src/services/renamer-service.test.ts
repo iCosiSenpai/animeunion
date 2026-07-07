@@ -54,6 +54,47 @@ describe('RenamerService', () => {
     ).toBe(join('/data/anime', 'Naruto', 'Season 01', 'Naruto - S01E05 - SUB ITA.mp4'));
   });
 
+  it('qualita XQ/XQPLUS: tag nel nome, path distinto dalla sorgente SD (che resta invariato)', () => {
+    insertAnime(db, { id: 'a-1', slug: 'naruto', title: 'Naruto' });
+    const renamer = makeRenamer(db, { seriesPathSub: '/data/anime' });
+
+    const sd = renamer.computeEpisodePath({
+      animeId: 'a-1',
+      episodeNumber: 5,
+      language: 'SUB_ITA',
+    });
+    const sdExplicit = renamer.computeEpisodePath({
+      animeId: 'a-1',
+      episodeNumber: 5,
+      language: 'SUB_ITA',
+      quality: 'SD',
+    });
+    const xq = renamer.computeEpisodePath({
+      animeId: 'a-1',
+      episodeNumber: 5,
+      language: 'SUB_ITA',
+      quality: 'XQ',
+    });
+    const xqplus = renamer.computeEpisodePath({
+      animeId: 'a-1',
+      episodeNumber: 5,
+      language: 'SUB_ITA',
+      quality: 'XQPLUS',
+    });
+
+    // SD (default e esplicito) = percorso storico invariato.
+    expect(sd).toBe(join('/data/anime', 'Naruto', 'Season 01', 'Naruto - S01E05 - SUB ITA.mp4'));
+    expect(sdExplicit).toBe(sd);
+    // Le upscalate prendono un tag qualita' → non sovrascrivono la sorgente ne' fra loro.
+    expect(xq).toBe(
+      join('/data/anime', 'Naruto', 'Season 01', 'Naruto - S01E05 - SUB ITA [XQ].mp4'),
+    );
+    expect(xqplus).toBe(
+      join('/data/anime', 'Naruto', 'Season 01', 'Naruto - S01E05 - SUB ITA [XQPLUS].mp4'),
+    );
+    expect(new Set([sd, xq, xqplus]).size).toBe(3);
+  });
+
   it('cartelle separate SUB/DUB → nomi puliti, root corretta', () => {
     insertAnime(db, { id: 'a-1', slug: 'naruto', title: 'Naruto' });
     const renamer = makeRenamer(db, {

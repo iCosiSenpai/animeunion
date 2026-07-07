@@ -46,7 +46,18 @@ Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
 - [x] **Step 7.5** — Fix auto-download: soglia forward-only ancorata agli episodi già usciti (migr. 0017)
 - [x] **Step 8** — Release v0.14.0
 
-## Roadmap verso v0.15.0 — "Quality + Neural Export (Anime4K)" (ATTIVO)
+## Mini-batch "Rifiniture post-Step-1" — perk Premium + onboarding + backup cloud (ATTIVO)
+
+> Piano vivo: **[plan/rifiniture-premium-onboarding.md](plan/rifiniture-premium-onboarding.md)**.
+> Emerso dal collaudo dopo lo Step 1 di v0.15.0. **v0.15.0 va IN PAUSA** finché non chiuso.
+> Cadenza: un solo step per sessione. Provider cloud scelto: **Google Drive**.
+
+- [x] **Step A** — Modalità test "nuovo utente" (dev workflow: `.env.newuser` + `dev:newuser`/`reset:newuser`) — 2026-07-07
+- [x] **Step B** — Statistiche: catalogo vs libreria (frontend) — 2026-07-07
+- [ ] **Step C** — Download simultanei come perk Premium (gate su `premium.active`, sblocca `maxConcurrent`)
+- [ ] **Step D** — Backup su Google Drive (`drive.file`, bring-your-own OAuth client) — decision-gated
+
+## Roadmap verso v0.15.0 — "Quality + Neural Export (Anime4K)" (IN PAUSA — vedi mini-batch sopra)
 
 > Piano vivo: **[plan/quality-gpu-bridge.md](plan/quality-gpu-bridge.md)** (fonte canonica).
 > **Cadenza concordata: un solo step per sessione** (nuova sessione per ogni step, per non bruciare
@@ -68,8 +79,18 @@ razionale (incl. worker nativo vs container, nota CUDA/NVENC) nel piano.
 ## Stato attuale (2026-07-07)
 
 **Versione corrente: v0.14.1 — affidabilità + hardening + anti-duplicati + fix auto-download.**
-**Batch v0.15.0 in corso: Step 1 (wiring Premium + gate UI) COMPLETO 2026-07-07.**
+**v0.15.0 Step 1 (wiring Premium + gate UI) COMPLETO. v0.15.0 IN PAUSA per il mini-batch
+"Rifiniture post-Step-1" (emerso dal collaudo): Step A+B fatti, restano C (download simultanei
+Premium) e D (backup Google Drive).**
 - 386 test verdi, lint/typecheck verdi, build web ok
+- Mini-batch Step A (2026-07-07): **modalità collaudo "nuovo utente"** — l'auto-login parte perché
+  `.env` ha le credenziali (`auth.status`→`getToken`); per testare da utente pulito usa
+  `npm run reset:newuser && npm run dev:newuser` (env `.env.newuser` senza creds + DB isolato in
+  `apps/api/data/newuser/`). Le credenziali dev restano per il lavoro sul codice; il test gira come
+  nuovo utente.
+- Mini-batch Step B (2026-07-07): **Statistiche riorganizzate** in "Catalogo AnimeUnion" (globale,
+  mirrorato per la ricerca → non-zero per tutti) vs "La tua libreria" (personale, zero su app nuova);
+  rimossa la barra "Avanzamento" fuorviante (scaricati/intero catalogo ~0%). Solo `stats-view.tsx`.
 - v0.15.0 Step 1: `userProfileSchema`/`apiMeSchema` ora leggono `premium`
   (`{tier,active,expiresAt}` nullable) e `features` (passthrough tollerante, flag assente = false);
   campi difensivi (`.default().catch()` → fail-closed sul gating se lo shape del server cambia).

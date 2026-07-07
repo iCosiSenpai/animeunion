@@ -48,34 +48,39 @@ function StatCard({
   );
 }
 
-function ProgressRow({ label, value, total }: { label: string; value: number; total: number }) {
-  const pct = total > 0 ? Math.round((value / total) * 100) : 0;
-  return (
-    <div className="space-y-1.5">
-      <div className="flex items-center justify-between text-sm">
-        <span>{label}</span>
-        <span className="tabular-nums text-muted-foreground">
-          {value.toLocaleString('it-IT')} / {total.toLocaleString('it-IT')} ({pct}%)
-        </span>
-      </div>
-      <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-        <div
-          className="h-full rounded-full bg-primary transition-all"
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-    </div>
-  );
-}
-
 function num(n: number): string {
   return n.toLocaleString('it-IT');
 }
 
+function StatsSection({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="space-y-3">
+      <div>
+        <h2 className="text-lg font-semibold">{title}</h2>
+        <p className="text-sm text-muted-foreground">{description}</p>
+      </div>
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">{children}</div>
+    </section>
+  );
+}
+
 function Loaded({ data }: { data: DashboardStats }) {
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
+    <div className="space-y-8">
+      {/* Numeri globali del sito, mirrorati in locale per la ricerca: NON sono la libreria
+          dell'utente, quindi sono non-zero anche su un'installazione appena creata. */}
+      <StatsSection
+        title="Catalogo AnimeUnion"
+        description="L'intero catalogo del sito, sincronizzato in locale per la ricerca. È uguale per tutti: non è la tua libreria."
+      >
         <StatCard
           icon={<Clapperboard className="h-5 w-5" />}
           label="Anime a catalogo"
@@ -86,15 +91,22 @@ function Loaded({ data }: { data: DashboardStats }) {
           label="Episodi totali"
           value={num(data.totalEpisodes)}
         />
-        <StatCard
-          icon={<CheckCircle2 className="h-5 w-5" />}
-          label="Episodi scaricati"
-          value={num(data.downloadedEpisodes)}
-        />
+      </StatsSection>
+
+      {/* Solo dati dell'utente: su un'app nuova partono tutti da zero. */}
+      <StatsSection
+        title="La tua libreria"
+        description="Solo ciò che hai nell'app: anime seguiti, episodi scaricati e spazio occupato."
+      >
         <StatCard
           icon={<Heart className="h-5 w-5" />}
           label="Anime seguiti"
           value={num(data.followedAnime)}
+        />
+        <StatCard
+          icon={<CheckCircle2 className="h-5 w-5" />}
+          label="Episodi scaricati"
+          value={num(data.downloadedEpisodes)}
         />
         <StatCard
           icon={<HardDrive className="h-5 w-5" />}
@@ -106,16 +118,7 @@ function Loaded({ data }: { data: DashboardStats }) {
           label="In coda"
           value={num(data.downloadQueueSize)}
         />
-      </div>
-
-      <Card className="space-y-4 p-5">
-        <h2 className="text-lg font-semibold">Avanzamento</h2>
-        <ProgressRow
-          label="Episodi scaricati"
-          value={data.downloadedEpisodes}
-          total={data.totalEpisodes}
-        />
-      </Card>
+      </StatsSection>
     </div>
   );
 }

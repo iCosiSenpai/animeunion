@@ -10,6 +10,7 @@
   },
   "scripts": {
     "dev": "tsx watch --env-file-if-exists=../../.env src/index.ts",
+    "dev:newuser": "tsx watch --env-file-if-exists=../../.env.newuser src/index.ts",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",

@@ -7,7 +7,7 @@ import {
   type FollowWithAnime,
   followStatusSchema,
 } from '@animeunion/shared';
-import { and, eq, isNull, lte, max, or } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, lte, max, or } from 'drizzle-orm';
 import type { Db } from '../db';
 import { schema } from '../db';
 import { NotFoundError } from '../lib/errors';
@@ -75,22 +75,26 @@ export function createFollowService(deps: FollowServiceDeps): FollowService {
     );
   }
 
-  // Massimo numero episodio GIA' USCITO per l'anime: e' la "soglia forward-only" da cui far partire
-  // l'auto-download. Solo gli episodi con airDate passata (o assente) contano: cosi' il backlog gia'
-  // uscito non viene ri-scaricato in massa, ma un episodio ancora IN ARRIVO (airDate futura, listato
-  // in anticipo da AnimeUnion) NON alza la soglia e verra' quindi scaricato quando esce. Senza questo
-  // filtro, attivare l'auto-download mentre l'ep1 e' gia' annunciato fissava la soglia a 1 e l'ep1
-  // restava escluso per sempre. airDate nullo = trattato come uscito (conservativo contro i
-  // ri-download di massa). airDate e now sono stringhe ISO: il confronto lessicografico e' corretto.
+  // Massimo numero episodio del "backlog gia' disponibile" per l'anime: e' la soglia forward-only da
+  // cui far partire l'auto-download. Un episodio conta come backlog SOLO se e' gia' scaricato/external
+  // OPPURE ha una airDate passata. Un episodio listato in anticipo (airDate NULLA e non ancora
+  // scaricato — come AnimeUnion pubblica i prossimi episodi) NON alza la soglia e viene quindi
+  // scaricato quando esce. Senza questo, attivare l'auto-download mentre l'ep1 e' gia' annunciato
+  // fissava la soglia a 1 e l'ep1 restava escluso per sempre (caso Grand Blue S3, airDate nulla).
+  // airDate e now sono stringhe ISO: il confronto lessicografico e' corretto.
   function maxReleasedEpisode(animeId: string): number {
     const nowIso = new Date().toISOString();
     const row = db
       .select({ value: max(schema.episode.number) })
       .from(schema.episode)
+      .leftJoin(schema.episodeFile, eq(schema.episodeFile.episodeId, schema.episode.id))
       .where(
         and(
           eq(schema.episode.animeId, animeId),
-          or(isNull(schema.episode.airDate), lte(schema.episode.airDate, nowIso)),
+          or(
+            inArray(schema.episodeFile.downloadStatus, ['downloaded', 'external']),
+            and(isNotNull(schema.episode.airDate), lte(schema.episode.airDate, nowIso)),
+          ),
         ),
       )
       .get();

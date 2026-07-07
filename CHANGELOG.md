@@ -14,6 +14,19 @@ e il progetto aderisce al [Semantic Versioning](https://semver.org/lang/it/).
 - Gating reale del Premium (collegamento all'account del sito, da definire con l'admin).
 - Update ottimistici e routing del cestino anche per `library.deleteSeries` (rimandati).
 
+## [0.14.1] - 2026-07-07
+
+Rifinitura del fix auto-download dopo diagnostica sul dato reale.
+
+### Fixed
+- **Auto-download: episodi listati in anticipo con `airDate` NULLA.** Il fix della v0.14.0 escludeva
+  dalla soglia forward-only solo gli episodi con `airDate` *futura*, ma AnimeUnion pubblica i prossimi
+  episodi con `airDate` **nulla** (verificato sul DB: Grand Blue S3 ep1 aveva `air_date = NULL`).
+  Quelli, trattati come "gia' usciti", alzavano ancora la soglia e restavano esclusi. Ora un episodio
+  conta come backlog **solo se gia' scaricato/external OPPURE con `airDate` passata**: un episodio
+  listato in anticipo (airDate nulla, non scaricato) non alza piu' la soglia e viene scaricato quando
+  esce. La protezione dal ri-download di massa resta per gli episodi posseduti o gia' datati.
+
 ## [0.14.0] - 2026-07-06
 
 Affidabilita + hardening + anti-duplicati: fix del download engine e dell'auto-download, cifratura

@@ -57,13 +57,18 @@ backend bridge NAS↔GPU (ibrido locale/cloud) → quality nel download engine (
 
 ## Stato attuale (2026-07-06)
 
-**Versione corrente: v0.14.0 — affidabilità + hardening + anti-duplicati + fix auto-download.**
-- 380 test verdi, lint/typecheck verdi, build web ok
+**Versione corrente: v0.14.1 — affidabilità + hardening + anti-duplicati + fix auto-download.**
+- 382 test verdi, lint/typecheck verdi, build web ok
+- v0.14.1: rifinitura del fix auto-download dopo diagnostica sul NAS — gli episodi in arrivo su
+  AnimeUnion hanno `airDate` **nulla** (non futura), quindi `maxReleasedEpisode` ora conta come
+  backlog solo gli episodi **già scaricati/external O con airDate passata**; un episodio listato in
+  anticipo (airDate nulla, non scaricato) non alza più la soglia. AUTH_ENCRYPT_KEY va impostata sul
+  NAS (fatto in deploy v0.14.0, altrimenti fail-closed).
 - v0.14.0: fix **auto-download che saltava gli episodi appena usciti** — la soglia forward-only era
-  ancorata al max episodio su TUTTI gli episodi (inclusi quelli in arrivo con airDate futura), quindi
-  attivandolo mentre l'ep1 era annunciato la soglia diventava 1 e l'ep1 restava escluso per sempre.
-  Ora `maxReleasedEpisode` ancora solo agli episodi usciti (airDate<=now); migr. 0017 ripara i follow
-  già rotti. Recupero manuale: "Scarica mancanti" non applica la soglia. Inoltre: backoff download
+  ancorata al max episodio su TUTTI gli episodi (inclusi quelli in arrivo), quindi attivandolo mentre
+  l'ep1 era annunciato la soglia diventava 1 e l'ep1 restava escluso per sempre. Ora
+  `maxReleasedEpisode` + migr. 0017 riparano i follow già rotti. Recupero manuale: "Scarica mancanti"
+  non applica la soglia. Inoltre: backoff download
   reale (`retry_at`, migr. 0016), re-download dopo stato terminale, cifratura a riposo di
   token/segreti (`AUTH_ENCRYPT_KEY` obbligatoria in prod), CORS same-origin, `trustProxy`, `browseDir`
   confinato, validazione backup pre-ripristino, **scanner duplicati** nel gestore file, move file su

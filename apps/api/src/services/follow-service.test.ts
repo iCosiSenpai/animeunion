@@ -56,10 +56,10 @@ describe('FollowService', () => {
     expect(list[0]?.anime.id).toBe(animeId);
   });
 
-  it('add imposta la soglia forward-only al max episodio noto', async () => {
+  it('add imposta la soglia forward-only al max episodio gia uscito', async () => {
     const { db, service, animeId } = await setup();
-    insertEpisode(db, 'e-1', animeId, 1);
-    insertEpisode(db, 'e-2', animeId, 5);
+    insertEpisode(db, 'e-1', animeId, 1, daysFromNow(-30));
+    insertEpisode(db, 'e-2', animeId, 5, daysFromNow(-1));
 
     service.add({ animeId, status: 'watching' });
 
@@ -67,21 +67,51 @@ describe('FollowService', () => {
     expect(followRow(db, animeId)?.autoDownloadFromEp).toBe(5);
   });
 
-  it('setAutoDownload(true) allinea la soglia al max episodio attuale', async () => {
+  it('setAutoDownload(true) allinea la soglia al max episodio uscito', async () => {
     const { db, service, animeId } = await setup();
     service.add({ animeId, status: 'plan_to_watch' }); // nessun episodio ancora -> soglia 0
     expect(followRow(db, animeId)?.autoDownloadFromEp).toBe(0);
-    insertEpisode(db, 'e-1', animeId, 3);
+    insertEpisode(db, 'e-1', animeId, 3, daysFromNow(-1));
 
     service.setAutoDownload({ animeId, autoDownload: true });
 
     expect(followRow(db, animeId)?.autoDownloadFromEp).toBe(3);
   });
 
-  it('la soglia NON conta un episodio ancora in arrivo (airDate futura) — bug Grand Blue S3', async () => {
+  it('la soglia NON conta un episodio listato in anticipo con airDate NULLA (caso Grand Blue S3)', async () => {
     const { db, service, animeId } = await setup();
-    // ep1 gia' listato ma in uscita fra giorni: non deve alzare la soglia, altrimenti alla sua
-    // uscita resterebbe escluso per sempre (1 <= 1).
+    // AnimeUnion lista i prossimi episodi con airDate nulla (non futura): non devono alzare la soglia,
+    // altrimenti alla loro uscita resterebbero esclusi per sempre (1 <= 1).
+    insertEpisode(db, 'e-1', animeId, 1); // airDate nulla, non scaricato
+
+    service.add({ animeId, status: 'watching' });
+
+    expect(followRow(db, animeId)?.autoDownloadFromEp).toBe(0);
+  });
+
+  it('un episodio gia scaricato conta come backlog anche con airDate nulla', async () => {
+    const { db, service, animeId } = await setup();
+    insertEpisode(db, 'e-1', animeId, 1); // airDate nulla
+    const ts = new Date().toISOString();
+    db.insert(schema.episodeFile)
+      .values({
+        id: 'ef-1',
+        episodeId: 'e-1',
+        language: 'SUB_ITA',
+        downloadStatus: 'downloaded',
+        createdAt: ts,
+        updatedAt: ts,
+      })
+      .run();
+
+    service.add({ animeId, status: 'watching' });
+
+    // Gia' posseduto -> conta come backlog: soglia 1 (gli episodi oltre l'1 verranno auto-scaricati).
+    expect(followRow(db, animeId)?.autoDownloadFromEp).toBe(1);
+  });
+
+  it('la soglia NON conta un episodio ancora in arrivo (airDate futura)', async () => {
+    const { db, service, animeId } = await setup();
     insertEpisode(db, 'e-1', animeId, 1, daysFromNow(7));
 
     service.add({ animeId, status: 'watching' });
@@ -142,11 +172,11 @@ describe('FollowService', () => {
         updatedAt: ts,
       })
       .run();
-    insertEpisode(db, 'e-1', animeId, 7);
+    insertEpisode(db, 'e-1', animeId, 7, daysFromNow(-1)); // gia' uscito -> backlog
 
     service.updateStatus({ animeId, status: 'watching' });
 
-    // Ancorata al max (7): l'auto-download partira' dagli episodi > 7, non dall'intero backlog.
+    // Ancorata al max uscito (7): l'auto-download partira' dagli episodi > 7, non dall'intero backlog.
     expect(followRow(db, animeId)?.autoDownloadFromEp).toBe(7);
   });
 

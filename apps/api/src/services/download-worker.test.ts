@@ -52,9 +52,17 @@ function makeWorker(
   db: ReturnType<typeof import('../test/helpers').createTestDb>,
   catalog: CatalogService,
   config: ReturnType<typeof createConfigService>,
+  resolveMaxConcurrent?: () => number | Promise<number>,
 ) {
   const renamer = createRenamerService({ db, config });
-  return createDownloadWorker({ db, catalog, config, logger: testLogger, renamer });
+  return createDownloadWorker({
+    db,
+    catalog,
+    config,
+    logger: testLogger,
+    renamer,
+    resolveMaxConcurrent,
+  });
 }
 
 /** Inserisce un anime e un episode_file SUB_ITA per ogni id richiesto (un episodio per file). */
@@ -986,7 +994,7 @@ describe('DownloadWorker (FSM)', () => {
     }
   });
 
-  it('forza 1 download alla volta anche con maxConcurrent=3 (Premium futuro)', async () => {
+  it('forza 1 download alla volta se non premium (resolveMaxConcurrent di default)', async () => {
     // Server che accetta la richiesta ma non completa mai la risposta: il primo job
     // resta 'downloading' cosi' possiamo osservare che gli altri due restano 'queued'.
     const sockets: Socket[] = [];
@@ -1038,6 +1046,64 @@ describe('DownloadWorker (FSM)', () => {
       const rows = db.select().from(schema.downloadQueue).all();
       expect(rows.filter((r) => r.status === 'downloading')).toHaveLength(1);
       expect(rows.filter((r) => r.status === 'queued')).toHaveLength(2);
+    } finally {
+      worker.stop();
+      for (const s of sockets) {
+        s.destroy();
+      }
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+
+  it('onora maxConcurrent=3 se premium (resolveMaxConcurrent -> 3)', async () => {
+    const sockets: Socket[] = [];
+    const server = createServer((_req, res) => {
+      res.writeHead(200, { 'content-type': 'video/mp4', 'content-length': '1000000' });
+      res.write(Buffer.alloc(64)); // passa lo sniff, poi resta appeso
+    });
+    server.on('connection', (s) => sockets.push(s));
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const { port } = server.address() as AddressInfo;
+    const url = `http://127.0.0.1:${port}/ep.mp4`;
+
+    const config = createConfigService({ db });
+    config.set('seriesPathSub', animePath);
+    config.set('maxConcurrent', 3);
+
+    const urls = new Map([
+      ['ef-1', url],
+      ['ef-2', url],
+      ['ef-3', url],
+    ]);
+    // Premium: il resolver onora la config (3).
+    const worker = makeWorker(db, buildStubCatalog(urls), config, () => 3);
+    seedEpisodeFiles(db, ['ef-1', 'ef-2', 'ef-3']);
+
+    try {
+      worker.start();
+      worker.enqueue('ef-1');
+      worker.enqueue('ef-2');
+      worker.enqueue('ef-3');
+      await worker.tryStartNext();
+
+      const downloadingCount = () =>
+        db
+          .select()
+          .from(schema.downloadQueue)
+          .all()
+          .filter((r) => r.status === 'downloading').length;
+
+      const deadline = Date.now() + 4000;
+      while (downloadingCount() < 3) {
+        if (Date.now() > deadline) {
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+
+      const rows = db.select().from(schema.downloadQueue).all();
+      expect(rows.filter((r) => r.status === 'downloading')).toHaveLength(3);
+      expect(rows.filter((r) => r.status === 'queued')).toHaveLength(0);
     } finally {
       worker.stop();
       for (const s of sockets) {

@@ -1,5 +1,6 @@
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isPremiumActive } from '@animeunion/shared';
 import { eq } from 'drizzle-orm';
 import { type Env, env } from './config/env';
 import { createDb, runMigrations, schema } from './db';
@@ -104,7 +105,19 @@ export function createAppContext(options: { env?: Env; databasePath?: string } =
     return row?.titleIta ?? row?.title ?? 'Anime';
   }
 
-  const worker = createDownloadWorker({ db, catalog, config, logger, renamer });
+  const worker = createDownloadWorker({
+    db,
+    catalog,
+    config,
+    logger,
+    renamer,
+    // Download simultanei = perk Premium: onora config.maxConcurrent solo se l'abbonamento e' attivo
+    // (profilo in cache 5 min), altrimenti 1. Ri-valutato ad ogni decisione di scheduling.
+    resolveMaxConcurrent: async () => {
+      const userProfile = await profile.getMe();
+      return isPremiumActive(userProfile) ? config.get('maxConcurrent') : 1;
+    },
+  });
   const download = createDownloadService({
     db,
     worker,

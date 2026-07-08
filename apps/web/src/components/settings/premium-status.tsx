@@ -1,7 +1,7 @@
 'use client';
 
 import { type PremiumTier, type UserProfile, hasNeuralExport } from '@animeunion/shared';
-import { CalendarClock, Check, Crown, Minus, Sparkles } from 'lucide-react';
+import { CalendarClock, Check, Crown, Layers, Minus, Sparkles } from 'lucide-react';
 
 const TIER_LABEL: Record<PremiumTier, string> = {
   FAN: 'Fan',
@@ -69,8 +69,20 @@ export function PremiumStatusPanel({ profile }: { profile: UserProfile }) {
               </p>
               <p className="text-xs text-muted-foreground">
                 {neural
-                  ? 'Incluso nel tuo piano. Il download upscalato arriverà nell’app in un prossimo aggiornamento.'
+                  ? 'Incluso nel tuo piano. Configura il download XQ/XQ+ qui sotto.'
                   : 'Non incluso nel tuo piano attuale.'}
+              </p>
+            </div>
+          </li>
+          <li className="flex items-start gap-3">
+            <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+            <div className="min-w-0">
+              <p className="flex items-center gap-1.5 text-sm font-medium">
+                <Layers className="h-4 w-4 text-primary" aria-hidden="true" />
+                Download simultanei
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Fino a 3 episodi in parallelo. Impostalo in Impostazioni › Download.
               </p>
             </div>
           </li>

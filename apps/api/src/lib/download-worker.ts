@@ -19,11 +19,13 @@ import type { Logger } from './logger';
 import { verifyVideoFile } from './video-verify';
 
 /**
- * Download eseguiti in parallelo. Bloccato a 1 di proposito: il download simultaneo e' una
- * funzione futura (Premium). La config `maxConcurrent` resta per compatibilita' ma il worker
- * impone comunque un job alla volta.
+ * Limite di default dei download in parallelo quando non e' iniettato `resolveMaxConcurrent`
+ * (fallback conservativo). Il download simultaneo (fino a `config.maxConcurrent`) e' un perk Premium:
+ * `context.ts` inietta un resolver che onora la config solo se l'utente e' premium, altrimenti 1.
  */
 const MAX_CONCURRENT_DOWNLOADS = 1;
+/** Tetto assoluto dei download simultanei (coerente con lo schema config: maxConcurrent 1-3). */
+const CONCURRENCY_CAP = 3;
 
 export type WorkerEvent = 'enqueue' | 'start' | 'progress' | 'complete' | 'failed' | 'cancelled';
 
@@ -83,10 +85,17 @@ export interface DownloadWorkerDeps {
   config: ConfigService;
   logger: Logger;
   renamer: RenamerService;
+  /**
+   * Limite corrente di download simultanei, ri-valutato ad ogni decisione di scheduling. Assente =
+   * fallback a 1 (compat). `context.ts` lo cabla su `isPremiumActive` + `config.maxConcurrent`.
+   */
+  resolveMaxConcurrent?: () => number | Promise<number>;
 }
 
 export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
   const { db, catalog, config, logger, renamer } = deps;
+  const resolveMaxConcurrent =
+    deps.resolveMaxConcurrent ?? ((): number => MAX_CONCURRENT_DOWNLOADS);
   const emitter = new EventEmitter();
   const inFlight = new Map<string, InFlight>();
   // Campionamento per stima velocità (in memoria, non persistito).
@@ -448,7 +457,15 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
     if (stopped || paused) {
       return;
     }
-    while (activeCount() < MAX_CONCURRENT_DOWNLOADS) {
+    // Limite dinamico (perk Premium): ri-valutato ad ogni ingresso. Clampato a [1, CONCURRENCY_CAP].
+    let limit = MAX_CONCURRENT_DOWNLOADS;
+    try {
+      limit = Math.max(1, Math.min(CONCURRENCY_CAP, Math.trunc(await resolveMaxConcurrent())));
+    } catch (error) {
+      logger.debug({ err: error }, 'resolveMaxConcurrent fallito: fallback a 1');
+      limit = 1;
+    }
+    while (activeCount() < limit) {
       const next = pickNext();
       if (!next) {
         return;
@@ -584,10 +601,7 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
       })();
       timer = setInterval(safetyTick, SAFETY_TICK_MS);
       timer.unref?.();
-      logger.info(
-        { everyMs: SAFETY_TICK_MS, maxConcurrent: MAX_CONCURRENT_DOWNLOADS },
-        'Download worker avviato',
-      );
+      logger.info({ everyMs: SAFETY_TICK_MS }, 'Download worker avviato');
     },
 
     stop(): void {

@@ -517,20 +517,40 @@ export function SettingsView() {
             ))}
             <Field
               label="Download simultanei"
-              hint="Download simultaneo non disponibile per ora — in arrivo con il Premium."
+              hint={
+                isPremiumActive(profileQuery.data)
+                  ? 'Quanti episodi scaricare in parallelo (perk Premium). Occhio all’I/O del disco condiviso con Jellyfin.'
+                  : 'Sbloccato con il Premium: fino a 3 download in parallelo. Senza, 1 alla volta.'
+              }
             >
-              <div className="inline-flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
-                <Lock className="h-4 w-4" aria-hidden="true" />
-                <span>1 alla volta</span>
-                <a
-                  href={PREMIUM_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="ml-1 rounded-full border border-primary/40 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-primary transition-colors hover:bg-primary/10"
+              {isPremiumActive(profileQuery.data) ? (
+                <Select
+                  value={String(draft.maxConcurrent)}
+                  onValueChange={(v) => update('maxConcurrent', Number(v))}
                 >
-                  Premium
-                </a>
-              </div>
+                  <SelectTrigger className="w-40">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1">1 alla volta</SelectItem>
+                    <SelectItem value="2">2 in parallelo</SelectItem>
+                    <SelectItem value="3">3 in parallelo</SelectItem>
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div className="inline-flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+                  <Lock className="h-4 w-4" aria-hidden="true" />
+                  <span>1 alla volta</span>
+                  <a
+                    href={PREMIUM_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="ml-1 rounded-full border border-primary/40 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-primary transition-colors hover:bg-primary/10"
+                  >
+                    Premium
+                  </a>
+                </div>
+              )}
             </Field>
             <Field
               label="Verifica integrità download"

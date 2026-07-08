@@ -7,9 +7,14 @@ non ha bisogno del token AnimeUnion (gli shader Anime4K sono pubblici, MIT).
 ## Requisiti
 
 - **GPU con Vulkan** (qui: RTX 5070 Ti, driver NVIDIA nativo Windows).
-- **ffmpeg con `--enable-libplacebo` + Vulkan.** `ffmpeg-static` NON basta (build generica). Su
-  Windows usare la build **"full"** di gyan.dev (https://www.gyan.dev/ffmpeg/builds/ →
-  `ffmpeg-git-full`), che include `--enable-libplacebo` e `--enable-vulkan`.
+- **ffmpeg con `--enable-libplacebo` + Vulkan.** `ffmpeg-static` NON basta (build generica). Opzioni
+  su Windows (verificate su RTX 5070 Ti, 2026-07-08):
+  - **BtbN release branch** via winget: `winget install BtbN.FFmpeg.GPL.8.1` — **funziona** con la
+    ricetta (`hwupload,libplacebo,hwdownload`), upscale 1080p reale ok.
+  - build **"full"** di gyan.dev (`ffmpeg-git-full`), che include `--enable-libplacebo`+`--enable-vulkan`.
+  - ⚠️ **Evitare la BtbN _master_** (`BtbN.FFmpeg.GPL`): compila libplacebo ma il filtro fallisce
+    l'init del graph ("Error initializing filters") — usare un branch di release.
+
   Verifica:
 
   ```powershell

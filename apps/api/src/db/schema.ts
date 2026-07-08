@@ -277,6 +277,36 @@ export const auth = sqliteTable('auth', {
   updatedAt: text('updated_at').notNull(),
 });
 
+// Coda dei job di export neurale (upscale XQ/XQ+ eseguito dal worker GPU). Separata da
+// download_queue: qui la sorgente SD e' gia' scaricata, il "download" e' il render remoto. Alla
+// riuscita si crea una NUOVA riga episode_file (quality XQ/XQPLUS), mai un update della sorgente SD.
+export const neuralExportJob = sqliteTable(
+  'neural_export_job',
+  {
+    id: text('id').primaryKey(),
+    // Riga episode_file della sorgente SD da upscalare.
+    episodeFileId: text('episode_file_id')
+      .notNull()
+      .references(() => episodeFile.id, { onDelete: 'cascade' }),
+    // Qualita' di destinazione: 'XQ' o 'XQPLUS'.
+    quality: text('quality').notNull(),
+    // queued | running | done | error | cancelled
+    state: text('state').notNull().default('queued'),
+    // Id del job lato worker (per polling/cancel).
+    workerJobId: text('worker_job_id'),
+    progress: real('progress').default(0),
+    error: text('error'),
+    // Percorso finale dell'output archiviato (dopo il render + rename).
+    outputPath: text('output_path'),
+    createdAt: text('created_at').notNull(),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (table) => [
+    index('idx_neural_export_episode_file').on(table.episodeFileId),
+    index('idx_neural_export_state').on(table.state),
+  ],
+);
+
 export const schema = {
   anime,
   genre,
@@ -292,4 +322,5 @@ export const schema = {
   stats,
   auth,
   pushSubscription,
+  neuralExportJob,
 };

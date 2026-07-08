@@ -14,6 +14,7 @@ import { jellyfinRouter } from './jellyfin';
 import { libraryRouter } from './library';
 import { lockRouter } from './lock';
 import { meRouter } from './me';
+import { neuralExportRouter } from './neural-export';
 import { notificationsRouter } from './notifications';
 import { profileRouter } from './profile';
 import { pushRouter } from './push';
@@ -31,6 +32,7 @@ export const appRouter = router({
   home: homeRouter,
   library: libraryRouter,
   me: meRouter,
+  neuralExport: neuralExportRouter,
   profile: profileRouter,
   config: configRouter,
   download: downloadRouter,

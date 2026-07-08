@@ -36,6 +36,7 @@ import {
   FolderTree,
   Loader2,
   Search,
+  Sparkles,
   Star,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -381,6 +382,16 @@ function EpisodeList({ anime }: { anime: AnimeDetailType }) {
     },
     onError: () => toast.error('Impossibile accodare i download'),
   });
+  // Neural Export (XQ/XQ+): mostrato solo se entitlement + worker pronti (gate cooperativo).
+  const neuralStatus = trpc.neuralExport.status.useQuery(undefined, { retry: false });
+  const neuralAvailable = neuralStatus.data?.available ?? false;
+  const neuralExportMutation = trpc.neuralExport.export.useMutation({
+    onSuccess: () => {
+      toast.success('Export neurale avviato — vedi la coda in Impostazioni › Premium');
+      void utils.neuralExport.jobs.invalidate();
+    },
+    onError: (e) => toast.error(e.message || 'Impossibile avviare l’export'),
+  });
   const { ensureConfirmed, dialog: seasonDialog } = useSeasonGate(anime.id);
   const [relOpen, setRelOpen] = useState(false);
   const [relLang, setRelLang] = useState<Language | undefined>(undefined);
@@ -515,6 +526,52 @@ function EpisodeList({ anime }: { anime: AnimeDetailType }) {
                     if (idx === 0) return [item];
                     return [<DropdownMenuSeparator key={`sep-${language}`} />, item];
                   })}
+                  {neuralAvailable &&
+                  episode.languages.some(
+                    (l) =>
+                      fileDlState(episode.fileIds[l], episode.fileStatus[l], queueMap) ===
+                      'downloaded',
+                  ) ? (
+                    <>
+                      <DropdownMenuSeparator />
+                      {episode.languages.flatMap((language) => {
+                        const isDownloaded =
+                          fileDlState(
+                            episode.fileIds[language],
+                            episode.fileStatus[language],
+                            queueMap,
+                          ) === 'downloaded';
+                        const id = episode.fileIds[language];
+                        if (!isDownloaded || !id) {
+                          return [];
+                        }
+                        const langSuffix =
+                          episode.languages.length > 1 ? ` (${LANGUAGE_LABELS[language]})` : '';
+                        return [
+                          <DropdownMenuItem
+                            key={`xq-${language}`}
+                            disabled={neuralExportMutation.isPending}
+                            onSelect={() =>
+                              neuralExportMutation.mutate({ episodeFileId: id, quality: 'XQ' })
+                            }
+                          >
+                            <Sparkles className="mr-2 h-4 w-4 text-primary" />
+                            Migliora a XQ · 1080p{langSuffix}
+                          </DropdownMenuItem>,
+                          <DropdownMenuItem
+                            key={`xqplus-${language}`}
+                            disabled={neuralExportMutation.isPending}
+                            onSelect={() =>
+                              neuralExportMutation.mutate({ episodeFileId: id, quality: 'XQPLUS' })
+                            }
+                          >
+                            <Sparkles className="mr-2 h-4 w-4 text-primary" />
+                            Migliora a XQ+ · 4K{langSuffix}
+                          </DropdownMenuItem>,
+                        ];
+                      })}
+                    </>
+                  ) : null}
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>

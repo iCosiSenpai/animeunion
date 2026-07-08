@@ -16,6 +16,7 @@ import { createHomeService } from '../services/home-service';
 import { createJellyfinService } from '../services/jellyfin-service';
 import { createLibraryService } from '../services/library-service';
 import { createLockService } from '../services/lock-service';
+import { createNeuralExportService } from '../services/neural-export-service';
 import { createNotificationService } from '../services/notification-service';
 import { createProfileService } from '../services/profile-service';
 import { createPushService } from '../services/push-service';
@@ -67,6 +68,14 @@ function makeCaller() {
     logger: testLogger,
   });
   const requests = createRequestService({ db, catalog, resolver, follow, download, config });
+  const neuralExport = createNeuralExportService({
+    db,
+    source,
+    config,
+    profile,
+    renamer,
+    logger: testLogger,
+  });
   const ctx: Context = {
     db,
     source,
@@ -89,6 +98,7 @@ function makeCaller() {
       requests,
       jellyfin,
       backup,
+      neuralExport,
     },
     logger: testLogger,
   };

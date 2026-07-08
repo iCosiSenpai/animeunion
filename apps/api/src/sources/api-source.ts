@@ -10,6 +10,7 @@ import type {
   GenreDetail,
   HistoryItem,
   LatestEpisode,
+  NeuralExportRecipe,
   NewsItem,
   PaginatedResult,
   RelatedAnime,
@@ -35,6 +36,7 @@ import {
   apiLatestEpisodesResponseSchema,
   apiLoginResponseSchema,
   apiMeSchema,
+  apiNeuralExportRecipeSchema,
   apiNewsResponseSchema,
   apiPaginatedAnimeSchema,
   apiSourceSchema,
@@ -324,6 +326,11 @@ export function createApiSource(options: ApiSourceOptions): AnimeSource {
     async getMe(): Promise<UserProfile> {
       const raw = await http.get<unknown>('/me');
       return apiMeSchema.parse(raw);
+    },
+
+    async getNeuralExportProfile(): Promise<NeuralExportRecipe> {
+      const raw = await http.get<unknown>('/neural-export/profile');
+      return apiNeuralExportRecipeSchema.parse(raw);
     },
 
     // --- Home del sito ---

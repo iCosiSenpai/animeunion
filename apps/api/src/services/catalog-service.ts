@@ -420,11 +420,14 @@ export function createCatalogService(options: CatalogServiceOptions): CatalogSer
   }
 
   function listEpisodesFromDb(animeId: string): EpisodeSummary[] {
+    // Solo le sorgenti SD: la lista episodi rappresenta gli episodi base (una riga per lingua). Le
+    // varianti upscalate (XQ/XQPLUS) sono proprieta' dell'episodio SD, non voci separate della lista
+    // (altrimenti dopo un export comparirebbero episodi "doppi"). Vedi schema quality (migr. 0018).
     const rows = db
       .select({ episode: schema.episode, file: schema.episodeFile })
       .from(schema.episode)
       .innerJoin(schema.episodeFile, eq(schema.episodeFile.episodeId, schema.episode.id))
-      .where(eq(schema.episode.animeId, animeId))
+      .where(and(eq(schema.episode.animeId, animeId), eq(schema.episodeFile.quality, 'SD')))
       .orderBy(asc(schema.episode.number), asc(schema.episodeFile.language))
       .all();
     return rows.map((row) => toEpisodeSummary(row.episode, row.file));

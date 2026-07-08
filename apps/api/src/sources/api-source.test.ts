@@ -406,6 +406,47 @@ describe('ApiSource', () => {
     expect(isPremiumActive(me)).toBe(true);
   });
 
+  it('getNeuralExportProfile legge la ricetta e tollera chiavi extra', async () => {
+    pool()
+      .intercept({ path: '/neural-export/profile', method: 'GET' })
+      .reply(
+        200,
+        {
+          version: 1,
+          requiredTiers: ['MEGA_FAN', 'ULTRA_FAN'],
+          license: 'MIT',
+          reference: 'ffmpeg ...',
+          futureField: 'ignored-but-kept',
+          shaders: [
+            {
+              file: 'Anime4K_Restore_CNN_M.glsl',
+              url: 'https://api.test/static/anime4k/Anime4K_Restore_CNN_M.glsl',
+              sha256: 'a'.repeat(64),
+              sizeBytes: 35916,
+            },
+          ],
+          profiles: [
+            {
+              id: 'xq',
+              chain: ['Anime4K_Restore_CNN_M.glsl'],
+              targetWidth: 1920,
+              targetHeight: 1080,
+              videoBitrate: '10M',
+              videoCodec: 'libx264',
+              audio: 'copy',
+              faststart: true,
+            },
+          ],
+        },
+        JSON_HEADERS,
+      );
+
+    const recipe = await createSource().getNeuralExportProfile?.();
+    expect(recipe?.version).toBe(1);
+    expect(recipe?.profiles[0]?.id).toBe('xq');
+    expect(recipe?.shaders[0]?.sha256).toHaveLength(64);
+  });
+
   it('propaga errore su risposta non ok', async () => {
     pool().intercept({ path: '/stats', method: 'GET' }).reply(500, { error: 'boom' }, JSON_HEADERS);
     await expect(createSource().getStats()).rejects.toThrow(/API fallita/);

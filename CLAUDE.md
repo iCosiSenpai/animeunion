@@ -74,16 +74,33 @@ razionale (incl. worker nativo vs container, nota CUDA/NVENC) nel piano.
   `premium`+`features`; gate reale al posto dell'upsell statico). Fatto 2026-07-07.
 - [x] **Step 2** — Schema "quality" (migr. **0018**): `episode_file` UNIQUE `(episode_id, language, quality)`.
   Fatto 2026-07-07 (enum `Quality`, renamer con tag qualità, DTO/config rimandati a Step 3 per Regola #1).
-- [ ] **Step 3+** — Engine Neural Export (Anime4K) — decision-gated (verifica endpoint `/neural-export/profile` + `/static/anime4k/` col token reale)
+- [x] **Step 3+** — Engine Neural Export (Anime4K) — FATTO 2026-07-08 (tutto lo step in una sessione,
+  deroga cadenza su richiesta utente): `packages/neural-core` (core riusabile) + `apps/worker`
+  (servizio GPU Windows) + NAS bridge (`neural-export-service`, migr. **0019** `neural_export_job`,
+  config worker) + UI (pannello Premium + azione "Migliora a XQ/XQ+"). 423 test verdi.
 - [ ] **Step finale** — Release v0.15.0
 
-## Stato attuale (2026-07-07)
+## Stato attuale (2026-07-08)
 
 **Versione corrente: v0.14.1 — affidabilità + hardening + anti-duplicati + fix auto-download.**
-**v0.15.0 Step 1 (wiring Premium + gate UI) e Step 2 (schema "quality", migr. 0018) COMPLETI.
-Prossimo: Step 3+ (engine Neural Export, decision-gated). Mini-batch "Rifiniture post-Step-1":
-Step A+B fatti, restano C (download simultanei Premium) e D (backup Google Drive).**
-- 391 test verdi, lint/typecheck verdi, build web ok
+**v0.15.0 Step 1 (wiring Premium), Step 2 (schema "quality", migr. 0018) e Step 3+ (engine Neural
+Export Anime4K) COMPLETI. Prossimo: Step finale (Release v0.15.0). Mini-batch "Rifiniture
+post-Step-1": Step A+B fatti, restano C (download simultanei Premium) e D (backup Google Drive).**
+- 423 test verdi, lint/typecheck verdi, build web ok
+- v0.15.0 Step 3+ (2026-07-08): **engine Neural Export** (upscale XQ 1080p / XQ+ 4K con
+  Anime4K/libplacebo). Tutto lo step in una sessione (deroga cadenza su richiesta utente). Nuovo
+  workspace `packages/neural-core` (core riusabile: provisionShaders+sha256, buildShaderChain,
+  buildFfmpegArgs pura, probeCapabilities, runUpscale) e `apps/worker` (servizio GPU nativo Windows,
+  Fastify + auth token: `/health` feature-detect, `POST /jobs` multipart, `/result` stream). NAS:
+  `neural-export-service` (recipe cache 6h + gate `hasNeuralExport` ri-verificato + bridge HTTP verso
+  il worker: dispatch/poll/finalize) crea una **nuova riga** `episode_file` (quality XQ/XQPLUS,
+  migr. **0019** `neural_export_job`) senza toccare la sorgente SD; config `neuralExportEnabled`/
+  `neuralWorkerUrl`/`neuralWorkerToken` (secret). UI: pannello in Impostazioni›Premium (stato worker
+  + coda + config + attribution MIT) e azione "Migliora a XQ/XQ+" nel dropdown episodio, gated su
+  `neuralExport.status.available`. Fix collaterale: la lista episodi filtra `quality='SD'` (le
+  upscalate non diventano voci separate). **Runtime worker (PC GPU)**: serve ffmpeg con
+  `--enable-libplacebo`+Vulkan (la build gyan "essentials" presente NON ce l'ha → `probeCapabilities`
+  degrada a `ok:false`, feature nascosta ma app intatta); vedi `apps/worker/README.md`.
 - v0.15.0 Step 2 (2026-07-07): **schema "quality"** — `episode_file` ora UNIQUE
   `(episode_id, language, quality)` (migr. **0018**: `ADD COLUMN quality NOT NULL DEFAULT 'SD'` +
   swap dell'indice unico, nessun rebuild). Enum `Quality` (`SD`/`XQ`/`XQPLUS`) in `shared/enums.ts`;
@@ -163,8 +180,8 @@ Step A+B fatti, restano C (download simultanei Premium) e D (backup Google Drive
   `apiMeSchema` oggi però SCARTA quei campi (da estendere nello Step 1). Account utente già premium
   (grant da Matteo) → ramo premium testabile subito.
 - **Batch attivo:** `v0.15.0 "Quality + Neural Export (Anime4K)"` — piano
-  [plan/quality-gpu-bridge.md](plan/quality-gpu-bridge.md). Step 1 completo; prossimo lavoro:
-  **Step 2** (schema "quality", migr. 0018). Cadenza: un solo step per sessione.
+  [plan/quality-gpu-bridge.md](plan/quality-gpu-bridge.md). Step 1-2-3 completi; prossimo lavoro:
+  **Step finale** (Release v0.15.0). Cadenza: un solo step per sessione (Step 3 in deroga).
 
 Funzioni principali operative: download automatico (1 episodio alla volta), FTS5 search, cestino
 recuperabile, backup automatico DB, verifica integrità video, Jellyfin integration, nfo sidecar,

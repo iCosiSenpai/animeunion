@@ -18,6 +18,7 @@ import { createHomeService } from './services/home-service';
 import { createJellyfinService } from './services/jellyfin-service';
 import { createLibraryService } from './services/library-service';
 import { createLockService } from './services/lock-service';
+import { createNeuralExportService } from './services/neural-export-service';
 import { createNfoService } from './services/nfo-service';
 import { createNotificationService } from './services/notification-service';
 import { createProfileService } from './services/profile-service';
@@ -182,6 +183,17 @@ export function createAppContext(options: { env?: Env; databasePath?: string } =
   const lock = createLockService({ db, env: resolvedEnv });
   const requestAuth = createRequestAuthService({ db });
   const requests = createRequestService({ db, catalog, resolver, follow, download, config });
+  const neuralExport = createNeuralExportService({
+    db,
+    source,
+    config,
+    profile,
+    renamer,
+    logger,
+  });
+  // Un riavvio interrompe i render in volo (lo stato worker e' in memoria): marca error i job
+  // rimasti appesi cosi' l'utente puo' ri-lanciarli.
+  neuralExport.recoverInterrupted();
 
   return {
     db,
@@ -205,6 +217,7 @@ export function createAppContext(options: { env?: Env; databasePath?: string } =
       requests,
       jellyfin,
       backup,
+      neuralExport,
     },
     logger,
   };

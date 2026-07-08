@@ -8,6 +8,7 @@ import type {
   GenreDetail,
   HistoryItem,
   LatestEpisode,
+  NeuralExportRecipe,
   NewsItem,
   SiteStats,
   UserProfile,
@@ -53,6 +54,9 @@ export interface AnimeSource {
   getWatchlist?(updatedSince?: string): Promise<WatchlistItem[]>;
   getHistory?(updatedSince?: string): Promise<HistoryItem[]>;
   getMe?(): Promise<UserProfile>;
+
+  // Neural Export: ricetta upscale (profili XQ/XQ+, catene shader). Auth Bearer.
+  getNeuralExportProfile?(): Promise<NeuralExportRecipe>;
 
   // Home del sito.
   getLatestEpisodes?(limit?: number): Promise<LatestEpisode[]>;

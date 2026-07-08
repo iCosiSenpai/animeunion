@@ -17,6 +17,7 @@ import type { HomeService } from './services/home-service';
 import type { JellyfinService } from './services/jellyfin-service';
 import type { LibraryService } from './services/library-service';
 import type { LockService } from './services/lock-service';
+import type { NeuralExportService } from './services/neural-export-service';
 import type { NotificationService } from './services/notification-service';
 import type { ProfileService } from './services/profile-service';
 import type { PushService } from './services/push-service';
@@ -46,6 +47,7 @@ export interface Context {
     requests: RequestService;
     jellyfin: JellyfinService;
     backup: DbBackupService;
+    neuralExport: NeuralExportService;
   };
   /** Token di sessione del blocco web UI, dall'header x-app-session (per richiesta). */
   sessionToken?: string;

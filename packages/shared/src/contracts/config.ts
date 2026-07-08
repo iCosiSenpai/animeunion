@@ -79,6 +79,12 @@ export const appConfigSchema = z.object({
   jellyfinAutoRefresh: z.boolean().default(false),
   // Personalizzazione della home: ordine e visibilità delle sezioni (vuoto = ordine di default).
   homeLayout: homeLayoutSchema,
+  // Neural Export (upscale XQ/XQ+ Anime4K via worker GPU esterno). Master off di default.
+  neuralExportEnabled: z.boolean().default(false),
+  // URL del worker GPU sulla LAN (es. http://192.168.1.50:8787). Vuoto = non configurato.
+  neuralWorkerUrl: z.string().default(''),
+  // Token condiviso col worker (segreto: cifrato a riposo, mascherato al frontend).
+  neuralWorkerToken: z.string().default(''),
 });
 export type AppConfig = z.infer<typeof appConfigSchema>;
 
@@ -90,7 +96,11 @@ export type ConfigKey = z.infer<typeof configKeySchema>;
 export const SECRET_MASK = '••••••••';
 
 // Chiavi di config che NON devono mai essere inviate in chiaro al frontend.
-export const SECRET_CONFIG_KEYS: ConfigKey[] = ['telegramBotToken', 'jellyfinApiKey'];
+export const SECRET_CONFIG_KEYS: ConfigKey[] = [
+  'telegramBotToken',
+  'jellyfinApiKey',
+  'neuralWorkerToken',
+];
 
 export const configSetInputSchema = z.object({
   key: configKeySchema,

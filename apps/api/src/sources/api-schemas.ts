@@ -2,12 +2,17 @@ import {
   animeStatusSchema,
   animeTypeSchema,
   languageSchema,
+  neuralExportRecipeSchema,
   premiumStatusSchema,
   seasonSchema,
   serverWatchStatusSchema,
   userFeaturesSchema,
 } from '@animeunion/shared';
 import { z } from 'zod';
+
+// La ricetta Neural Export dal server. Riusa lo schema tollerante di shared (single source of truth):
+// campi extra passano, un bump non-breaking non rompe il parse.
+export const apiNeuralExportRecipeSchema = neuralExportRecipeSchema;
 
 const nullableString = z
   .string()

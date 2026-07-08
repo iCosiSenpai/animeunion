@@ -5,6 +5,7 @@ export * from './episode';
 export * from './catalog';
 export * from './follow';
 export * from './me';
+export * from './neural-export';
 export * from './download';
 export * from './library';
 export * from './files';

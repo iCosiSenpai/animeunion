@@ -5,6 +5,7 @@ import { BackupSection } from '@/components/settings/backup-section';
 import { FolderInput } from '@/components/settings/folder-picker';
 import { HomeLayoutSection } from '@/components/settings/home-layout-section';
 import { InstallButton } from '@/components/settings/install-button';
+import { NeuralExportPanel } from '@/components/settings/neural-export-panel';
 import { PremiumStatusPanel } from '@/components/settings/premium-status';
 import { PREMIUM_URL, PremiumUpsell } from '@/components/settings/premium-upsell';
 import { PushToggle } from '@/components/settings/push-toggle';
@@ -912,7 +913,86 @@ export function SettingsView() {
 
           <div className={cn(active !== 'premium' && 'hidden')}>
             {isPremiumActive(profileQuery.data) ? (
-              <PremiumStatusPanel profile={profileQuery.data} />
+              <div className="space-y-6">
+                <PremiumStatusPanel profile={profileQuery.data} />
+                <div className="space-y-4 rounded-xl border p-5">
+                  <div>
+                    <h3 className="text-base font-semibold">Worker Neural Export</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Il PC con GPU che esegue l'upscale sulla LAN. Istruzioni in
+                      apps/worker/README.md.
+                    </p>
+                  </div>
+                  <Field
+                    label="Abilita download neurale"
+                    hint="Master del Neural Export. Off = XQ/XQ+ nascosti ovunque."
+                  >
+                    <Select
+                      value={draft.neuralExportEnabled ? 'on' : 'off'}
+                      onValueChange={(v) => update('neuralExportEnabled', v === 'on')}
+                    >
+                      <SelectTrigger className="w-40">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="on">Attivo</SelectItem>
+                        <SelectItem value="off">Disattivo</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  <Field
+                    label="URL del worker"
+                    hint="Indirizzo LAN del worker GPU. Es. http://192.168.1.50:8787"
+                  >
+                    <Input
+                      autoComplete="off"
+                      placeholder="http://…:8787"
+                      value={draft.neuralWorkerUrl}
+                      onChange={(e) => update('neuralWorkerUrl', e.target.value)}
+                    />
+                  </Field>
+                  <Field
+                    label="Token del worker"
+                    hint="Deve combaciare con WORKER_TOKEN impostato sul worker."
+                  >
+                    <div className="space-y-1.5">
+                      <Input
+                        type="password"
+                        autoComplete="off"
+                        placeholder={
+                          original?.neuralWorkerToken === SECRET_MASK
+                            ? 'Configurato — digita per sostituirlo'
+                            : 'incolla il token'
+                        }
+                        value={
+                          draft.neuralWorkerToken === SECRET_MASK ? '' : draft.neuralWorkerToken
+                        }
+                        onChange={(e) => update('neuralWorkerToken', e.target.value)}
+                      />
+                      {original?.neuralWorkerToken === SECRET_MASK &&
+                      draft.neuralWorkerToken === SECRET_MASK ? (
+                        <p className="text-xs text-muted-foreground">
+                          Token configurato (mascherato). Lascia vuoto per mantenerlo, digita per
+                          sostituirlo o{' '}
+                          <button
+                            type="button"
+                            className="text-primary underline-offset-4 hover:underline"
+                            onClick={() => update('neuralWorkerToken', '')}
+                          >
+                            rimuovilo
+                          </button>
+                          .
+                        </p>
+                      ) : null}
+                    </div>
+                  </Field>
+                  <p className="text-xs text-muted-foreground">
+                    Salva le modifiche, poi usa “Verifica worker” qui sotto per controllare la
+                    connessione.
+                  </p>
+                </div>
+                <NeuralExportPanel />
+              </div>
             ) : (
               <PremiumUpsell />
             )}

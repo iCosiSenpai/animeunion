@@ -5,6 +5,7 @@ import type {
   CalendarEntry,
   EpisodeDetail,
   GenreDetail,
+  NeuralExportRecipe,
   PaginatedResult,
   SiteStats,
 } from '@animeunion/shared';
@@ -125,6 +126,57 @@ export class MockSource implements AnimeSource {
     return {
       totalAnime: animeDetails.length,
       totalEpisodes,
+    };
+  }
+
+  async getNeuralExportProfile(): Promise<NeuralExportRecipe> {
+    // Fixture di sviluppo/test: 2 profili + shader placeholder. Gli sha256 sono fittizi (il render
+    // vero gira sul worker con la ricetta reale del server; qui basta uno shape valido).
+    return {
+      version: 1,
+      requiredTiers: ['MEGA_FAN', 'ULTRA_FAN'],
+      license: 'Anime4K shaders (c) bloc97 et al. — MIT',
+      reference: 'ffmpeg -init_hw_device vulkan -i in.mp4 -vf "..." out.mp4',
+      shaders: [
+        {
+          file: 'Anime4K_Restore_CNN_M.glsl',
+          url: 'https://api.animeunion.tv/static/anime4k/Anime4K_Restore_CNN_M.glsl',
+          sha256: '0'.repeat(64),
+          sizeBytes: 35916,
+        },
+        {
+          file: 'Anime4K_Upscale_CNN_x2_M.glsl',
+          url: 'https://api.animeunion.tv/static/anime4k/Anime4K_Upscale_CNN_x2_M.glsl',
+          sha256: '1'.repeat(64),
+          sizeBytes: 40000,
+        },
+      ],
+      profiles: [
+        {
+          id: 'xq',
+          chain: ['Anime4K_Restore_CNN_M.glsl', 'Anime4K_Upscale_CNN_x2_M.glsl'],
+          targetWidth: 1920,
+          targetHeight: 1080,
+          videoBitrate: '10M',
+          videoCodec: 'libx264',
+          audio: 'copy',
+          faststart: true,
+        },
+        {
+          id: 'xqplus',
+          chain: [
+            'Anime4K_Restore_CNN_M.glsl',
+            'Anime4K_Upscale_CNN_x2_M.glsl',
+            'Anime4K_Upscale_CNN_x2_M.glsl',
+          ],
+          targetWidth: 3840,
+          targetHeight: 2160,
+          videoBitrate: '35M',
+          videoCodec: 'libx264',
+          audio: 'copy',
+          faststart: true,
+        },
+      ],
     };
   }
 }

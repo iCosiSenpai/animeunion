@@ -9,6 +9,7 @@ import { logger } from './lib/logger';
 import { createTelegramNotifier } from './lib/telegram';
 import { createAuthService } from './services/auth-service';
 import { createCatalogService } from './services/catalog-service';
+import { createCloudBackupService } from './services/cloud-backup-service';
 import { createConfigService } from './services/config-service';
 import { applyPendingRestore, createDbBackupService } from './services/db-backup-service';
 import { createDownloadService } from './services/download-service';
@@ -95,6 +96,7 @@ export function createAppContext(options: { env?: Env; databasePath?: string } =
   const nfo = createNfoService({ db, config, logger });
   const jellyfin = createJellyfinService({ config, logger });
   const backup = createDbBackupService({ db, dbPath, logger });
+  const cloudBackup = createCloudBackupService({ config, backup, logger });
 
   function animeTitleOf(animeId: string): string {
     const row = db
@@ -230,6 +232,7 @@ export function createAppContext(options: { env?: Env; databasePath?: string } =
       requests,
       jellyfin,
       backup,
+      cloudBackup,
       neuralExport,
     },
     logger,

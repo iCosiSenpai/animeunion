@@ -124,6 +124,13 @@ export function createScheduler(ctx: Context): Scheduler {
             if (removed > 0) {
               logger.debug({ removed }, 'Backup DB: copie vecchie eliminate');
             }
+            // Push su Google Drive (best-effort): solo se abilitato e collegato. Un errore del
+            // cloud non deve compromettere il backup locale gia' andato a buon fine.
+            const gstatus = services.cloudBackup.getStatus();
+            if (gstatus.enabled && gstatus.connected) {
+              return services.cloudBackup.uploadLatestBackup().then(() => undefined);
+            }
+            return undefined;
           })
           .catch((error) => {
             logger.warn({ err: error }, 'Backup DB automatico fallito');

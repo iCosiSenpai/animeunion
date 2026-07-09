@@ -7,6 +7,7 @@ import { ApiError, AuthError } from './lib/http-client';
 import type { Logger } from './lib/logger';
 import type { AuthService } from './services/auth-service';
 import type { CatalogService } from './services/catalog-service';
+import type { CloudBackupService } from './services/cloud-backup-service';
 import type { ConfigService } from './services/config-service';
 import type { DbBackupService } from './services/db-backup-service';
 import type { DownloadService } from './services/download-service';
@@ -47,6 +48,7 @@ export interface Context {
     requests: RequestService;
     jellyfin: JellyfinService;
     backup: DbBackupService;
+    cloudBackup: CloudBackupService;
     neuralExport: NeuralExportService;
   };
   /** Token di sessione del blocco web UI, dall'header x-app-session (per richiesta). */

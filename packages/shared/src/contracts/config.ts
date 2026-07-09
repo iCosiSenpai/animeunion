@@ -85,6 +85,17 @@ export const appConfigSchema = z.object({
   neuralWorkerUrl: z.string().default(''),
   // Token condiviso col worker (segreto: cifrato a riposo, mascherato al frontend).
   neuralWorkerToken: z.string().default(''),
+  // Backup cloud su Google Drive (bring-your-own OAuth client Desktop). Master off di default.
+  // Il refresh token e il client secret sono segreti (cifrati a riposo, mascherati al FE).
+  gdriveEnabled: z.boolean().default(false),
+  gdriveClientId: z.string().default(''),
+  gdriveClientSecret: z.string().default(''),
+  // Redirect loopback per il flusso "incolla-codice": Google accetta http:// solo per 127.0.0.1.
+  gdriveRedirectUri: z.string().default('http://127.0.0.1'),
+  gdriveRefreshToken: z.string().default(''),
+  // Id della cartella Drive creata dall'app (popolato al primo upload; riusato dopo).
+  gdriveFolderId: z.string().default(''),
+  gdriveRetention: z.number().int().positive().default(7),
 });
 export type AppConfig = z.infer<typeof appConfigSchema>;
 
@@ -100,6 +111,8 @@ export const SECRET_CONFIG_KEYS: ConfigKey[] = [
   'telegramBotToken',
   'jellyfinApiKey',
   'neuralWorkerToken',
+  'gdriveClientSecret',
+  'gdriveRefreshToken',
 ];
 
 export const configSetInputSchema = z.object({

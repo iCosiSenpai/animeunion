@@ -19,6 +19,8 @@ export interface DbBackupService {
   runBackup(): Promise<BackupRunResult>;
   /** Elenca i backup disponibili (più recenti prima). */
   listBackups(): Promise<BackupList>;
+  /** Percorso su disco del backup più recente (per il push cloud), o null se non ce ne sono. */
+  latestBackupPath(): Promise<{ name: string; path: string } | null>;
   /** Mantiene solo i `retention` backup più recenti; ritorna quanti ne ha eliminati. */
   pruneBackups(retention: number): Promise<number>;
   /**
@@ -151,6 +153,15 @@ export function createDbBackupService(deps: DbBackupDeps): DbBackupService {
       }
       entries.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
       return { entries };
+    },
+
+    async latestBackupPath(): Promise<{ name: string; path: string } | null> {
+      const { entries } = await service.listBackups();
+      const first = entries[0];
+      if (!first) {
+        return null;
+      }
+      return { name: first.name, path: join(backupDir, first.name) };
     },
 
     async pruneBackups(retention): Promise<number> {

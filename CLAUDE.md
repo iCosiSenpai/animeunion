@@ -46,18 +46,18 @@ Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
 - [x] **Step 7.5** — Fix auto-download: soglia forward-only ancorata agli episodi già usciti (migr. 0017)
 - [x] **Step 8** — Release v0.14.0
 
-## Mini-batch "Rifiniture post-Step-1" — perk Premium + onboarding + backup cloud (ATTIVO)
+## Mini-batch "Rifiniture post-Step-1" — perk Premium + onboarding + backup cloud (COMPLETO)
 
-> Piano vivo: **[plan/rifiniture-premium-onboarding.md](plan/rifiniture-premium-onboarding.md)**.
-> Emerso dal collaudo dopo lo Step 1 di v0.15.0. **v0.15.0 va IN PAUSA** finché non chiuso.
-> Cadenza: un solo step per sessione. Provider cloud scelto: **Google Drive**.
+> Piano archivio: **[plan/rifiniture-premium-onboarding.md](plan/rifiniture-premium-onboarding.md)**.
+> Emerso dal collaudo dopo lo Step 1 di v0.15.0. **Chiuso 2026-07-09**: si riprende v0.15.0 (release).
+> Provider cloud scelto: **Google Drive**.
 
 - [x] **Step A** — Modalità test "nuovo utente" (dev workflow: `.env.newuser` + `dev:newuser`/`reset:newuser`) — 2026-07-07
 - [x] **Step B** — Statistiche: catalogo vs libreria (frontend) — 2026-07-07
-- [ ] **Step C** — Download simultanei come perk Premium (gate su `premium.active`, sblocca `maxConcurrent`)
-- [ ] **Step D** — Backup su Google Drive (`drive.file`, bring-your-own OAuth client) — decision-gated
+- [x] **Step C** — Download simultanei come perk Premium (gate su `premium.active`, sblocca `maxConcurrent`) — 2026-07-08
+- [x] **Step D** — Backup su Google Drive (`drive.file`, bring-your-own OAuth client Desktop, HTTPS-free) — 2026-07-09
 
-## Roadmap verso v0.15.0 — "Quality + Neural Export (Anime4K)" (IN PAUSA — vedi mini-batch sopra)
+## Roadmap verso v0.15.0 — "Quality + Neural Export (Anime4K)" (ATTIVO — mini-batch chiuso)
 
 > Piano vivo: **[plan/quality-gpu-bridge.md](plan/quality-gpu-bridge.md)** (fonte canonica).
 > **Cadenza concordata: un solo step per sessione** (nuova sessione per ogni step, per non bruciare
@@ -80,13 +80,23 @@ razionale (incl. worker nativo vs container, nota CUDA/NVENC) nel piano.
   config worker) + UI (pannello Premium + azione "Migliora a XQ/XQ+"). 423 test verdi.
 - [ ] **Step finale** — Release v0.15.0
 
-## Stato attuale (2026-07-08)
+## Stato attuale (2026-07-09)
 
 **Versione corrente: v0.14.1 — affidabilità + hardening + anti-duplicati + fix auto-download.**
 **v0.15.0 Step 1 (wiring Premium), Step 2 (schema "quality", migr. 0018) e Step 3+ (engine Neural
-Export Anime4K) COMPLETI. Prossimo: Step finale (Release v0.15.0). Mini-batch "Rifiniture
-post-Step-1": Step A+B fatti, restano C (download simultanei Premium) e D (backup Google Drive).**
-- 423 test verdi, lint/typecheck verdi, build web ok
+Export Anime4K) COMPLETI. Mini-batch "Rifiniture post-Step-1" CHIUSO (A+B+C+D). Prossimo: Step
+finale (Release v0.15.0).**
+- 432 test verdi, lint/typecheck (tutti i workspace) verdi, build web ok
+- Mini-batch Step D (2026-07-09): **backup su Google Drive** — `cloud-backup-service` con
+  bring-your-own OAuth client **Desktop** (scope `drive.file`), flusso **HTTPS-free** (redirect
+  loopback `http://127.0.0.1` + incolla-codice manuale, pattern rclone) perché l'app gira in HTTP e
+  Google accetta redirect http solo su localhost. **Zero nuove dipendenze** (token exchange/refresh +
+  upload multipart REST via `undici`). Config `gdrive*` (secret cifrati: `gdriveClientSecret`,
+  `gdriveRefreshToken`); router `backup.google*`; scheduler `backupTick` fa il push best-effort dopo
+  il backup locale (se `gdriveEnabled`+collegato); UI sotto-sezione in `backup-section.tsx`. Il push
+  crea/riusa la cartella Drive "AnimeUnion Backups", carica il `.db` più recente e pota oltre
+  `gdriveRetention`. Stato ultimo upload/errore in memoria (Regola #1: niente tabella nuova). 8 test
+  MockAgent. Collaudo reale (client Desktop + upload) a carico utente.
 - v0.15.0 Step 3+ (2026-07-08): **engine Neural Export** (upscale XQ 1080p / XQ+ 4K con
   Anime4K/libplacebo). Tutto lo step in una sessione (deroga cadenza su richiesta utente). Nuovo
   workspace `packages/neural-core` (core riusabile: provisionShaders+sha256, buildShaderChain,
@@ -180,7 +190,8 @@ post-Step-1": Step A+B fatti, restano C (download simultanei Premium) e D (backu
   `apiMeSchema` oggi però SCARTA quei campi (da estendere nello Step 1). Account utente già premium
   (grant da Matteo) → ramo premium testabile subito.
 - **Batch attivo:** `v0.15.0 "Quality + Neural Export (Anime4K)"` — piano
-  [plan/quality-gpu-bridge.md](plan/quality-gpu-bridge.md). Step 1-2-3 completi; prossimo lavoro:
+  [plan/quality-gpu-bridge.md](plan/quality-gpu-bridge.md). Step 1-2-3 completi + mini-batch
+  "Rifiniture post-Step-1" CHIUSO (A+B+C+D, incl. backup Google Drive 2026-07-09); prossimo lavoro:
   **Step finale** (Release v0.15.0). Cadenza: un solo step per sessione (Step 3 in deroga).
 
 Funzioni principali operative: download automatico (1 episodio alla volta), FTS5 search, cestino

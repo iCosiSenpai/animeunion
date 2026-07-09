@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { schema } from '../db';
 import { createAuthService } from '../services/auth-service';
 import { createCatalogService } from '../services/catalog-service';
+import { createCloudBackupService } from '../services/cloud-backup-service';
 import { createConfigService } from '../services/config-service';
 import { createDbBackupService } from '../services/db-backup-service';
 import { createDownloadService } from '../services/download-service';
@@ -53,6 +54,7 @@ function makeCaller() {
   const push = createPushService({ db, logger: testLogger });
   const jellyfin = createJellyfinService({ config, logger: testLogger });
   const backup = createDbBackupService({ db, dbPath: ':memory:', logger: testLogger });
+  const cloudBackup = createCloudBackupService({ config, backup, logger: testLogger });
   const download = createDownloadService({
     db,
     worker: {
@@ -98,6 +100,7 @@ function makeCaller() {
       requests,
       jellyfin,
       backup,
+      cloudBackup,
       neuralExport,
     },
     logger: testLogger,

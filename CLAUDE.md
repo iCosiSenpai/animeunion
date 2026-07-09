@@ -57,7 +57,7 @@ Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
 - [x] **Step C** — Download simultanei come perk Premium (gate su `premium.active`, sblocca `maxConcurrent`) — 2026-07-08
 - [x] **Step D** — Backup su Google Drive (`drive.file`, bring-your-own OAuth client Desktop, HTTPS-free) — 2026-07-09
 
-## Roadmap verso v0.15.0 — "Quality + Neural Export (Anime4K)" (ATTIVO — mini-batch chiuso)
+## Roadmap verso v0.15.0 — "Quality + Neural Export (Anime4K)" (COMPLETO — rilasciata 2026-07-09)
 
 > Piano vivo: **[plan/quality-gpu-bridge.md](plan/quality-gpu-bridge.md)** (fonte canonica).
 > **Cadenza concordata: un solo step per sessione** (nuova sessione per ogni step, per non bruciare
@@ -78,14 +78,16 @@ razionale (incl. worker nativo vs container, nota CUDA/NVENC) nel piano.
   deroga cadenza su richiesta utente): `packages/neural-core` (core riusabile) + `apps/worker`
   (servizio GPU Windows) + NAS bridge (`neural-export-service`, migr. **0019** `neural_export_job`,
   config worker) + UI (pannello Premium + azione "Migliora a XQ/XQ+"). 423 test verdi.
-- [ ] **Step finale** — Release v0.15.0
+- [x] **Step finale** — Release v0.15.0 — 2026-07-09
 
 ## Stato attuale (2026-07-09)
 
-**Versione corrente: v0.14.1 — affidabilità + hardening + anti-duplicati + fix auto-download.**
-**v0.15.0 Step 1 (wiring Premium), Step 2 (schema "quality", migr. 0018) e Step 3+ (engine Neural
-Export Anime4K) COMPLETI. Mini-batch "Rifiniture post-Step-1" CHIUSO (A+B+C+D). Prossimo: Step
-finale (Release v0.15.0).**
+**Versione corrente: v0.15.0 — "Quality + Neural Export (Anime4K)".** Coesistenza SD/XQ/XQ+, upscale
+via worker GPU esterno, Premium cablato sul profilo del sito, + rifiniture (download simultanei
+Premium, backup Google Drive, statistiche oneste, workflow test "nuovo utente"). Rilasciata 2026-07-09
+(bump root+api+web, ff-merge in `main`, push origin). **Deploy NAS: manuale (a carico utente)** — su
+NAS servono `AUTH_ENCRYPT_KEY` (già impostata dal v0.14.0) e le migration 0018/0019 (auto all'avvio).
+Il worker GPU (`apps/worker`) gira sul PC con RTX 5070 Ti, non sul NAS.
 - 432 test verdi, lint/typecheck (tutti i workspace) verdi, build web ok
 - Mini-batch Step D (2026-07-09): **backup su Google Drive** — `cloud-backup-service` con
   bring-your-own OAuth client **Desktop** (scope `drive.file`), flusso **HTTPS-free** (redirect
@@ -189,10 +191,11 @@ finale (Release v0.15.0).**
   `features.neuralExport` (vedi `INTEGRATION_PREMIUM.md`/`INTEGRATION_NEURAL_EXPORT.md`). Il nostro
   `apiMeSchema` oggi però SCARTA quei campi (da estendere nello Step 1). Account utente già premium
   (grant da Matteo) → ramo premium testabile subito.
-- **Batch attivo:** `v0.15.0 "Quality + Neural Export (Anime4K)"` — piano
-  [plan/quality-gpu-bridge.md](plan/quality-gpu-bridge.md). Step 1-2-3 completi + mini-batch
-  "Rifiniture post-Step-1" CHIUSO (A+B+C+D, incl. backup Google Drive 2026-07-09); prossimo lavoro:
-  **Step finale** (Release v0.15.0). Cadenza: un solo step per sessione (Step 3 in deroga).
+- **Batch v0.15.0 CHIUSO e RILASCIATO (2026-07-09).** Piano archivio
+  [plan/quality-gpu-bridge.md](plan/quality-gpu-bridge.md). Step 1-2-3 + mini-batch "Rifiniture
+  post-Step-1" (A+B+C+D) + Step finale (release) completi. **Nessun batch attivo:** prossimo lavoro da
+  decidere con l'utente (idee aperte: setup wizard Step F, GitHub Pages, E2E in CI — vedi CHANGELOG
+  [Unreleased]).
 
 Funzioni principali operative: download automatico (1 episodio alla volta), FTS5 search, cestino
 recuperabile, backup automatico DB, verifica integrità video, Jellyfin integration, nfo sidecar,
@@ -204,6 +207,7 @@ gestore file con collega-senza-scaricare, home personalizzabile, calendario, wal
 
 | Versione | Batch | Data |
 |---|---|---|
+| v0.15.0 | Quality + Neural Export (Anime4K) + rifiniture Premium | 2026-07-09 |
 | v0.14.0 | Affidabilità + Hardening + Anti-duplicati | 2026-07-06 |
 | v0.13.0 | Mobile First + Rinforzo | 2026-07-01 |
 | v0.12.0 | [Super rinforzo](docs/history/batch-super-rinforzo-v0.12.0.md) | 2026-06-29 |

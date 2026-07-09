@@ -11,8 +11,49 @@ e il progetto aderisce al [Semantic Versioning](https://semver.org/lang/it/).
 - Setup wizard migliorato (Step F, rimandato).
 - GitHub Pages (landing pubblica + spazio mascotte).
 - Esecuzione degli E2E Playwright in CI (scaffolding già presente).
-- Gating reale del Premium (collegamento all'account del sito, da definire con l'admin).
 - Update ottimistici e routing del cestino anche per `library.deleteSeries` (rimandati).
+
+## [0.15.0] - 2026-07-09
+
+Quality + Neural Export (Anime4K): coesistenza SD/XQ/XQ+ per lo stesso episodio, upscale via worker
+GPU esterno, Premium cablato sul profilo del sito, più le rifiniture emerse dal collaudo (download
+simultanei Premium, backup su Google Drive, statistiche oneste, workflow di test "nuovo utente").
+
+### Added
+- **Neural Export (upscale XQ 1080p / XQ+ 4K).** Nuovo motore che migliora un episodio SD già
+  scaricato con **Anime4K** (shader MIT di bloc97) via **ffmpeg + libplacebo + Vulkan**, identico al
+  player del sito. Il NAS non ha GPU: il render gira su un **worker nativo Windows** (`apps/worker`,
+  Fastify + auth token) sulla LAN, orchestrato dal NAS via bridge HTTP (dispatch multipart → poll →
+  finalize). Nuovo `packages/neural-core` riusabile (provisioning shader con verifica sha256,
+  costruzione della catena shader, `buildFfmpegArgs` pura, feature-detect, run). L'upscale crea una
+  **nuova riga** `episode_file` (quality XQ/XQPLUS) senza toccare la sorgente SD. UI: pannello in
+  Impostazioni›Premium (stato worker + coda + attribution MIT) e azione "Migliora a XQ/XQ+" nel
+  dropdown episodio, gated sull'entitlement e sulla raggiungibilità del worker. Migration **0019**
+  (`neural_export_job`).
+- **Schema "quality" (coesistenza SD/XQ/XQ+).** `episode_file` ora è UNIQUE
+  `(episode_id, language, quality)` (migration **0018**): la sorgente SD e le versioni upscalate
+  convivono per lo stesso (episodio, lingua). Enum `Quality` (`SD`/`XQ`/`XQPLUS`); il renamer aggiunge
+  il tag ` [XQ]`/` [XQPLUS]` così le upscalate non sovrascrivono la sorgente. La lista episodi mostra
+  solo le voci SD (le upscalate non diventano righe separate).
+- **Premium LIVE + gate reale.** `apiMeSchema`/`userProfileSchema` leggono ora `premium`
+  (`{tier,active,expiresAt}`) e `features` dal profilo del sito (campi difensivi fail-closed). Helper
+  entitlement in shared (`isPremiumActive`, `hasNeuralExport`). Il gate UI reale (`PremiumStatusPanel`)
+  sostituisce l'upsell statico quando il Premium è attivo.
+- **Download simultanei come perk Premium.** Il worker di download onora `maxConcurrent` (1–3) solo se
+  l'abbonamento è attivo, altrimenti resta a 1; il controllo in Impostazioni è sbloccato solo per gli
+  utenti Premium (altrimenti lock + upsell).
+- **Backup su Google Drive.** Push cloud dei backup del DB con **client OAuth Desktop proprio**
+  dell'utente (scope `drive.file`: l'app vede solo i file che crea). Flusso **HTTPS-free** (redirect
+  loopback `127.0.0.1` + incolla-codice, pattern rclone) perché l'app gira in HTTP. Zero nuove
+  dipendenze (token exchange/refresh + upload multipart via `undici`). Client secret e refresh token
+  cifrati a riposo e mascherati al frontend. Upload automatico dopo il backup locale (opt-in) o
+  manuale, con retention lato Drive. UI nella sezione Backup.
+- **Statistiche: catalogo vs libreria.** La schermata Statistiche separa "Catalogo AnimeUnion"
+  (globale) da "La tua libreria" (personale), rimuovendo la barra "Avanzamento" fuorviante
+  (scaricati / intero catalogo ~0%).
+- **Workflow di test "nuovo utente"** (solo sviluppo): `npm run reset:newuser && npm run dev:newuser`
+  gira senza credenziali in env e con DB isolato → compare la schermata di login, senza toccare
+  l'account di sviluppo.
 
 ## [0.14.1] - 2026-07-07
 

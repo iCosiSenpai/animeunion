@@ -31,6 +31,29 @@ Shared: `packages/shared` (zod + interfaccia `AnimeSource`). Video: ffmpeg-stati
 Scheduler: setInterval (node-cron non usato). Lint: Biome. Test: Vitest (+ Playwright in futuro).
 Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
 
+## Roadmap verso v0.16.0 — "Doctor sempre attivo + Premium visibile + UX rifinita" (ATTIVO)
+
+> Piano vivo: **[plan/doctor-premium-ux.md](plan/doctor-premium-ux.md)** (fonte canonica).
+> Branch: `feat/doctor-premium-ux` (da `main`). **Cadenza: un solo step per sessione.**
+> All'inizio di ogni sessione: leggi CLAUDE.md → apri il piano → riprendi dal primo `[ ]`.
+
+- [ ] **Step 1** — Doctor attivo: monitoraggio continuo + auto-resolve + notifica ripristino
+- [ ] **Step 2** — Ripresa automatica download falliti per cartella read-only (dip. Step 1)
+- [ ] **Step 3** — Premium visibile e riusabile (meccanica + UI; il perk resta visibile da attivo)
+- [ ] **Step 4** — Premium nella sidebar
+- [ ] **Step 5** — Fix "Salva" pagina Aspetto (fetch→invalidate + Tema next-themes)
+- [ ] **Step 6** — Pagina "Aspetto" rifatta + filtri ricerca sfondo (incl. "Più votati")
+- [ ] **Step 7** — Pagina "Notifiche" rifatta + chiarezza PWA/Push (test push, stato install)
+- [ ] **Step 8** — Neural Export: spostare tra Download e Pianificazione + spiegare + guida
+- [ ] **Step 9** — Upscale locale (scaricati + collegati) — con verifica tecnica preliminare
+- [ ] **Step 10** — Audit "Verifica integrità download" + coerenza con upscale GPU
+- [ ] **Step 11** — FAQ/tutorial su GitHub + GitHub Pages
+- [ ] **Step 12** — Rimozione totale riferimenti a Plex (solo Jellyfin)
+- [ ] **Step 13** — Statistiche oneste (episodi distinti, "Episodi totali" onesta)
+- [ ] **Step 14** — Polish UI diffuso (Carica altri, empty state, hover sidebar, footer Doctor)
+- [ ] **Step 15** — Ricerca feature Premium del sito + Assistenza prioritaria Telegram
+- [ ] **Step 16** — Release v0.16.0
+
 ## Roadmap verso v0.14.0 — "Affidabilità + Hardening + Anti-duplicati" (COMPLETO)
 
 > Piano archivio: **[plan/affidabilita-hardening.md](plan/affidabilita-hardening.md)**
@@ -80,7 +103,15 @@ razionale (incl. worker nativo vs container, nota CUDA/NVENC) nel piano.
   config worker) + UI (pannello Premium + azione "Migliora a XQ/XQ+"). 423 test verdi.
 - [x] **Step finale** — Release v0.15.0 — 2026-07-09
 
-## Stato attuale (2026-07-09)
+## Stato attuale (2026-07-11)
+
+**Batch attivo: v0.16.0 — "Doctor sempre attivo + Premium visibile + UX rifinita"** (piano
+[plan/doctor-premium-ux.md](plan/doctor-premium-ux.md), branch `feat/doctor-premium-ux`). 16 step
+pianificati (Doctor attivo con auto-resolve + resume download, Premium visibile/riusabile + in
+sidebar, fix Salva Aspetto, rifacimento pagine Notifiche/Aspetto, Neural Export spostato e spiegato,
+upscale locale, FAQ/GitHub Pages, rimozione Plex, statistiche oneste, polish UI, ricerca feature
+Premium). Nessuno step ancora implementato: prossima sessione parte dallo Step 1. Cadenza un solo
+step per sessione.
 
 **Versione corrente: v0.15.0 — "Quality + Neural Export (Anime4K)".** Coesistenza SD/XQ/XQ+, upscale
 via worker GPU esterno, Premium cablato sul profilo del sito, + rifiniture (download simultanei

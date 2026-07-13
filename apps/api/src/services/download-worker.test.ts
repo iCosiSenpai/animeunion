@@ -783,10 +783,122 @@ describe('DownloadWorker (FSM)', () => {
       expect(q?.status).toBe('failed');
       // Permanente: nessun retry effettuato.
       expect(q?.retryCount).toBe(0);
+      expect(q?.failKind).toBe('permanent');
     } finally {
       worker.stop();
       await new Promise<void>((resolve) => server.close(() => resolve()));
     }
+  });
+
+  it('fallimento ambientale (errno FS) marca fail_kind=env senza retry residui', async () => {
+    // Il catalog lancia un errore con code errno di cartella non scrivibile: classifyError → 'env'.
+    const catalog = {
+      getEpisodeFile: async () => {
+        throw Object.assign(new Error('EROFS: read-only file system'), { code: 'EROFS' });
+      },
+    } as unknown as CatalogService;
+
+    const config = createConfigService({ db });
+    config.set('seriesPathSub', animePath);
+    const worker = makeWorker(db, catalog, config);
+    seedEpisodeFiles(db, ['ef-1']);
+    // Ultimo tentativo disponibile (retryCount=2, retryMax=3): fallisce subito in modo terminale.
+    db.insert(schema.downloadQueue)
+      .values({
+        id: 'q-env',
+        episodeFileId: 'ef-1',
+        status: 'queued',
+        retryCount: 2,
+        retryMax: 3,
+        priority: 50,
+        createdAt: new Date().toISOString(),
+      })
+      .run();
+
+    try {
+      worker.start();
+      await worker.tryStartNext();
+
+      const deadline = Date.now() + 4000;
+      let q = db
+        .select()
+        .from(schema.downloadQueue)
+        .where(eq(schema.downloadQueue.id, 'q-env'))
+        .get();
+      while (q && q.status !== 'completed' && q.status !== 'failed') {
+        if (Date.now() > deadline) {
+          throw new Error(`timeout: stato '${q.status}'`);
+        }
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        q = db
+          .select()
+          .from(schema.downloadQueue)
+          .where(eq(schema.downloadQueue.id, 'q-env'))
+          .get();
+      }
+
+      expect(q?.status).toBe('failed');
+      expect(q?.failKind).toBe('env');
+    } finally {
+      worker.stop();
+    }
+  });
+
+  it('retryEnvFailed rimette in coda solo i falliti env (permanent/other restano fermi)', () => {
+    const config = createConfigService({ db });
+    config.set('seriesPathSub', animePath);
+    const worker = makeWorker(db, buildStubCatalog(new Map()), config);
+    seedEpisodeFiles(db, ['ef-env', 'ef-perm', 'ef-other']);
+
+    const t = new Date().toISOString();
+    for (const [id, fileId, failKind] of [
+      ['q-env', 'ef-env', 'env'],
+      ['q-perm', 'ef-perm', 'permanent'],
+      ['q-other', 'ef-other', 'other'],
+    ] as const) {
+      db.insert(schema.downloadQueue)
+        .values({
+          id,
+          episodeFileId: fileId,
+          status: 'failed',
+          error: 'boom',
+          failKind,
+          retryCount: 3,
+          retryMax: 3,
+          completedAt: t,
+          priority: 50,
+          createdAt: t,
+        })
+        .run();
+    }
+
+    // Coda ferma (non start) per non far partire davvero i job: verifichiamo solo la transizione DB.
+    const resumed = worker.retryEnvFailed();
+    expect(resumed).toBe(1);
+
+    const env = db
+      .select()
+      .from(schema.downloadQueue)
+      .where(eq(schema.downloadQueue.id, 'q-env'))
+      .get();
+    const perm = db
+      .select()
+      .from(schema.downloadQueue)
+      .where(eq(schema.downloadQueue.id, 'q-perm'))
+      .get();
+    const other = db
+      .select()
+      .from(schema.downloadQueue)
+      .where(eq(schema.downloadQueue.id, 'q-other'))
+      .get();
+    expect(env?.status).toBe('queued');
+    expect(env?.failKind).toBeNull();
+    expect(env?.retryCount).toBe(0);
+    expect(perm?.status).toBe('failed');
+    expect(other?.status).toBe('failed');
+
+    // Idempotente: senza altri env falliti non ripristina nulla.
+    expect(worker.retryEnvFailed()).toBe(0);
   });
 
   it('start reimposta i download orfani (downloading/processing) a failed', () => {

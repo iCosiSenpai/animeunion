@@ -200,6 +200,11 @@ export const downloadQueue = sqliteTable(
     // pickNext ignora le righe queued con retry_at nel futuro, evitando il retry a raffica in
     // single-flight (il finally chiamava tryStartNext ri-selezionando subito il job appena fallito).
     retryAt: text('retry_at'),
+    // Causa dell'ultimo fallimento terminale, per la ripresa automatica selettiva (Step 2 v0.16.0):
+    // 'env' (cartella non scrivibile / I-O / spazio: recuperabile quando il Doctor rileva il
+    // ripristino), 'permanent' (4xx/link scaduto/contenuto non video), 'other' (transitorio esaurito
+    // i retry). null = mai fallito o causa ignota (job pre-migrazione). Solo i 'env' ripartono da soli.
+    failKind: text('fail_kind'),
     createdAt: text('created_at').notNull(),
   },
   (table) => [

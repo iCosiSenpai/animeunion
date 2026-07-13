@@ -213,7 +213,25 @@ export function createAppContext(options: { env?: Env; databasePath?: string } =
 
   // Doctor: monitoraggio attivo (writability cartelle, disco, API, Jellyfin) con notifiche di
   // allerta/ripristino sulle transizioni. Lo scheduler lo esegue a tick regolari.
-  const doctor = createDoctorService({ config, auth, jellyfin, notifications, logger });
+  const doctor = createDoctorService({
+    config,
+    auth,
+    jellyfin,
+    notifications,
+    logger,
+    // Quando una cartella/disco torna a posto, ri-accoda i download falliti per quella causa
+    // ambientale (Step 2 v0.16.0) e avvisa l'utente solo se ne riparte davvero almeno uno.
+    onWritableRestored: () => {
+      const n = download.resumeEnvFailed();
+      if (n > 0) {
+        notifications.create({
+          type: 'info',
+          title: 'Download ripresi',
+          body: `${n} download in attesa ${n === 1 ? 'e ripartito' : 'sono ripartiti'} dopo il ripristino della cartella.`,
+        });
+      }
+    },
+  });
 
   return {
     db,

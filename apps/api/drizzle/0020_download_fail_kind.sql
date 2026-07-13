@@ -1,0 +1,1 @@
+ALTER TABLE `download_queue` ADD `fail_kind` text;

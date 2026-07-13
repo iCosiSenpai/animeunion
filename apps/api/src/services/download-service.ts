@@ -85,6 +85,12 @@ export interface DownloadService {
   retry(queueId: string): boolean;
   /** Rimette in coda tutti i job falliti. */
   retryAllFailed(): number;
+  /**
+   * Rimette in coda i download falliti per causa ambientale (cartella non scrivibile / I-O / spazio).
+   * Chiamato quando il Doctor rileva il ripristino (es. cartella tornata scrivibile). Ritorna quanti
+   * ne ha ripresi; i fallimenti "veri" (404, link scaduto, hash) restano fermi.
+   */
+  resumeEnvFailed(): number;
   /** Rimette in coda tutti i job falliti di un singolo anime (azione di gruppo, una chiamata). */
   retryGroup(animeId: string): number;
   /** Rimuove dalla tabella gli item terminali. */
@@ -718,6 +724,17 @@ export function createDownloadService(deps: DownloadServiceDeps): DownloadServic
       }
       if (count > 0) {
         logger.info({ count }, 'Tutti i download falliti rimetterti in coda');
+      }
+      return count;
+    },
+
+    resumeEnvFailed() {
+      const count = worker.retryEnvFailed();
+      if (count > 0) {
+        logger.info(
+          { count },
+          'Download falliti per cartella/disco ripresi dopo il ripristino ambientale',
+        );
       }
       return count;
     },

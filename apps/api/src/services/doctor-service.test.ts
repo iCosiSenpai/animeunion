@@ -11,6 +11,7 @@ function makeDeps(overrides: {
   free?: number | null;
   authed?: boolean;
   jellyfin?: { url?: string; key?: string; ok?: boolean; error?: string };
+  onWritableRestored?: () => void;
 }) {
   const created: CreatedNotification[] = [];
   const jfUrl = overrides.jellyfin?.url ?? '';
@@ -40,6 +41,7 @@ function makeDeps(overrides: {
       }) as DoctorServiceDeps['notifications']['create'],
     },
     freeDiskBytes: async () => overrides.free ?? null,
+    onWritableRestored: overrides.onWritableRestored,
   };
   return { deps, created };
 }
@@ -141,5 +143,58 @@ describe('DoctorService', () => {
     const calls = probe.mock.calls.length;
     doctor.getState();
     expect(probe.mock.calls.length).toBe(calls); // getState non richiama i controlli
+  });
+
+  it('cartella tornata scrivibile → onWritableRestored invocato una sola volta', async () => {
+    const onWritableRestored = vi.fn();
+    const deps = makeDeps({
+      dirs: [dir('seriesPathSub', '/media/Anime', false)],
+      onWritableRestored,
+    }).deps;
+    const doctor = createDoctorService(deps);
+
+    await doctor.runChecks(); // critico: nessun ripristino
+    expect(onWritableRestored).not.toHaveBeenCalled();
+
+    let writable = false;
+    deps.config.downloadDirsStatus = async () => [dir('seriesPathSub', '/media/Anime', writable)];
+    writable = true;
+    await doctor.runChecks(); // ok: transizione → callback
+
+    expect(onWritableRestored).toHaveBeenCalledTimes(1);
+
+    await doctor.runChecks(); // resta ok: nessun nuovo invito
+    expect(onWritableRestored).toHaveBeenCalledTimes(1);
+  });
+
+  it('nessun ripristino ambientale → onWritableRestored non invocato', async () => {
+    // Solo l'API transita da critica a ok: non deve triggerare la ripresa download (categoria api).
+    const onWritableRestored = vi.fn();
+    const deps = makeDeps({ authed: false, onWritableRestored }).deps;
+    const doctor = createDoctorService(deps);
+
+    await doctor.runChecks(); // api critica
+    deps.auth.status = () => ({ authenticated: true }) as never;
+    await doctor.runChecks(); // api ok
+
+    expect(onWritableRestored).not.toHaveBeenCalled();
+  });
+
+  it('un errore in onWritableRestored non fa cadere il tick', async () => {
+    const deps = makeDeps({
+      dirs: [dir('seriesPathSub', '/media/Anime', false)],
+      onWritableRestored: () => {
+        throw new Error('boom');
+      },
+    }).deps;
+    const doctor = createDoctorService(deps);
+
+    await doctor.runChecks();
+    let writable = false;
+    deps.config.downloadDirsStatus = async () => [dir('seriesPathSub', '/media/Anime', writable)];
+    writable = true;
+
+    const state = await doctor.runChecks();
+    expect(state.healthy).toBe(true); // il tick completa nonostante il callback lanci
   });
 });

@@ -38,7 +38,7 @@ Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
 > All'inizio di ogni sessione: leggi CLAUDE.md → apri il piano → riprendi dal primo `[ ]`.
 
 - [x] **Step 1** — Doctor attivo: monitoraggio continuo + auto-resolve + notifica ripristino
-- [ ] **Step 2** — Ripresa automatica download falliti per cartella read-only (dip. Step 1)
+- [x] **Step 2** — Ripresa automatica download falliti per cartella read-only (dip. Step 1)
 - [ ] **Step 3** — Premium visibile e riusabile (meccanica + UI; il perk resta visibile da attivo)
 - [ ] **Step 4** — Premium nella sidebar
 - [ ] **Step 5** — Fix "Salva" pagina Aspetto (fetch→invalidate + Tema next-themes)
@@ -107,9 +107,21 @@ razionale (incl. worker nativo vs container, nota CUDA/NVENC) nel piano.
 
 **Batch attivo: v0.16.0 — "Doctor sempre attivo + Premium visibile + UX rifinita"** (piano
 [plan/doctor-premium-ux.md](plan/doctor-premium-ux.md), branch `feat/doctor-premium-ux`). 16 step
-pianificati. **Step 1 COMPLETO (2026-07-13)**; prossima sessione: Step 2 (ripresa automatica
-download falliti per cartella read-only, dip. Step 1). Cadenza un solo step per sessione.
+pianificati. **Step 1-2 COMPLETI (2026-07-13)**; prossima sessione: Step 3 (Premium visibile e
+riusabile — meccanica + UI). Cadenza un solo step per sessione.
 
+- **v0.16.0 Step 2 (2026-07-13): ripresa automatica download falliti per cartella read-only.** Chiude
+  l'incidente Jellyfin read-only: prima i download falliti per cartella non scrivibile restavano
+  `failed` per sempre anche dopo il fix dei permessi. Ora il motore **classifica** la causa del
+  fallimento terminale (`classifyError` in `download-worker.ts`: `PermanentDownloadError`→`permanent`,
+  errno FS `EACCES/EPERM/EROFS/ENOSPC/EIO/ENXIO` o nuovo `EnvironmentDownloadError`→`env`, resto
+  →`other`) e la **persiste** in `download_queue.fail_kind` (migr. **0020**, nullable/additiva). Il
+  Doctor, quando un check `writable`/`disk` transita critical→ok (nuovo callback `onWritableRestored`
+  in `doctor-service`), chiama `download.resumeEnvFailed()` → `worker.retryEnvFailed()` che rimette in
+  `queued` **solo** i `fail_kind='env'` (`retryAt=null`, riparte subito), lasciando fermi
+  `permanent`/`other`; notifica in-app "Download ripresi" solo se `n>0`. Cablaggio in `context.ts`
+  (download creato prima di doctor). 443 test verdi (+5), lint/typecheck/build web verdi. Regola #1
+  rispettata: `fail_kind` è esattamente il consumer del segnale prodotto dallo Step 1.
 - **v0.16.0 Step 1 (2026-07-13): Doctor attivo.** Nuovo `doctor-service` (in memoria, Regola #1:
   nessuna tabella) che generalizza il vecchio pattern `lowRoots` dello scheduler: `runChecks()`
   verifica scrivibilità cartelle download, spazio disco, connessione API, Jellyfin (solo se

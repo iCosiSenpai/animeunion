@@ -37,6 +37,12 @@ export interface DoctorServiceDeps {
   now?: () => Date;
   /** Iniettabile nei test per evitare l'I/O reale sul disco. */
   freeDiskBytes?: (path: string) => Promise<number | null>;
+  /**
+   * Invocato al massimo una volta per ciclo di controlli quando almeno un check ambientale
+   * (cartella scrivibile o spazio disco) transita da critico a ok. Gancio per la ripresa automatica
+   * dei download falliti per cartella read-only (Step 2 v0.16.0).
+   */
+  onWritableRestored?: () => void;
 }
 
 /** Testo di notifica per la transizione di un check (allerta o ripristino). */
@@ -87,12 +93,19 @@ export function createDoctorService(deps: DoctorServiceDeps): DoctorService {
 
   /** Confronta i check nuovi con lo stato precedente e notifica solo le transizioni. */
   function reconcile(next: Map<string, DoctorCheck>) {
+    // Traccia se una condizione ambientale (cartella/disco) e' tornata a posto in questo ciclo:
+    // e' il segnale per ri-accodare i download falliti per cartella read-only (Step 2).
+    let envRestored = false;
+    const isEnv = (c: DoctorCheckCategory) => c === 'writable' || c === 'disk';
     for (const [id, check] of next) {
       const prev = state.get(id);
       if (check.status === 'critical' && (!prev || prev.status === 'ok')) {
         notify(check.category, 'alert', check);
       } else if (check.status === 'ok' && prev && prev.status === 'critical') {
         notify(check.category, 'resolved', check);
+        if (isEnv(check.category)) {
+          envRestored = true;
+        }
       }
     }
     // Un check sparito mentre era critico (es. cartella riconfigurata) va considerato risolto,
@@ -105,6 +118,14 @@ export function createDoctorService(deps: DoctorServiceDeps): DoctorService {
     state.clear();
     for (const [id, check] of next) {
       state.set(id, check);
+    }
+    if (envRestored && deps.onWritableRestored) {
+      // Robusto: un errore del consumer (ripresa download) non deve far cadere il tick del Doctor.
+      try {
+        deps.onWritableRestored();
+      } catch (error) {
+        logger?.debug({ err: error }, 'Doctor onWritableRestored fallito');
+      }
     }
   }
 

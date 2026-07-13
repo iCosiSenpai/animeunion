@@ -12,6 +12,7 @@ import { atomicMove, ensureDir, freeDiskBytes, sweepPartFiles, tempPath } from '
 import {
   DownloadAbortedError,
   type DownloadProgress,
+  EnvironmentDownloadError,
   PermanentDownloadError,
   downloadToFile,
 } from './http-downloader';
@@ -60,6 +61,12 @@ export interface DownloadWorker {
   cancel(queueId: string): boolean;
   /** Riavvia un job in failed (azzera retry_count). */
   retry(queueId: string): boolean;
+  /**
+   * Rimette in coda tutti i job falliti per causa ambientale (`fail_kind='env'`: cartella non
+   * scrivibile / I-O / spazio). Chiamato quando il Doctor rileva il ripristino. Ritorna quanti
+   * ne ha ripresi. I fallimenti 'permanent'/'other' restano fermi.
+   */
+  retryEnvFailed(): number;
   /** Cambia la priorità di un job in coda (il worker preleva per priorità desc). */
   setPriority(queueId: string, priority: number): boolean;
   /** Mette in pausa la coda: i job in corso continuano, non ne partono di nuovi. */
@@ -77,6 +84,32 @@ const MIN_FREE_DISK_BYTES = 500 * 1024 * 1024; // 500 MiB di margine minimo
 
 function backoffMs(attempt: number): number {
   return Math.min(BACKOFF_BASE_MS * 2 ** attempt, BACKOFF_CAP_MS);
+}
+
+/** Causa di un fallimento terminale, persistita in download_queue.fail_kind (vedi migr. 0020). */
+type FailKind = 'env' | 'permanent' | 'other';
+
+// Codici errno di errori "ambientali" (cartella/volume): recuperabili quando l'ambiente guarisce.
+// EACCES/EPERM: permessi; EROFS: filesystem read-only; ENOSPC: disco pieno; EIO/ENXIO: I-O device.
+const ENV_ERRNO = new Set(['EACCES', 'EPERM', 'EROFS', 'ENOSPC', 'EIO', 'ENXIO']);
+
+/**
+ * Classifica l'errore di un download per decidere la ripresa automatica: 'permanent' non riparte
+ * mai, 'env' riparte quando il Doctor rileva il ripristino della cartella/disco, 'other' (transitorio
+ * esaurito i retry) resta fermo ma e' ri-tentabile a mano.
+ */
+function classifyError(error: unknown): FailKind {
+  if (error instanceof PermanentDownloadError) {
+    return 'permanent';
+  }
+  if (error instanceof EnvironmentDownloadError) {
+    return 'env';
+  }
+  const code = (error as NodeJS.ErrnoException | undefined)?.code;
+  if (code && ENV_ERRNO.has(code)) {
+    return 'env';
+  }
+  return 'other';
 }
 
 export interface DownloadWorkerDeps {
@@ -271,7 +304,7 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
       // Guardia spazio disco: evita di riempire completamente il volume.
       const free = await freeDiskBytes(dirname(finalPath));
       if (free != null && free < MIN_FREE_DISK_BYTES) {
-        throw new Error(
+        throw new EnvironmentDownloadError(
           `Spazio su disco insufficiente: ${Math.round(free / 1024 / 1024)} MiB liberi`,
         );
       }
@@ -418,6 +451,8 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
           progress: 0,
           bytesDownloaded: 0,
           speedBps: null,
+          // Un tentativo che riparte non e' in stato di fallimento: azzera la causa.
+          failKind: null,
           // Gate del backoff: pickNext non ripescherà questo job finché retry_at non è passato,
           // così il tryStartNext del finally (e i tick) non lo rilanciano a raffica.
           retryAt: new Date(Date.now() + wait).toISOString(),
@@ -438,6 +473,9 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
           error: message,
           completedAt: new Date().toISOString(),
           speedBps: null,
+          // Causa persistita: i 'env' (cartella/disco) ripartono quando il Doctor rileva il
+          // ripristino; 'permanent'/'other' restano fermi (ri-tentabili a mano).
+          failKind: classifyError(error),
         });
         emitter.emit('failed', {
           queueId,
@@ -675,6 +713,7 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
             error: null,
             retryCount: 0,
             retryAt: null,
+            failKind: null,
             startedAt: null,
             completedAt: null,
             // Ripartenza pulita: scarta lo stato di resume del tentativo precedente (l'eventuale
@@ -751,12 +790,43 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
         progress: 0,
         bytesDownloaded: 0,
         speedBps: null,
+        failKind: null,
         // Retry manuale: riparte subito, nessun gate di backoff residuo.
         retryAt: null,
       });
       emitter.emit('enqueue', { queueId, episodeFileId: item.episodeFileId });
       void tryStartNext();
       return true;
+    },
+
+    retryEnvFailed() {
+      const rows = db
+        .select({ id: schema.downloadQueue.id, episodeFileId: schema.downloadQueue.episodeFileId })
+        .from(schema.downloadQueue)
+        .where(
+          and(eq(schema.downloadQueue.status, 'failed'), eq(schema.downloadQueue.failKind, 'env')),
+        )
+        .all();
+      if (rows.length === 0) {
+        return 0;
+      }
+      for (const row of rows) {
+        updateQueue(row.id, {
+          status: 'queued',
+          retryCount: 0,
+          error: null,
+          progress: 0,
+          bytesDownloaded: 0,
+          speedBps: null,
+          failKind: null,
+          // Ripristino ambientale: riparte subito (nessun backoff residuo). startedAt/completedAt
+          // restano invariati: verranno sovrascritti quando il job riparte davvero.
+          retryAt: null,
+        });
+        emitter.emit('enqueue', { queueId: row.id, episodeFileId: row.episodeFileId });
+      }
+      void tryStartNext();
+      return rows.length;
     },
 
     setPriority(queueId, priority) {

@@ -141,6 +141,13 @@
       "when": 1783300000000,
       "tag": "0019_neural_export_job",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1783400000000,
+      "tag": "0020_download_fail_kind",
+      "breakpoints": true
     }
   ]
 }

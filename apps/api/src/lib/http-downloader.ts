@@ -50,6 +50,19 @@ export class PermanentDownloadError extends Error {
   }
 }
 
+/**
+ * Errore "ambientale": il download e' fallito per una condizione dell'ambiente (cartella non
+ * scrivibile, I-O, spazio disco) e NON per la sorgente. Recuperabile: quando il Doctor rileva il
+ * ripristino (es. cartella tornata scrivibile) i job falliti cosi' vengono ri-accodati in automatico
+ * (vedi download-worker.retryEnvFailed). Distinto dagli errno FS grezzi per non fare string-matching.
+ */
+export class EnvironmentDownloadError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'EnvironmentDownloadError';
+  }
+}
+
 export interface DownloadOptions {
   url: string;
   destPath: string;

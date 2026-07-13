@@ -137,6 +137,12 @@ export function CommandPalette() {
       onSelect: () => go('/calendar'),
     },
     {
+      id: 'premium',
+      label: 'Premium',
+      icon: <Crown className="h-4 w-4" />,
+      onSelect: () => go('/premium'),
+    },
+    {
       id: 'settings',
       label: 'Impostazioni',
       icon: <Settings className="h-4 w-4" />,
@@ -258,12 +264,6 @@ export function CommandPalette() {
       label: 'Impostazioni: Backup',
       icon: <Database className="h-4 w-4" />,
       onSelect: () => go('/settings?section=backup'),
-    },
-    {
-      id: 'settings-premium',
-      label: 'Impostazioni: Premium',
-      icon: <Crown className="h-4 w-4" />,
-      onSelect: () => go('/settings?section=premium'),
     },
     {
       id: 'settings-avanzate',

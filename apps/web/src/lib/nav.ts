@@ -12,6 +12,7 @@ export const navLinks: NavLink[] = [
   { href: '/library', label: 'Libreria', primary: true },
   { href: '/downloads', label: 'Download' },
   { href: '/calendar', label: 'Calendario' },
+  { href: '/premium', label: 'Premium' },
   { href: '/settings', label: 'Impostazioni' },
   { href: '/statistiche', label: 'Statistiche' },
   { href: '/diagnostica', label: 'Diagnostica' },

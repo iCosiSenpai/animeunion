@@ -40,7 +40,7 @@ Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
 - [x] **Step 1** — Doctor attivo: monitoraggio continuo + auto-resolve + notifica ripristino
 - [x] **Step 2** — Ripresa automatica download falliti per cartella read-only (dip. Step 1)
 - [x] **Step 3** — Premium visibile e riusabile (meccanica + UI; il perk resta visibile da attivo)
-- [ ] **Step 4** — Premium nella sidebar
+- [x] **Step 4** — Premium nella sidebar
 - [ ] **Step 5** — Fix "Salva" pagina Aspetto (fetch→invalidate + Tema next-themes)
 - [ ] **Step 6** — Pagina "Aspetto" rifatta + filtri ricerca sfondo (incl. "Più votati")
 - [ ] **Step 7** — Pagina "Notifiche" rifatta + chiarezza PWA/Push (test push, stato install)
@@ -107,8 +107,20 @@ razionale (incl. worker nativo vs container, nota CUDA/NVENC) nel piano.
 
 **Batch attivo: v0.16.0 — "Doctor sempre attivo + Premium visibile + UX rifinita"** (piano
 [plan/doctor-premium-ux.md](plan/doctor-premium-ux.md), branch `feat/doctor-premium-ux`). 16 step
-pianificati. **Step 1-3 COMPLETI (2026-07-13)**; prossima sessione: Step 4 (Premium nella sidebar).
-Cadenza un solo step per sessione.
+pianificati. **Step 1-4 COMPLETI (2026-07-13)**; prossima sessione: Step 5 (Fix "Salva" pagina
+Aspetto). Cadenza un solo step per sessione.
+
+- **v0.16.0 Step 4 (2026-07-13): Premium nella sidebar.** Prima il Premium era solo un tab sepolto in
+  Impostazioni (`?section=premium`), senza un accesso di primo livello. Ora c'è una **pagina dedicata
+  `/premium`** (`app/(app)/premium/page.tsx` + `components/premium/premium-view.tsx`) che riusa i
+  componenti già estratti: branch `isPremiumActive(trpc.profile.me)` → `PremiumStatusPanel` (stato +
+  tier + funzioni sbloccate) con rimando "Configura il worker" a Settings, oppure `PremiumUpsell`;
+  loading skeleton + `QueryError`. Voce **sidebar "Premium"** (icona `Crown`) via `nav.ts` (non
+  `primary`: desktop rail + drawer "Altro" mobile) + `ICONS['/premium']`. Il **tab Settings›Premium**
+  ora rimanda alla pagina (card compatta al posto di `PremiumStatusPanel`/`PremiumUpsell`) ma
+  **mantiene la config del worker Neural Export** (Step 8 la sposterà). Command palette: voce
+  "Premium" tra le azioni principali → `/premium`. Nessuna migrazione/env. 447 test verdi (invariati),
+  lint/typecheck/build web verdi.
 
 - **v0.16.0 Step 3 (2026-07-13): Premium visibile e riusabile.** Prima le voci sbloccate dal Premium
   perdevano ogni segno di essere un perk. Ora una **mappa `feature→entitlement` estendibile** in

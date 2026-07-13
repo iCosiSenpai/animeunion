@@ -7,8 +7,6 @@ import { HomeLayoutSection } from '@/components/settings/home-layout-section';
 import { InstallButton } from '@/components/settings/install-button';
 import { NeuralExportPanel } from '@/components/settings/neural-export-panel';
 import { PremiumLockedNote, PremiumUnlockedNote } from '@/components/settings/premium-feature';
-import { PremiumStatusPanel } from '@/components/settings/premium-status';
-import { PremiumUpsell } from '@/components/settings/premium-upsell';
 import { PushToggle } from '@/components/settings/push-toggle';
 import { RequestsSection } from '@/components/settings/requests-section';
 import { SecuritySection } from '@/components/settings/security-section';
@@ -55,6 +53,7 @@ import {
   Webhook,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
@@ -926,7 +925,21 @@ export function SettingsView() {
           <div className={cn(active !== 'premium' && 'hidden')}>
             {isPremiumActive(profileQuery.data) ? (
               <div className="space-y-6">
-                <PremiumStatusPanel profile={profileQuery.data} />
+                <div className="flex items-start gap-3 rounded-xl border border-primary/30 bg-primary/5 p-5">
+                  <Crown className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
+                  <div className="min-w-0 space-y-2">
+                    <div>
+                      <p className="text-sm font-medium">Il tuo Premium è attivo</p>
+                      <p className="text-xs text-muted-foreground">
+                        Stato, piano e funzioni sbloccate sono nella pagina Premium. Qui sotto resta
+                        la configurazione del worker Neural Export.
+                      </p>
+                    </div>
+                    <Button asChild variant="outline" size="sm">
+                      <Link href="/premium">Vai alla pagina Premium</Link>
+                    </Button>
+                  </div>
+                </div>
                 <div className="space-y-4 rounded-xl border p-5">
                   <div>
                     <h3 className="text-base font-semibold">Worker Neural Export</h3>
@@ -1006,7 +1019,20 @@ export function SettingsView() {
                 <NeuralExportPanel />
               </div>
             ) : (
-              <PremiumUpsell />
+              <div className="flex items-start gap-3 rounded-xl border p-5">
+                <Crown className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
+                <div className="min-w-0 space-y-2">
+                  <div>
+                    <p className="text-sm font-medium">AnimeUnion Premium</p>
+                    <p className="text-xs text-muted-foreground">
+                      Scopri le funzioni extra e sostieni AnimeUnion dalla pagina Premium.
+                    </p>
+                  </div>
+                  <Button asChild variant="outline" size="sm">
+                    <Link href="/premium">Vai alla pagina Premium</Link>
+                  </Button>
+                </div>
+              </div>
             )}
           </div>
 

@@ -39,7 +39,7 @@ Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
 
 - [x] **Step 1** — Doctor attivo: monitoraggio continuo + auto-resolve + notifica ripristino
 - [x] **Step 2** — Ripresa automatica download falliti per cartella read-only (dip. Step 1)
-- [ ] **Step 3** — Premium visibile e riusabile (meccanica + UI; il perk resta visibile da attivo)
+- [x] **Step 3** — Premium visibile e riusabile (meccanica + UI; il perk resta visibile da attivo)
 - [ ] **Step 4** — Premium nella sidebar
 - [ ] **Step 5** — Fix "Salva" pagina Aspetto (fetch→invalidate + Tema next-themes)
 - [ ] **Step 6** — Pagina "Aspetto" rifatta + filtri ricerca sfondo (incl. "Più votati")
@@ -107,9 +107,19 @@ razionale (incl. worker nativo vs container, nota CUDA/NVENC) nel piano.
 
 **Batch attivo: v0.16.0 — "Doctor sempre attivo + Premium visibile + UX rifinita"** (piano
 [plan/doctor-premium-ux.md](plan/doctor-premium-ux.md), branch `feat/doctor-premium-ux`). 16 step
-pianificati. **Step 1-2 COMPLETI (2026-07-13)**; prossima sessione: Step 3 (Premium visibile e
-riusabile — meccanica + UI). Cadenza un solo step per sessione.
+pianificati. **Step 1-3 COMPLETI (2026-07-13)**; prossima sessione: Step 4 (Premium nella sidebar).
+Cadenza un solo step per sessione.
 
+- **v0.16.0 Step 3 (2026-07-13): Premium visibile e riusabile.** Prima le voci sbloccate dal Premium
+  perdevano ogni segno di essere un perk. Ora una **mappa `feature→entitlement` estendibile** in
+  shared (`premiumFeatureSchema` enum `concurrentDownloads`/`neuralExport` + `hasPremiumFeature` che
+  riusa `isPremiumActive`/`hasNeuralExport`, fail-closed — Regola #1: solo le due feature odierne) e
+  una **primitiva UI riusabile** `apps/web/src/components/settings/premium-feature.tsx`
+  (`PremiumUnlockedNote` = riga "Sbloccato col tuo piano Premium" con `Crown`; `PremiumLockedNote` =
+  lock-pill estratto dal markup prima duplicato; `PremiumInlineBadge` = mini-badge "Premium" per le
+  voci di menu). Cablata su **download simultanei** (`settings-view.tsx`: nota sotto il Select da
+  attivo, `PremiumLockedNote` da bloccato) e sulle voci **"Migliora a XQ/XQ+"** del dropdown catalogo
+  (`anime-detail.tsx`). Nessuna migrazione/env. 447 test verdi (+4), lint/typecheck verdi.
 - **v0.16.0 Step 2 (2026-07-13): ripresa automatica download falliti per cartella read-only.** Chiude
   l'incidente Jellyfin read-only: prima i download falliti per cartella non scrivibile restavano
   `failed` per sempre anche dopo il fix dei permessi. Ora il motore **classifica** la causa del

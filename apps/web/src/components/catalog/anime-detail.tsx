@@ -4,6 +4,7 @@ import { AnimeGrid } from '@/components/anime/anime-grid';
 import { AniListIcon, AnimeUnionIcon, MalIcon } from '@/components/anime/brand-icons';
 import { FollowButton } from '@/components/anime/follow-button';
 import { LanguageBadge } from '@/components/anime/language-badge';
+import { PremiumInlineBadge } from '@/components/settings/premium-feature';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -557,6 +558,7 @@ function EpisodeList({ anime }: { anime: AnimeDetailType }) {
                           >
                             <Sparkles className="mr-2 h-4 w-4 text-primary" />
                             Migliora a XQ · 1080p{langSuffix}
+                            <PremiumInlineBadge />
                           </DropdownMenuItem>,
                           <DropdownMenuItem
                             key={`xqplus-${language}`}
@@ -567,6 +569,7 @@ function EpisodeList({ anime }: { anime: AnimeDetailType }) {
                           >
                             <Sparkles className="mr-2 h-4 w-4 text-primary" />
                             Migliora a XQ+ · 4K{langSuffix}
+                            <PremiumInlineBadge />
                           </DropdownMenuItem>,
                         ];
                       })}

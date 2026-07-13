@@ -6,8 +6,9 @@ import { FolderInput } from '@/components/settings/folder-picker';
 import { HomeLayoutSection } from '@/components/settings/home-layout-section';
 import { InstallButton } from '@/components/settings/install-button';
 import { NeuralExportPanel } from '@/components/settings/neural-export-panel';
+import { PremiumLockedNote, PremiumUnlockedNote } from '@/components/settings/premium-feature';
 import { PremiumStatusPanel } from '@/components/settings/premium-status';
-import { PREMIUM_URL, PremiumUpsell } from '@/components/settings/premium-upsell';
+import { PremiumUpsell } from '@/components/settings/premium-upsell';
 import { PushToggle } from '@/components/settings/push-toggle';
 import { RequestsSection } from '@/components/settings/requests-section';
 import { SecuritySection } from '@/components/settings/security-section';
@@ -45,7 +46,6 @@ import {
   FolderDown,
   Languages,
   LayoutGrid,
-  Lock,
   type LucideIcon,
   Palette,
   Send,
@@ -524,32 +524,24 @@ export function SettingsView() {
               }
             >
               {isPremiumActive(profileQuery.data) ? (
-                <Select
-                  value={String(draft.maxConcurrent)}
-                  onValueChange={(v) => update('maxConcurrent', Number(v))}
-                >
-                  <SelectTrigger className="w-40">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="1">1 alla volta</SelectItem>
-                    <SelectItem value="2">2 in parallelo</SelectItem>
-                    <SelectItem value="3">3 in parallelo</SelectItem>
-                  </SelectContent>
-                </Select>
-              ) : (
-                <div className="inline-flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
-                  <Lock className="h-4 w-4" aria-hidden="true" />
-                  <span>1 alla volta</span>
-                  <a
-                    href={PREMIUM_URL}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="ml-1 rounded-full border border-primary/40 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-primary transition-colors hover:bg-primary/10"
+                <div>
+                  <Select
+                    value={String(draft.maxConcurrent)}
+                    onValueChange={(v) => update('maxConcurrent', Number(v))}
                   >
-                    Premium
-                  </a>
+                    <SelectTrigger className="w-40">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1">1 alla volta</SelectItem>
+                      <SelectItem value="2">2 in parallelo</SelectItem>
+                      <SelectItem value="3">3 in parallelo</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <PremiumUnlockedNote />
                 </div>
+              ) : (
+                <PremiumLockedNote fallbackLabel="1 alla volta" />
               )}
             </Field>
             <Field

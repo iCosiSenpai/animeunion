@@ -84,6 +84,27 @@ export function hasNeuralExport(profile: UserProfile | null | undefined): boolea
   return profile?.features?.neuralExport === true;
 }
 
+// Catalogo delle feature Premium note all'app oggi. Estendibile: una nuova feature aggiunge una
+// voce qui e un ramo in `hasPremiumFeature` (Regola #1: solo le due che esistono adesso).
+export const premiumFeatureSchema = z.enum(['concurrentDownloads', 'neuralExport']);
+export type PremiumFeature = z.infer<typeof premiumFeatureSchema>;
+
+/**
+ * Risolve l'entitlement di una feature Premium dal profilo, riusando gli helper autorevoli.
+ * Unico punto in cui "feature -> come si sblocca" è codificato (fail-closed su profilo assente).
+ */
+export function hasPremiumFeature(
+  profile: UserProfile | null | undefined,
+  feature: PremiumFeature,
+): boolean {
+  switch (feature) {
+    case 'concurrentDownloads':
+      return isPremiumActive(profile);
+    case 'neuralExport':
+      return hasNeuralExport(profile);
+  }
+}
+
 // B.1 — Ultimi episodi usciti.
 export const latestEpisodeSchema = z.object({
   animeId: z.string(),

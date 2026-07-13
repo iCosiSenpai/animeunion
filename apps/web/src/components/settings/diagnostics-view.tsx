@@ -42,28 +42,80 @@ function StatRow({
 
 export function DiagnosticsView() {
   const health = trpc.health.status.useQuery(undefined, { refetchInterval: 15000 });
+  const doctor = trpc.doctor.state.useQuery(undefined, { refetchInterval: 15000 });
+  const utils = trpc.useUtils();
+  const runDoctor = trpc.doctor.run.useMutation({
+    onSuccess: () => {
+      void utils.doctor.state.invalidate();
+    },
+  });
   const data = health.data;
+  const refreshing = health.isFetching || runDoctor.isPending;
+
+  const refresh = () => {
+    void health.refetch();
+    runDoctor.mutate();
+  };
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-1">
-          <h1 className="text-2xl font-bold tracking-tight">Diagnostica</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Doctor</h1>
           <p className="text-sm text-muted-foreground">
-            Stato del sistema: download, cartelle, spazio disco, catalogo e connessione.
+            Monitoraggio attivo: download, cartelle, spazio disco, catalogo e connessione. Gli
+            avvisi si risolvono da soli quando la condizione rientra.
           </p>
         </div>
         <Button
           variant="outline"
           size="sm"
-          onClick={() => health.refetch()}
-          disabled={health.isFetching}
+          onClick={refresh}
+          disabled={refreshing}
           className="gap-1"
         >
-          <RefreshCw className={`h-4 w-4 ${health.isFetching ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
           Aggiorna
         </Button>
       </div>
+
+      {doctor.data ? (
+        <Card
+          className={`space-y-3 p-5 ${
+            doctor.data.healthy ? '' : 'border-amber-500/40 bg-amber-500/5'
+          }`}
+        >
+          <h2 className="flex items-center gap-2 text-lg font-semibold">
+            {doctor.data.healthy ? (
+              <CheckCircle2 className="h-5 w-5 text-green-500" />
+            ) : (
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
+            )}
+            {doctor.data.healthy
+              ? 'Tutto in ordine'
+              : `${doctor.data.criticalCount} problem${doctor.data.criticalCount === 1 ? 'a' : 'i'} da controllare`}
+          </h2>
+          {doctor.data.checks.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Primo controllo in corso… (
+              {doctor.data.lastRunAt ? formatDate(doctor.data.lastRunAt) : 'in avvio'})
+            </p>
+          ) : (
+            <ul className="space-y-0">
+              {doctor.data.checks.map((c) => (
+                <StatRow key={c.id} label={c.label} ok={c.status === 'ok'}>
+                  {c.detail ?? (c.status === 'ok' ? 'OK' : 'Problema')}
+                </StatRow>
+              ))}
+            </ul>
+          )}
+          {doctor.data.lastRunAt ? (
+            <p className="text-xs text-muted-foreground">
+              Ultimo controllo: {formatDate(doctor.data.lastRunAt)}
+            </p>
+          ) : null}
+        </Card>
+      ) : null}
 
       {health.isLoading ? (
         <div className="flex items-center justify-center p-12 text-muted-foreground">

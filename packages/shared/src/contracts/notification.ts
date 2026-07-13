@@ -7,6 +7,8 @@ export const notificationTypeSchema = z.enum([
   'season_available',
   'sync_complete',
   'disk_low',
+  'doctor_alert',
+  'doctor_resolved',
   'info',
 ]);
 export type NotificationType = z.infer<typeof notificationTypeSchema>;

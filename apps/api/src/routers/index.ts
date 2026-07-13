@@ -4,6 +4,7 @@ import { backupRouter } from './backup';
 import { calendarRouter } from './calendar';
 import { catalogRouter } from './catalog';
 import { configRouter } from './config';
+import { doctorRouter } from './doctor';
 import { downloadRouter } from './download';
 import { episodeRouter } from './episode';
 import { filesRouter } from './files';
@@ -40,6 +41,7 @@ export const appRouter = router({
   series: seriesRouter,
   notifications: notificationsRouter,
   health: healthRouter,
+  doctor: doctorRouter,
   theme: themeRouter,
   lock: lockRouter,
   push: pushRouter,

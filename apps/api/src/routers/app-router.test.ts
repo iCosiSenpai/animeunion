@@ -9,6 +9,7 @@ import { createCatalogService } from '../services/catalog-service';
 import { createCloudBackupService } from '../services/cloud-backup-service';
 import { createConfigService } from '../services/config-service';
 import { createDbBackupService } from '../services/db-backup-service';
+import { createDoctorService } from '../services/doctor-service';
 import { createDownloadService } from '../services/download-service';
 import { createFavoritesService } from '../services/favorites-service';
 import { createFileManagerService } from '../services/file-manager-service';
@@ -78,6 +79,7 @@ function makeCaller() {
     renamer,
     logger: testLogger,
   });
+  const doctor = createDoctorService({ config, auth, jellyfin, notifications, logger: testLogger });
   const ctx: Context = {
     db,
     source,
@@ -102,6 +104,7 @@ function makeCaller() {
       backup,
       cloudBackup,
       neuralExport,
+      doctor,
     },
     logger: testLogger,
   };

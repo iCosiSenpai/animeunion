@@ -10,6 +10,7 @@ import type { CatalogService } from './services/catalog-service';
 import type { CloudBackupService } from './services/cloud-backup-service';
 import type { ConfigService } from './services/config-service';
 import type { DbBackupService } from './services/db-backup-service';
+import type { DoctorService } from './services/doctor-service';
 import type { DownloadService } from './services/download-service';
 import type { FavoritesService } from './services/favorites-service';
 import type { FileManagerService } from './services/file-manager-service';
@@ -50,6 +51,7 @@ export interface Context {
     backup: DbBackupService;
     cloudBackup: CloudBackupService;
     neuralExport: NeuralExportService;
+    doctor: DoctorService;
   };
   /** Token di sessione del blocco web UI, dall'header x-app-session (per richiesta). */
   sessionToken?: string;

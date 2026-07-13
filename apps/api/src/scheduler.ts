@@ -1,4 +1,3 @@
-import { freeDiskBytes } from './lib/download-fs';
 import { createSeasonWatcher } from './services/season-watcher';
 import type { Context } from './trpc';
 
@@ -10,13 +9,15 @@ export interface Scheduler {
 const DOWNLOAD_AUTODOWNLOAD_MINUTES = 30;
 const QUEUE_PURGE_HOURS = 6;
 const TRASH_PRUNE_HOURS = 12;
-const DISK_CHECK_HOURS = 6;
 const SEASON_CHECK_HOURS = 12;
 const SEASON_CHECK_STARTUP_MS = 2 * 60 * 1000; // prima passata ~2 min dopo l'avvio
 const LIBRARY_CHECK_MINUTES = 15; // controllo attivo integrità libreria (episodi spariti dal disco)
 const LIBRARY_CHECK_STARTUP_MS = 3 * 60 * 1000;
-// Soglia di avviso (1 GiB): più alta del hard-stop del worker (500 MiB) per avvisare prima.
-const DISK_LOW_BYTES = 1024 * 1024 * 1024;
+// Doctor: monitoraggio attivo (writability cartelle, disco, API, Jellyfin) con notifiche di
+// allerta/ripristino. Tick frequente (5 min) così un ripristino, es. cartella tornata scrivibile,
+// si nota in fretta (il vecchio check disco a 6h era assorbito qui).
+const DOCTOR_CHECK_MINUTES = 5;
+const DOCTOR_CHECK_STARTUP_MS = 20 * 1000;
 
 /**
  * Scheduler di polling dei preferiti del sito (v1.0.3) + auto-download per i follow
@@ -141,36 +142,20 @@ export function createScheduler(ctx: Context): Scheduler {
       backupTimer.unref?.();
       timers.push(backupTimer);
 
-      // Avviso spazio disco basso: debounced (notifica solo alla transizione ok->low per cartella).
-      const lowRoots = new Set<string>();
-      const checkDisk = async () => {
-        try {
-          for (const root of services.config.distinctDownloadRoots()) {
-            const free = await freeDiskBytes(root);
-            if (free == null) {
-              continue;
-            }
-            if (free < DISK_LOW_BYTES) {
-              if (!lowRoots.has(root)) {
-                lowRoots.add(root);
-                services.notifications.create({
-                  type: 'disk_low',
-                  title: 'Spazio su disco in esaurimento',
-                  body: `Cartella ${root}: ${Math.round(free / 1024 / 1024)} MiB liberi`,
-                });
-              }
-            } else {
-              lowRoots.delete(root); // tornata sopra soglia: riarma l'avviso
-            }
-          }
-        } catch (error) {
-          logger.debug({ err: error }, 'Tick check disco fallito');
-        }
+      // Doctor: monitoraggio attivo continuo. Assorbe il vecchio check disco (che era solo ok->low
+      // per lo spazio) generalizzandolo a scrivibilità cartelle + disco + API + Jellyfin, con
+      // notifica sia di allerta che di ripristino. Run allo startup (breve delay) + tick 5 min.
+      const doctorTick = () => {
+        void services.doctor.runChecks().catch((error) => {
+          logger.debug({ err: error }, 'Tick Doctor fallito');
+        });
       };
-      void checkDisk();
-      const diskTimer = setInterval(() => void checkDisk(), DISK_CHECK_HOURS * 60 * 60 * 1000);
-      diskTimer.unref?.();
-      timers.push(diskTimer);
+      const doctorStartup = setTimeout(doctorTick, DOCTOR_CHECK_STARTUP_MS);
+      doctorStartup.unref?.();
+      timers.push(doctorStartup);
+      const doctorTimer = setInterval(doctorTick, DOCTOR_CHECK_MINUTES * 60 * 1000);
+      doctorTimer.unref?.();
+      timers.push(doctorTimer);
 
       // Nuove stagioni delle serie seguite (batch a rotazione, refresh forzato del dettaglio).
       const seasonWatcher = createSeasonWatcher({

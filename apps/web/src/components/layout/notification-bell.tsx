@@ -10,6 +10,7 @@ import { cn, formatDate } from '@/lib/utils';
 import type { Notification, NotificationType } from '@animeunion/shared';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
+  AlertTriangle,
   Bell,
   CheckCheck,
   CheckCircle2,
@@ -18,6 +19,7 @@ import {
   Info,
   RefreshCw,
   Sparkles,
+  Stethoscope,
   Trash2,
   XCircle,
 } from 'lucide-react';
@@ -31,6 +33,8 @@ const ICONS: Record<NotificationType, ReactNode> = {
   season_available: <Sparkles className="h-4 w-4 text-primary" />,
   sync_complete: <RefreshCw className="h-4 w-4 text-muted-foreground" />,
   disk_low: <HardDrive className="h-4 w-4 text-amber-500" />,
+  doctor_alert: <AlertTriangle className="h-4 w-4 text-amber-500" />,
+  doctor_resolved: <Stethoscope className="h-4 w-4 text-green-500" />,
   info: <Info className="h-4 w-4 text-muted-foreground" />,
 };
 
@@ -43,6 +47,8 @@ const CATEGORY: Record<NotificationType, Exclude<FilterKey, 'all'>> = {
   season_available: 'episode',
   sync_complete: 'system',
   disk_low: 'system',
+  doctor_alert: 'system',
+  doctor_resolved: 'system',
   info: 'system',
 };
 

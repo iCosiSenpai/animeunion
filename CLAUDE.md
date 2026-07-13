@@ -37,7 +37,7 @@ Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
 > Branch: `feat/doctor-premium-ux` (da `main`). **Cadenza: un solo step per sessione.**
 > All'inizio di ogni sessione: leggi CLAUDE.md → apri il piano → riprendi dal primo `[ ]`.
 
-- [ ] **Step 1** — Doctor attivo: monitoraggio continuo + auto-resolve + notifica ripristino
+- [x] **Step 1** — Doctor attivo: monitoraggio continuo + auto-resolve + notifica ripristino
 - [ ] **Step 2** — Ripresa automatica download falliti per cartella read-only (dip. Step 1)
 - [ ] **Step 3** — Premium visibile e riusabile (meccanica + UI; il perk resta visibile da attivo)
 - [ ] **Step 4** — Premium nella sidebar
@@ -103,15 +103,25 @@ razionale (incl. worker nativo vs container, nota CUDA/NVENC) nel piano.
   config worker) + UI (pannello Premium + azione "Migliora a XQ/XQ+"). 423 test verdi.
 - [x] **Step finale** — Release v0.15.0 — 2026-07-09
 
-## Stato attuale (2026-07-11)
+## Stato attuale (2026-07-13)
 
 **Batch attivo: v0.16.0 — "Doctor sempre attivo + Premium visibile + UX rifinita"** (piano
 [plan/doctor-premium-ux.md](plan/doctor-premium-ux.md), branch `feat/doctor-premium-ux`). 16 step
-pianificati (Doctor attivo con auto-resolve + resume download, Premium visibile/riusabile + in
-sidebar, fix Salva Aspetto, rifacimento pagine Notifiche/Aspetto, Neural Export spostato e spiegato,
-upscale locale, FAQ/GitHub Pages, rimozione Plex, statistiche oneste, polish UI, ricerca feature
-Premium). Nessuno step ancora implementato: prossima sessione parte dallo Step 1. Cadenza un solo
-step per sessione.
+pianificati. **Step 1 COMPLETO (2026-07-13)**; prossima sessione: Step 2 (ripresa automatica
+download falliti per cartella read-only, dip. Step 1). Cadenza un solo step per sessione.
+
+- **v0.16.0 Step 1 (2026-07-13): Doctor attivo.** Nuovo `doctor-service` (in memoria, Regola #1:
+  nessuna tabella) che generalizza il vecchio pattern `lowRoots` dello scheduler: `runChecks()`
+  verifica scrivibilità cartelle download, spazio disco, connessione API, Jellyfin (solo se
+  configurato); mantiene lo stato tra i tick e notifica solo le **transizioni** (ok→critical =
+  `doctor_alert`; critical→ok = `doctor_resolved`, l'alert sparisce da solo). Lo scheduler ha un
+  **tick Doctor** ogni 5 min (+ run ~20s dopo l'avvio) che **assorbe** il vecchio check disco a 6h
+  (niente doppie notifiche `disk_low`). Shared: `doctorStateSchema` + 2 nuovi `NotificationType`.
+  Router `doctor` (`state` query cheap + `run` mutation per il pulsante Aggiorna). Frontend: la
+  pagina `/diagnostica` diventa **"Doctor"** con una card di stato monitorato in cima; `SetupBanner`
+  ora è guidato dallo stato Doctor (auto-hide su ripristino, link → Doctor). Il segnale "cartella di
+  nuovo scrivibile" è il gancio per lo Step 2. 438 test verdi, lint/typecheck/build web verdi.
+  Formato del piano `plan/doctor-premium-ux.md` allineato agli altri (sotto-task a checkbox).
 
 **Versione corrente: v0.15.0 — "Quality + Neural Export (Anime4K)".** Coesistenza SD/XQ/XQ+, upscale
 via worker GPU esterno, Premium cablato sul profilo del sito, + rifiniture (download simultanei

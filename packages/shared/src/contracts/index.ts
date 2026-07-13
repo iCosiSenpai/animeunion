@@ -15,6 +15,7 @@ export * from './series';
 export * from './requests';
 export * from './notification';
 export * from './health';
+export * from './doctor';
 export * from './theme';
 export * from './lock';
 export * from './push';

@@ -12,6 +12,7 @@ import { createCatalogService } from './services/catalog-service';
 import { createCloudBackupService } from './services/cloud-backup-service';
 import { createConfigService } from './services/config-service';
 import { applyPendingRestore, createDbBackupService } from './services/db-backup-service';
+import { createDoctorService } from './services/doctor-service';
 import { createDownloadService } from './services/download-service';
 import { createFavoritesService } from './services/favorites-service';
 import { createFileManagerService } from './services/file-manager-service';
@@ -210,6 +211,10 @@ export function createAppContext(options: { env?: Env; databasePath?: string } =
   // rimasti appesi cosi' l'utente puo' ri-lanciarli.
   neuralExport.recoverInterrupted();
 
+  // Doctor: monitoraggio attivo (writability cartelle, disco, API, Jellyfin) con notifiche di
+  // allerta/ripristino sulle transizioni. Lo scheduler lo esegue a tick regolari.
+  const doctor = createDoctorService({ config, auth, jellyfin, notifications, logger });
+
   return {
     db,
     source,
@@ -234,6 +239,7 @@ export function createAppContext(options: { env?: Env; databasePath?: string } =
       backup,
       cloudBackup,
       neuralExport,
+      doctor,
     },
     logger,
   };

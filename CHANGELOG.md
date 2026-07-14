@@ -7,6 +7,25 @@ e il progetto aderisce al [Semantic Versioning](https://semver.org/lang/it/).
 
 ## [Unreleased]
 
+### Added
+- **Notifiche Discord (webhook).** Nuovo canale di inoltro parallelo a Telegram: l'utente incolla un
+  webhook URL del proprio server Discord (Impostazioni server → Integrazioni → Webhook) e le notifiche
+  vengono postate nel canale, anche ad app chiusa. Nessun bot né OAuth: solo una POST best-effort al
+  webhook (`apps/api/src/lib/discord.ts`, calco del notifier Telegram). Config `notifyDiscord` +
+  `discordWebhookUrl` (segreto: cifrato a riposo, mascherato al frontend; fallback env
+  `DISCORD_WEBHOOK_URL`). Pulsante "Invia messaggio di test" con esito. Zero migrazioni.
+
+### Changed
+- **Pagina "Notifiche" rifatta.** La sezione Impostazioni›Notifiche era una lista piatta di campi; ora
+  è raggruppata per canale in card distinte — **Nell'app** (completamento, nuove stagioni),
+  **Telegram**, **Discord**, **Push del browser**, **App installabile (PWA)** — con icona, titolo e
+  descrizione per ciascun gruppo (stile delle card introdotte nello Step 6 "Aspetto").
+- **Pulsante "Installa app" (PWA) stato-aware.** Prima mostrava sempre "Già installata o non
+  disponibile" (ambiguo). Ora distingue tre stati: **installata** (`display-mode: standalone` o
+  `navigator.standalone` iOS → conferma), **installabile** (prompt `beforeinstallprompt` disponibile →
+  pulsante "Installa app"), **non disponibile** (manca il prompt → spiegazione del requisito HTTPS con
+  link alla guida, coerente con il toggle push).
+
 ### Da fare
 - Setup wizard migliorato (Step F, rimandato).
 - GitHub Pages (landing pubblica + spazio mascotte).

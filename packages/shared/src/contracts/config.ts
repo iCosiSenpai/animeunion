@@ -66,6 +66,10 @@ export const appConfigSchema = z.object({
   // (coerente con il modello token-in-SQLite); vuoti = usa il fallback da env, se presente.
   telegramBotToken: z.string().default(''),
   telegramChatId: z.string().default(''),
+  // Inoltro delle notifiche a un canale Discord via webhook (Impostazioni server → Integrazioni →
+  // Webhook). Il webhook URL è un segreto (chi lo ha può postare): cifrato a riposo, mascherato al FE.
+  notifyDiscord: z.boolean().default(false),
+  discordWebhookUrl: z.string().default(''),
   // Tema: colore accent (palette) e wallpaper di sfondo (URL; vuoto = nessuno sfondo).
   themeAccent: themeAccentSchema.default('green'),
   themeBackgroundUrl: z.string().default(''),
@@ -109,6 +113,7 @@ export const SECRET_MASK = '••••••••';
 // Chiavi di config che NON devono mai essere inviate in chiaro al frontend.
 export const SECRET_CONFIG_KEYS: ConfigKey[] = [
   'telegramBotToken',
+  'discordWebhookUrl',
   'jellyfinApiKey',
   'neuralWorkerToken',
   'gdriveClientSecret',

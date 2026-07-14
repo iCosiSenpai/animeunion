@@ -35,6 +35,7 @@ import { cn } from '@/lib/utils';
 import { type AppConfig, SECRET_MASK, isPremiumActive } from '@animeunion/shared';
 import {
   Bell,
+  BellRing,
   CalendarClock,
   Compass,
   Crown,
@@ -44,11 +45,14 @@ import {
   Languages,
   LayoutGrid,
   type LucideIcon,
+  MessageCircle,
+  MessagesSquare,
   Palette,
   Send,
   Server,
   Shield,
   SlidersHorizontal,
+  Smartphone,
   Webhook,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
@@ -119,6 +123,33 @@ function Section({
       <Separator />
       <div className="space-y-4">{children}</div>
     </Card>
+  );
+}
+
+// Card di gruppo dentro Notifiche: raggruppa i controlli per canale (in-app, Telegram, Discord,
+// push, PWA) con titolo+descrizione, così i canali non si confondono in una lista piatta.
+function NotifyGroup({
+  title,
+  description,
+  icon: Icon,
+  children,
+}: {
+  title: string;
+  description: string;
+  icon: LucideIcon;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-4 rounded-xl border p-4">
+      <div className="flex items-start gap-2.5">
+        <Icon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <div>
+          <p className="text-sm font-medium">{title}</p>
+          <p className="text-xs text-muted-foreground">{description}</p>
+        </div>
+      </div>
+      {children}
+    </div>
   );
 }
 
@@ -196,6 +227,7 @@ export function SettingsView() {
   const setMutation = trpc.config.set.useMutation();
   const syncMutation = trpc.catalog.sync.useMutation();
   const testTelegramMutation = trpc.notifications.testTelegram.useMutation();
+  const testDiscordMutation = trpc.notifications.testDiscord.useMutation();
   const testJellyfinMutation = trpc.jellyfin.testConnection.useMutation();
   const profileQuery = trpc.profile.me.useQuery(undefined, { retry: false });
   const { theme, setTheme } = useTheme();
@@ -428,6 +460,22 @@ export function SettingsView() {
       });
       if (res.ok) {
         toast.success('Messaggio di test inviato su Telegram.');
+      } else {
+        toast.error(res.error ?? 'Invio del messaggio di test non riuscito.');
+      }
+    } catch {
+      toast.error('Invio del messaggio di test non riuscito.');
+    }
+  };
+
+  const onTestDiscord = async () => {
+    try {
+      const res = await testDiscordMutation.mutateAsync({
+        // Mascherato e non modificato ⇒ undefined: il server usa il webhook salvato.
+        webhookUrl: draft.discordWebhookUrl === SECRET_MASK ? undefined : draft.discordWebhookUrl,
+      });
+      if (res.ok) {
+        toast.success('Messaggio di test inviato su Discord.');
       } else {
         toast.error(res.error ?? 'Invio del messaggio di test non riuscito.');
       }
@@ -703,142 +751,224 @@ export function SettingsView() {
           </Section>
 
           <Section id="notifiche" hidden={active !== 'notifiche'} title="Notifiche">
-            <Field
-              label="Notifica completamento"
-              hint="Mostra un toast quando un episodio finisce di scaricarsi."
+            <NotifyGroup
+              icon={Bell}
+              title="Nell'app"
+              description="Avvisi mostrati dentro AnimeUnion (campanella e toast). Sempre disponibili."
             >
-              <Select
-                value={draft.notifyOnComplete ? 'on' : 'off'}
-                onValueChange={(v) => update('notifyOnComplete', v === 'on')}
+              <Field
+                label="Notifica completamento"
+                hint="Mostra un toast quando un episodio finisce di scaricarsi."
               >
-                <SelectTrigger className="w-40">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="on">Attivo</SelectItem>
-                  <SelectItem value="off">Disattivo</SelectItem>
-                </SelectContent>
-              </Select>
-            </Field>
-            <Field
-              label="Nuove stagioni"
-              hint="Avvisa quando una serie che segui ottiene una nuova stagione o contenuto correlato."
+                <Select
+                  value={draft.notifyOnComplete ? 'on' : 'off'}
+                  onValueChange={(v) => update('notifyOnComplete', v === 'on')}
+                >
+                  <SelectTrigger className="w-40">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="on">Attivo</SelectItem>
+                    <SelectItem value="off">Disattivo</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field
+                label="Nuove stagioni"
+                hint="Avvisa quando una serie che segui ottiene una nuova stagione o contenuto correlato."
+              >
+                <Select
+                  value={draft.notifyNewSeasons ? 'on' : 'off'}
+                  onValueChange={(v) => update('notifyNewSeasons', v === 'on')}
+                >
+                  <SelectTrigger className="w-40">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="on">Attivo</SelectItem>
+                    <SelectItem value="off">Disattivo</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+            </NotifyGroup>
+
+            <NotifyGroup
+              icon={MessageCircle}
+              title="Telegram"
+              description="Inoltra le notifiche a un bot Telegram. Funziona anche fuori dall'app."
             >
-              <Select
-                value={draft.notifyNewSeasons ? 'on' : 'off'}
-                onValueChange={(v) => update('notifyNewSeasons', v === 'on')}
+              <Field label="Inoltro" hint="Attiva l'invio delle notifiche al bot.">
+                <Select
+                  value={draft.notifyTelegram ? 'on' : 'off'}
+                  onValueChange={(v) => update('notifyTelegram', v === 'on')}
+                >
+                  <SelectTrigger className="w-40">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="on">Attivo</SelectItem>
+                    <SelectItem value="off">Disattivo</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field label="Bot Token" hint="Token del bot ottenuto da @BotFather.">
+                <div className="space-y-1.5">
+                  <Input
+                    type="password"
+                    autoComplete="off"
+                    placeholder={
+                      original?.telegramBotToken === SECRET_MASK
+                        ? 'Configurato — digita per sostituirlo'
+                        : '123456:ABC-DEF…'
+                    }
+                    value={draft.telegramBotToken === SECRET_MASK ? '' : draft.telegramBotToken}
+                    onChange={(e) => update('telegramBotToken', e.target.value)}
+                  />
+                  {original?.telegramBotToken === SECRET_MASK &&
+                  draft.telegramBotToken === SECRET_MASK ? (
+                    <p className="text-xs text-muted-foreground">
+                      Token configurato (mascherato). Lascia vuoto per mantenerlo, digita per
+                      sostituirlo o{' '}
+                      <button
+                        type="button"
+                        className="text-primary underline-offset-4 hover:underline"
+                        onClick={() => update('telegramBotToken', '')}
+                      >
+                        rimuovilo
+                      </button>
+                      .
+                    </p>
+                  ) : null}
+                </div>
+              </Field>
+              <Field
+                label="Chat ID"
+                hint="Id della chat dove ricevere i messaggi (es. con @userinfobot)."
               >
-                <SelectTrigger className="w-40">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="on">Attivo</SelectItem>
-                  <SelectItem value="off">Disattivo</SelectItem>
-                </SelectContent>
-              </Select>
-            </Field>
-            <Field
-              label="Notifiche Telegram"
-              hint="Inoltra le notifiche al tuo bot Telegram. Configura token e chat id qui sotto."
-            >
-              <Select
-                value={draft.notifyTelegram ? 'on' : 'off'}
-                onValueChange={(v) => update('notifyTelegram', v === 'on')}
-              >
-                <SelectTrigger className="w-40">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="on">Attivo</SelectItem>
-                  <SelectItem value="off">Disattivo</SelectItem>
-                </SelectContent>
-              </Select>
-            </Field>
-            <Field label="Bot Token" hint="Token del bot ottenuto da @BotFather.">
-              <div className="space-y-1.5">
                 <Input
-                  type="password"
                   autoComplete="off"
-                  placeholder={
-                    original?.telegramBotToken === SECRET_MASK
-                      ? 'Configurato — digita per sostituirlo'
-                      : '123456:ABC-DEF…'
-                  }
-                  value={draft.telegramBotToken === SECRET_MASK ? '' : draft.telegramBotToken}
-                  onChange={(e) => update('telegramBotToken', e.target.value)}
+                  placeholder="123456789"
+                  value={draft.telegramChatId}
+                  onChange={(e) => update('telegramChatId', e.target.value)}
                 />
-                {original?.telegramBotToken === SECRET_MASK &&
-                draft.telegramBotToken === SECRET_MASK ? (
-                  <p className="text-xs text-muted-foreground">
-                    Token configurato (mascherato). Lascia vuoto per mantenerlo, digita per
-                    sostituirlo o{' '}
-                    <button
-                      type="button"
-                      className="text-primary underline-offset-4 hover:underline"
-                      onClick={() => update('telegramBotToken', '')}
-                    >
-                      rimuovilo
-                    </button>
-                    .
-                  </p>
-                ) : null}
-              </div>
-            </Field>
-            <Field
-              label="Chat ID"
-              hint="Id della chat dove ricevere i messaggi (es. con @userinfobot)."
+              </Field>
+              <Field label="Verifica" hint="Invia un messaggio di prova con i valori inseriti.">
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button
+                    variant="outline"
+                    onClick={onTestTelegram}
+                    disabled={
+                      testTelegramMutation.isPending ||
+                      !draft.telegramBotToken ||
+                      !draft.telegramChatId
+                    }
+                  >
+                    <Send className="mr-2 h-4 w-4" />
+                    {testTelegramMutation.isPending ? 'Invio…' : 'Invia messaggio di test'}
+                  </Button>
+                  <a
+                    href="https://github.com/iCosiSenpai/animeunion#configurazione-notifiche-telegram"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-sm text-primary underline-offset-4 hover:underline"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    Come si configura?
+                  </a>
+                </div>
+              </Field>
+            </NotifyGroup>
+
+            <NotifyGroup
+              icon={MessagesSquare}
+              title="Discord"
+              description="Inoltra le notifiche a un canale Discord tramite un webhook del tuo server."
             >
-              <Input
-                autoComplete="off"
-                placeholder="123456789"
-                value={draft.telegramChatId}
-                onChange={(e) => update('telegramChatId', e.target.value)}
-              />
-            </Field>
-            <Field label="Verifica" hint="Invia un messaggio di prova con i valori inseriti.">
-              <div className="flex flex-wrap items-center gap-3">
-                <Button
-                  variant="outline"
-                  onClick={onTestTelegram}
-                  disabled={
-                    testTelegramMutation.isPending ||
-                    !draft.telegramBotToken ||
-                    !draft.telegramChatId
-                  }
+              <Field label="Inoltro" hint="Attiva l'invio delle notifiche al webhook.">
+                <Select
+                  value={draft.notifyDiscord ? 'on' : 'off'}
+                  onValueChange={(v) => update('notifyDiscord', v === 'on')}
                 >
-                  <Send className="mr-2 h-4 w-4" />
-                  {testTelegramMutation.isPending ? 'Invio…' : 'Invia messaggio di test'}
-                </Button>
-                <a
-                  href="https://github.com/iCosiSenpai/animeunion#configurazione-notifiche-telegram"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-sm text-primary underline-offset-4 hover:underline"
-                >
-                  <ExternalLink className="h-3.5 w-3.5" />
-                  Come si configura?
-                </a>
-              </div>
-            </Field>
-            <Field
-              label="Notifiche push"
-              hint="Notifiche del browser (anche ad app chiusa). Richiede HTTPS — vedi la guida nel README."
+                  <SelectTrigger className="w-40">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="on">Attivo</SelectItem>
+                    <SelectItem value="off">Disattivo</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field
+                label="Webhook URL"
+                hint="Impostazioni server → Integrazioni → Webhook → Copia URL."
+              >
+                <div className="space-y-1.5">
+                  <Input
+                    type="password"
+                    autoComplete="off"
+                    placeholder={
+                      original?.discordWebhookUrl === SECRET_MASK
+                        ? 'Configurato — incolla per sostituirlo'
+                        : 'https://discord.com/api/webhooks/…'
+                    }
+                    value={draft.discordWebhookUrl === SECRET_MASK ? '' : draft.discordWebhookUrl}
+                    onChange={(e) => update('discordWebhookUrl', e.target.value)}
+                  />
+                  {original?.discordWebhookUrl === SECRET_MASK &&
+                  draft.discordWebhookUrl === SECRET_MASK ? (
+                    <p className="text-xs text-muted-foreground">
+                      Webhook configurato (mascherato). Lascia vuoto per mantenerlo, incolla per
+                      sostituirlo o{' '}
+                      <button
+                        type="button"
+                        className="text-primary underline-offset-4 hover:underline"
+                        onClick={() => update('discordWebhookUrl', '')}
+                      >
+                        rimuovilo
+                      </button>
+                      .
+                    </p>
+                  ) : null}
+                </div>
+              </Field>
+              <Field label="Verifica" hint="Invia un messaggio di prova al webhook inserito.">
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button
+                    variant="outline"
+                    onClick={onTestDiscord}
+                    disabled={testDiscordMutation.isPending || !draft.discordWebhookUrl}
+                  >
+                    <Send className="mr-2 h-4 w-4" />
+                    {testDiscordMutation.isPending ? 'Invio…' : 'Invia messaggio di test'}
+                  </Button>
+                  <a
+                    href="https://support.discord.com/hc/it/articles/228383668"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-sm text-primary underline-offset-4 hover:underline"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    Come si crea un webhook?
+                  </a>
+                </div>
+              </Field>
+            </NotifyGroup>
+
+            <NotifyGroup
+              icon={BellRing}
+              title="Push del browser"
+              description="Notifiche del sistema operativo, anche ad app chiusa. Richiede HTTPS."
             >
               <PushToggle />
-            </Field>
-            <Field
-              label="App installabile"
-              hint="Installa AnimeUnion come app (PWA). Richiede HTTPS."
+            </NotifyGroup>
+
+            <NotifyGroup
+              icon={Smartphone}
+              title="App installabile (PWA)"
+              description="Installa AnimeUnion come app dedicata sul dispositivo. Richiede HTTPS."
             >
               <InstallButton />
-            </Field>
-            <Field label="Provider futuri" hint="Discord sarà disponibile in una prossima release.">
-              <div className="flex flex-wrap gap-2">
-                <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs text-muted-foreground">
-                  Discord
-                </span>
-              </div>
-            </Field>
+            </NotifyGroup>
           </Section>
 
           <Section id="avanzate" hidden={active !== 'avanzate'} title="Diagnostica">

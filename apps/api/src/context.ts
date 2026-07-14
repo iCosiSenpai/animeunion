@@ -4,6 +4,7 @@ import { isPremiumActive } from '@animeunion/shared';
 import { eq } from 'drizzle-orm';
 import { type Env, env } from './config/env';
 import { createDb, runMigrations, schema } from './db';
+import { createDiscordNotifier } from './lib/discord';
 import { createDownloadWorker } from './lib/download-worker';
 import { logger } from './lib/logger';
 import { createTelegramNotifier } from './lib/telegram';
@@ -66,8 +67,13 @@ export function createAppContext(options: { env?: Env; databasePath?: string } =
     }),
     logger,
   });
+  const discord = createDiscordNotifier({
+    // Config-DB (Impostazioni) ha precedenza; env resta fallback per i deploy esistenti.
+    getWebhookUrl: () => config.get('discordWebhookUrl') || resolvedEnv.DISCORD_WEBHOOK_URL,
+    logger,
+  });
   const push = createPushService({ db, logger });
-  const notifications = createNotificationService({ db, config, telegram, push, logger });
+  const notifications = createNotificationService({ db, config, telegram, discord, push, logger });
   const catalog = createCatalogService({
     db,
     source,

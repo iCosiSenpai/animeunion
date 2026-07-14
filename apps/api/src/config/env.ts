@@ -19,6 +19,8 @@ const envSchema = z.object({
   // Notifiche Telegram (opzionali): bot token + chat id. Segreti → solo env/.env.
   TELEGRAM_BOT_TOKEN: z.string().optional(),
   TELEGRAM_CHAT_ID: z.string().optional(),
+  // Notifiche Discord (opzionali): webhook URL del canale. Segreto → solo env/.env (fallback deploy).
+  DISCORD_WEBHOOK_URL: z.string().optional(),
   // Escape hatch: 'true' disabilita il blocco passcode della web UI (recupero).
   WEB_LOCK_DISABLED: z.string().optional(),
   // Chiave per cifrare i segreti a riposo nel DB (password AnimeUnion, token di accesso, token

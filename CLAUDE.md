@@ -43,7 +43,7 @@ Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
 - [x] **Step 4** — Premium nella sidebar
 - [x] **Step 5** — Fix "Salva" pagina Aspetto (fetch→invalidate + Tema next-themes)
 - [x] **Step 6** — Pagina "Aspetto" rifatta + filtri ricerca sfondo (incl. "Più votati")
-- [ ] **Step 7** — Pagina "Notifiche" rifatta + chiarezza PWA/Push (test push, stato install)
+- [x] **Step 7** — Pagina "Notifiche" rifatta + Discord (webhook) + PWA install stato-aware
 - [ ] **Step 8** — Neural Export: spostare tra Download e Pianificazione + spiegare + guida
 - [ ] **Step 9** — Upscale locale (scaricati + collegati) — con verifica tecnica preliminare
 - [ ] **Step 10** — Audit "Verifica integrità download" + coerenza con upscale GPU
@@ -107,8 +107,27 @@ razionale (incl. worker nativo vs container, nota CUDA/NVENC) nel piano.
 
 **Batch attivo: v0.16.0 — "Doctor sempre attivo + Premium visibile + UX rifinita"** (piano
 [plan/doctor-premium-ux.md](plan/doctor-premium-ux.md), branch `feat/doctor-premium-ux`). 16 step
-pianificati. **Step 1-6 COMPLETI (2026-07-14)**; prossima sessione: Step 7 (Pagina "Notifiche" rifatta
-+ chiarezza PWA/Push). Cadenza un solo step per sessione.
+pianificati. **Step 1-7 COMPLETI (2026-07-14)**; prossima sessione: Step 8 (Neural Export: spostare
+tra Download e Pianificazione + spiegare + guida). Cadenza un solo step per sessione.
+
+- **v0.16.0 Step 7 (2026-07-14): pagina "Notifiche" rifatta + Discord + PWA stato-aware.** Prima la
+  sezione Notifiche era una lista piatta di `Field` (in-app/Telegram/push/PWA mischiati) con un blocco
+  decorativo "Provider futuri › Discord". Ora un helper locale **`NotifyGroup`** (card bordata
+  icona+titolo+descrizione, gemello di `Group` in `appearance-section.tsx`) raggruppa i controlli per
+  **canale**: *Nell'app* (completamento, nuove stagioni), *Telegram*, *Discord*, *Push del browser*,
+  *App installabile (PWA)*. **Discord è stato implementato per davvero** (decisione utente, non più solo
+  etichetta): notifier webhook parallelo a Telegram — `apps/api/src/lib/discord.ts`
+  (`createDiscordNotifier`: POST `{content}` al webhook, 204/2xx=ok, best-effort) + `discord.test.ts`
+  (5 test con `MockAgent`); config shared **`notifyDiscord`** + **`discordWebhookUrl`** (secret,
+  mascherato con `SECRET_MASK` come i token Telegram/Jellyfin); dispatch in `notification-service`
+  (`config.get('notifyDiscord') && discord?.isConfigured()`); mutation `notifications.testDiscord`;
+  wiring `context.ts` (`config.get('discordWebhookUrl') || resolvedEnv.DISCORD_WEBHOOK_URL`, env come
+  fallback deploy). UI card Discord: toggle inoltro + Webhook URL mascherato (placeholder/rimuovi come
+  Bot Token) + "Invia messaggio di test" + link guida webhook. **`install-button.tsx` reso stato-aware**:
+  *installata* (`matchMedia('(display-mode: standalone)')`/`navigator.standalone` iOS + listener
+  `appinstalled`, mostra conferma) / *installabile* (`deferred` → prompt) / *non supportata* (nota HTTPS
+  + link guida). Zero migrazioni (tabella `config` key-value). 456 test verdi (+5 Discord),
+  lint/typecheck/build web verdi.
 
 - **v0.16.0 Step 6 (2026-07-14): pagina "Aspetto" rifatta + filtri ricerca sfondo.** Prima la sezione
   Aspetto era quattro `Field` grigi impilati (Tema/Accent/Sfondo/Animazioni come dropdown/swatch) senza

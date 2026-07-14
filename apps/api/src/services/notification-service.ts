@@ -2,6 +2,7 @@ import type { Notification, NotificationType } from '@animeunion/shared';
 import { count, desc, eq, inArray } from 'drizzle-orm';
 import type { Db } from '../db';
 import { schema } from '../db';
+import type { DiscordNotifier } from '../lib/discord';
 import type { Logger } from '../lib/logger';
 import type { TelegramCredentials, TelegramNotifier } from '../lib/telegram';
 import type { ConfigService } from './config-service';
@@ -36,6 +37,8 @@ export interface NotificationService {
   clear(): number;
   /** Invio di prova su Telegram (per il bottone "Invia test" nelle Impostazioni). */
   testTelegram(override?: TelegramCredentials): Promise<{ ok: boolean; error?: string }>;
+  /** Invio di prova su Discord (per il bottone "Invia test" nelle Impostazioni). */
+  testDiscord(overrideUrl?: string): Promise<{ ok: boolean; error?: string }>;
 }
 
 // Finestra di coalescing: episodi dello stesso anime completati entro questo intervallo
@@ -48,6 +51,7 @@ export interface NotificationServiceDeps {
   db: Db;
   config: ConfigService;
   telegram?: TelegramNotifier;
+  discord?: DiscordNotifier;
   push?: PushService;
   logger?: Logger;
   now?: () => Date;
@@ -76,7 +80,7 @@ interface DownloadAggregate {
 }
 
 export function createNotificationService(deps: NotificationServiceDeps): NotificationService {
-  const { db, config, telegram, push, logger } = deps;
+  const { db, config, telegram, discord, push, logger } = deps;
   const now = deps.now ?? (() => new Date());
 
   // Aggregati di download in corso, per anime (chiave = animeId o sentinella). In memoria:
@@ -119,6 +123,14 @@ export function createNotificationService(deps: NotificationServiceDeps): Notifi
       const text = input.body ? `${input.title}\n${input.body}` : input.title;
       void telegram.send(text).catch((error) => {
         logger?.debug({ err: error }, 'Notifica Telegram non inviata');
+      });
+    }
+
+    // Inoltro Discord best-effort (non blocca, non lancia).
+    if (config.get('notifyDiscord') && discord?.isConfigured()) {
+      const text = input.body ? `${input.title}\n${input.body}` : input.title;
+      void discord.send(text).catch((error) => {
+        logger?.debug({ err: error }, 'Notifica Discord non inviata');
       });
     }
 
@@ -261,6 +273,13 @@ export function createNotificationService(deps: NotificationServiceDeps): Notifi
         return { ok: false, error: 'Telegram non disponibile' };
       }
       return telegram.sendTest(override);
+    },
+
+    async testDiscord(overrideUrl) {
+      if (!discord) {
+        return { ok: false, error: 'Discord non disponibile' };
+      }
+      return discord.sendTest(overrideUrl);
     },
   };
 }

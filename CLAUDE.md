@@ -42,7 +42,7 @@ Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
 - [x] **Step 3** — Premium visibile e riusabile (meccanica + UI; il perk resta visibile da attivo)
 - [x] **Step 4** — Premium nella sidebar
 - [x] **Step 5** — Fix "Salva" pagina Aspetto (fetch→invalidate + Tema next-themes)
-- [ ] **Step 6** — Pagina "Aspetto" rifatta + filtri ricerca sfondo (incl. "Più votati")
+- [x] **Step 6** — Pagina "Aspetto" rifatta + filtri ricerca sfondo (incl. "Più votati")
 - [ ] **Step 7** — Pagina "Notifiche" rifatta + chiarezza PWA/Push (test push, stato install)
 - [ ] **Step 8** — Neural Export: spostare tra Download e Pianificazione + spiegare + guida
 - [ ] **Step 9** — Upscale locale (scaricati + collegati) — con verifica tecnica preliminare
@@ -107,9 +107,23 @@ razionale (incl. worker nativo vs container, nota CUDA/NVENC) nel piano.
 
 **Batch attivo: v0.16.0 — "Doctor sempre attivo + Premium visibile + UX rifinita"** (piano
 [plan/doctor-premium-ux.md](plan/doctor-premium-ux.md), branch `feat/doctor-premium-ux`). 16 step
-pianificati. **Step 1-5 COMPLETI (2026-07-13)**; prossima sessione: Step 6 (Pagina "Aspetto" rifatta
-+ filtri ricerca sfondo). Cadenza un solo step per sessione.
+pianificati. **Step 1-6 COMPLETI (2026-07-14)**; prossima sessione: Step 7 (Pagina "Notifiche" rifatta
++ chiarezza PWA/Push). Cadenza un solo step per sessione.
 
+- **v0.16.0 Step 6 (2026-07-14): pagina "Aspetto" rifatta + filtri ricerca sfondo.** Prima la sezione
+  Aspetto era quattro `Field` grigi impilati (Tema/Accent/Sfondo/Animazioni come dropdown/swatch) senza
+  anteprime, inline in `settings-view.tsx`. Ora è una **`appearance-section.tsx`** estratta (props
+  discrete disaccoppiate da `AppConfig`, come `AccentPicker`/`WallpaperPicker`) con card di gruppo
+  `Group`: **Tema** = 3 card cliccabili con **mini-mockup** (`ThemeMockup` — barra sidebar + righe
+  contenuto nei colori del tema; 'system' = diagonale chiaro/scuro), applica subito via next-themes;
+  **Accent** = `AccentPicker` + pill di anteprima nel colore `--primary`; **Sfondo** = `WallpaperPicker`;
+  **Animazioni** = due card radio Attive/Disattive. A11y: `radiogroup`/`radio`+`aria-checked`, icone
+  decorative `aria-hidden`, niente info solo-colore. Ricerca sfondo: nuovo `sorting` (`toplist`=Più
+  votati / `favorites`=Più amati) esposto in `wallpaperSearchInputSchema` e onorato in `wallhaven.ts`
+  (override esplicito + `topRange=1y` su toplist; default auto `q?relevance:toplist` invariato);
+  controllo "Ordina per" nel Popover filtri + **badge preferiti** `Heart`+conteggio (`favorites`
+  mappato dal DTO, `wallpaperSchema` esteso) sulle miniature. Nessuna migrazione/env. 451 test verdi
+  (+4 wallhaven), lint/typecheck/build web verdi.
 - **v0.16.0 Step 5 (2026-07-13): fix "Salva" pagina Aspetto.** Prima salvando accent/sfondo la barra
   "Salva" spariva ma il tema non cambiava a schermo fino a un reload: `saveChanges`
   (`settings-view.tsx`) faceva solo `utils.config.getAll.fetch()` (write-cache), e gli osservatori del

@@ -20,14 +20,19 @@ export const wallpaperSchema = z.object({
   fullUrl: z.string(),
   resolution: z.string(),
   pageUrl: z.string(),
+  // Conteggio "preferiti" wallhaven: mostrato come badge sulle miniature (utile per "Più votati").
+  favorites: z.number().optional(),
 });
 export type Wallpaper = z.infer<typeof wallpaperSchema>;
 
 // Input di ricerca wallpaper. Semantico: il FE non conosce la codifica wallhaven
 // (categorie/purity in bit), che resta confinata in lib/wallhaven.ts.
 // `sketchy` aggiunge il purity "sketchy" (artistico) alla ricerca SFW; categoria sempre Anime.
+// `sorting` scavalca l'ordinamento automatico: `toplist` = "Più votati", `favorites` = "Più amati";
+// assente = auto (rilevanza con query, toplist senza).
 export const wallpaperSearchInputSchema = z.object({
   query: z.string().optional(),
   sketchy: z.boolean().optional(),
+  sorting: z.enum(['toplist', 'favorites']).optional(),
 });
 export type WallpaperSearchInput = z.infer<typeof wallpaperSearchInputSchema>;

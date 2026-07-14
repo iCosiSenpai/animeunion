@@ -1,6 +1,6 @@
 'use client';
 
-import { AccentPicker } from '@/components/settings/accent-picker';
+import { AppearanceSection } from '@/components/settings/appearance-section';
 import { BackupSection } from '@/components/settings/backup-section';
 import { FolderInput } from '@/components/settings/folder-picker';
 import { HomeLayoutSection } from '@/components/settings/home-layout-section';
@@ -10,7 +10,6 @@ import { PremiumLockedNote, PremiumUnlockedNote } from '@/components/settings/pr
 import { PushToggle } from '@/components/settings/push-toggle';
 import { RequestsSection } from '@/components/settings/requests-section';
 import { SecuritySection } from '@/components/settings/security-section';
-import { WallpaperPicker } from '@/components/settings/wallpaper-picker';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import {
@@ -853,52 +852,18 @@ export function SettingsView() {
             </Field>
           </Section>
 
-          <Section id="aspetto" hidden={active !== 'aspetto'} title="Aspetto">
-            <Field label="Tema" hint="Chiaro, scuro o come il sistema. Si applica subito.">
-              <Select value={theme ?? 'system'} onValueChange={setTheme}>
-                <SelectTrigger className="w-40">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="light">Chiaro</SelectItem>
-                  <SelectItem value="dark">Scuro</SelectItem>
-                  <SelectItem value="system">Sistema</SelectItem>
-                </SelectContent>
-              </Select>
-            </Field>
-            <Field
-              label="Colore accent"
-              hint="Il colore principale dell'app. Si applica dopo il salvataggio."
-            >
-              <AccentPicker value={draft.themeAccent} onChange={(v) => update('themeAccent', v)} />
-            </Field>
-            <Field
-              label="Sfondo"
-              hint="Un wallpaper anime soffuso su tutta l'app (SFW, via wallhaven). Si applica dopo il salvataggio."
-            >
-              <WallpaperPicker
-                value={draft.themeBackgroundUrl}
-                onChange={(url) => update('themeBackgroundUrl', url)}
-              />
-            </Field>
-            <Field
-              label="Animazioni"
-              hint="Transizioni di pagina e micro-interazioni dell'interfaccia. Consumano un po' di GPU/CPU: su dispositivi lenti conviene disattivarle."
-            >
-              <Select
-                value={draft.animationsEnabled ? 'on' : 'off'}
-                onValueChange={(v) => update('animationsEnabled', v === 'on')}
-              >
-                <SelectTrigger className="w-40">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="on">Attivo</SelectItem>
-                  <SelectItem value="off">Disattivo</SelectItem>
-                </SelectContent>
-              </Select>
-            </Field>
-          </Section>
+          <div className={cn(active !== 'aspetto' && 'hidden')}>
+            <AppearanceSection
+              theme={(theme ?? 'system') as 'light' | 'dark' | 'system'}
+              onThemeChange={setTheme}
+              accent={draft.themeAccent}
+              onAccentChange={(v) => update('themeAccent', v)}
+              backgroundUrl={draft.themeBackgroundUrl}
+              onBackgroundChange={(url) => update('themeBackgroundUrl', url)}
+              animationsEnabled={draft.animationsEnabled}
+              onAnimationsChange={(enabled) => update('animationsEnabled', enabled)}
+            />
+          </div>
 
           <div className={cn(active !== 'home' && 'hidden')}>
             <HomeLayoutSection />

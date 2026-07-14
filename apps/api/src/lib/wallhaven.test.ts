@@ -86,4 +86,62 @@ describe('wallhaven.searchWallpapers', () => {
 
     expect(await searchWallpapers({ query: 'x' })).toEqual([]);
   });
+
+  it('sorting=toplist esplicito forza toplist anche con query (+ topRange)', async () => {
+    agent
+      .get(WALLHAVEN)
+      .intercept({
+        path: (p) => p.includes('sorting=toplist') && p.includes('topRange=1y'),
+        method: 'GET',
+      })
+      .reply(200, { data: [] }, { headers: { 'content-type': 'application/json' } });
+
+    expect(await searchWallpapers({ query: 'naruto', sorting: 'toplist' })).toEqual([]);
+  });
+
+  it('sorting=favorites usa sorting=favorites (nessun topRange)', async () => {
+    agent
+      .get(WALLHAVEN)
+      .intercept({
+        path: (p) => p.includes('sorting=favorites') && !p.includes('topRange'),
+        method: 'GET',
+      })
+      .reply(200, { data: [] }, { headers: { 'content-type': 'application/json' } });
+
+    expect(await searchWallpapers({ sorting: 'favorites' })).toEqual([]);
+  });
+
+  it('senza sorting resta auto: relevance con query', async () => {
+    agent
+      .get(WALLHAVEN)
+      .intercept({ path: (p) => p.includes('sorting=relevance'), method: 'GET' })
+      .reply(200, { data: [] }, { headers: { 'content-type': 'application/json' } });
+
+    expect(await searchWallpapers({ query: 'naruto' })).toEqual([]);
+  });
+
+  it('mappa il conteggio favorites nel risultato', async () => {
+    agent
+      .get(WALLHAVEN)
+      .intercept({ path: (p) => p.startsWith('/api/v1/search'), method: 'GET' })
+      .reply(
+        200,
+        {
+          data: [
+            {
+              id: 'fav',
+              url: 'https://wallhaven.cc/w/fav',
+              resolution: '1920x1080',
+              path: 'https://w.wallhaven.cc/full/fa/wallhaven-fav.jpg',
+              favorites: 2145,
+              thumbs: { large: 'https://th.wallhaven.cc/lg/fa/fav.jpg' },
+            },
+          ],
+        },
+        { headers: { 'content-type': 'application/json' } },
+      );
+
+    const res = await searchWallpapers({ query: 'x' });
+    expect(res[0]).toMatchObject({ id: 'fav', favorites: 2145 });
+  });
 });

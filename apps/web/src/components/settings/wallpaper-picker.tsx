@@ -17,6 +17,7 @@ import {
   Check,
   Download,
   ExternalLink,
+  Heart,
   ImageOff,
   Loader2,
   Search,
@@ -24,6 +25,22 @@ import {
   ZoomIn,
 } from 'lucide-react';
 import { useState } from 'react';
+
+type Sorting = 'auto' | 'toplist' | 'favorites';
+
+const SORTINGS: { value: Sorting; label: string }[] = [
+  { value: 'auto', label: 'Consigliati' },
+  { value: 'toplist', label: 'Più votati' },
+  { value: 'favorites', label: 'Più amati' },
+];
+
+// Formatta il conteggio preferiti in modo compatto (2145 -> "2.1k").
+function formatFavorites(n: number): string {
+  if (n >= 1000) {
+    return `${(n / 1000).toFixed(1).replace(/\.0$/, '')}k`;
+  }
+  return String(n);
+}
 
 // Selettore wallpaper (sfondo del tema) via proxy wallhaven. Query vuota = popolari.
 // Categoria sempre Anime; il filtro "Sketchy" aggiunge i contenuti artistici (purity 110).
@@ -37,12 +54,14 @@ export function WallpaperPicker({
   const [query, setQuery] = useState('');
   const [submitted, setSubmitted] = useState('');
   const [sketchy, setSketchy] = useState(false);
+  const [sorting, setSorting] = useState<Sorting>('auto');
   const [preview, setPreview] = useState<Wallpaper | null>(null);
 
   const results = trpc.theme.searchWallpapers.useQuery(
-    { query: submitted || undefined, sketchy },
+    { query: submitted || undefined, sketchy, sorting: sorting === 'auto' ? undefined : sorting },
     { staleTime: 5 * 60_000 },
   );
+  const filtersActive = sketchy || sorting !== 'auto';
 
   return (
     <div className="space-y-3">
@@ -87,7 +106,7 @@ export function WallpaperPicker({
               aria-label="Filtri"
             >
               <SlidersHorizontal className="h-4 w-4" />
-              {sketchy ? (
+              {filtersActive ? (
                 <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-primary" />
               ) : null}
             </Button>
@@ -96,6 +115,26 @@ export function WallpaperPicker({
             <div className="space-y-1">
               <p className="text-sm font-medium">Filtri</p>
               <p className="text-xs text-muted-foreground">Categoria: Anime.</p>
+            </div>
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-muted-foreground">Ordina per</p>
+              <div className="grid grid-cols-3 gap-1" role="radiogroup" aria-label="Ordinamento">
+                {SORTINGS.map((s) => (
+                  <Button
+                    key={s.value}
+                    type="button"
+                    variant={sorting === s.value ? 'default' : 'outline'}
+                    size="sm"
+                    // biome-ignore lint/a11y/useSemanticElements: styled radio in a segmented control
+                    role="radio"
+                    aria-checked={sorting === s.value}
+                    onClick={() => setSorting(s.value)}
+                    className="h-8 px-1 text-xs"
+                  >
+                    {s.label}
+                  </Button>
+                ))}
+              </div>
             </div>
             <Button
               type="button"
@@ -166,6 +205,12 @@ export function WallpaperPicker({
                 >
                   <ZoomIn className="h-4 w-4" />
                 </button>
+                {typeof w.favorites === 'number' && w.favorites > 0 ? (
+                  <span className="pointer-events-none absolute bottom-1 left-1 z-10 inline-flex items-center gap-1 rounded-md bg-black/60 px-1.5 py-0.5 text-[11px] font-medium text-white">
+                    <Heart className="h-3 w-3 fill-current" aria-hidden="true" />
+                    {formatFavorites(w.favorites)}
+                  </span>
+                ) : null}
               </div>
             );
           })}

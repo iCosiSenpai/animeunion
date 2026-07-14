@@ -321,6 +321,11 @@ export function SettingsView() {
       // resterebbe acceso per sempre sul confronto draft[key] !== original[key].
       const fresh = await utils.config.getAll.fetch();
       setDraft(fresh);
+      // Invalida la query condivisa cosi' gli osservatori del tema (app-theme.tsx staleTime 60s,
+      // animation-provider.tsx staleTime 10s) ri-fetchano e ri-applicano subito accent/sfondo/
+      // animazioni. Senza questo il fetch aggiorna la cache ma quegli osservatori "freschi" non
+      // ri-renderizzano finche' non scade lo staleTime (stesso pattern di backup-section.tsx).
+      await utils.config.getAll.invalidate();
       toast.success('Impostazioni salvate.');
       return true;
     } catch (error) {
@@ -849,7 +854,7 @@ export function SettingsView() {
           </Section>
 
           <Section id="aspetto" hidden={active !== 'aspetto'} title="Aspetto">
-            <Field label="Tema" hint="Chiaro, scuro o come il sistema.">
+            <Field label="Tema" hint="Chiaro, scuro o come il sistema. Si applica subito.">
               <Select value={theme ?? 'system'} onValueChange={setTheme}>
                 <SelectTrigger className="w-40">
                   <SelectValue />
@@ -869,7 +874,7 @@ export function SettingsView() {
             </Field>
             <Field
               label="Sfondo"
-              hint="Un wallpaper anime soffuso su tutta l'app (SFW, via wallhaven)."
+              hint="Un wallpaper anime soffuso su tutta l'app (SFW, via wallhaven). Si applica dopo il salvataggio."
             >
               <WallpaperPicker
                 value={draft.themeBackgroundUrl}

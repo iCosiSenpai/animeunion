@@ -41,7 +41,7 @@ Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
 - [x] **Step 2** — Ripresa automatica download falliti per cartella read-only (dip. Step 1)
 - [x] **Step 3** — Premium visibile e riusabile (meccanica + UI; il perk resta visibile da attivo)
 - [x] **Step 4** — Premium nella sidebar
-- [ ] **Step 5** — Fix "Salva" pagina Aspetto (fetch→invalidate + Tema next-themes)
+- [x] **Step 5** — Fix "Salva" pagina Aspetto (fetch→invalidate + Tema next-themes)
 - [ ] **Step 6** — Pagina "Aspetto" rifatta + filtri ricerca sfondo (incl. "Più votati")
 - [ ] **Step 7** — Pagina "Notifiche" rifatta + chiarezza PWA/Push (test push, stato install)
 - [ ] **Step 8** — Neural Export: spostare tra Download e Pianificazione + spiegare + guida
@@ -107,9 +107,21 @@ razionale (incl. worker nativo vs container, nota CUDA/NVENC) nel piano.
 
 **Batch attivo: v0.16.0 — "Doctor sempre attivo + Premium visibile + UX rifinita"** (piano
 [plan/doctor-premium-ux.md](plan/doctor-premium-ux.md), branch `feat/doctor-premium-ux`). 16 step
-pianificati. **Step 1-4 COMPLETI (2026-07-13)**; prossima sessione: Step 5 (Fix "Salva" pagina
-Aspetto). Cadenza un solo step per sessione.
+pianificati. **Step 1-5 COMPLETI (2026-07-13)**; prossima sessione: Step 6 (Pagina "Aspetto" rifatta
++ filtri ricerca sfondo). Cadenza un solo step per sessione.
 
+- **v0.16.0 Step 5 (2026-07-13): fix "Salva" pagina Aspetto.** Prima salvando accent/sfondo la barra
+  "Salva" spariva ma il tema non cambiava a schermo fino a un reload: `saveChanges`
+  (`settings-view.tsx`) faceva solo `utils.config.getAll.fetch()` (write-cache), e gli osservatori del
+  tema (`app-theme.tsx` `staleTime 60s`, `animation-provider.tsx` `staleTime 10s`) non
+  ri-renderizzavano. Ora dopo `fetch()`+`setDraft(fresh)` (che resta per resettare il draft sui
+  segreti mascherati → niente banner "Modifiche non salvate" fantasma) c'è un
+  `await utils.config.getAll.invalidate()` che forza il refetch/re-render di quegli osservatori →
+  accent/sfondo/animazioni si applicano subito (stesso pattern di `backup-section.tsx`). Il **Tema**
+  (chiaro/scuro/sistema) resta gestito da `next-themes` (preview istantanea, fuori dal draft): copy
+  chiarita ("Si applica subito") per non farlo sembrare "non salva"; hint "Sfondo" allineato
+  ("Si applica dopo il salvataggio"). Nessuna migrazione/env. 447 test verdi (invariati),
+  lint/typecheck/build web verdi.
 - **v0.16.0 Step 4 (2026-07-13): Premium nella sidebar.** Prima il Premium era solo un tab sepolto in
   Impostazioni (`?section=premium`), senza un accesso di primo livello. Ora c'è una **pagina dedicata
   `/premium`** (`app/(app)/premium/page.tsx` + `components/premium/premium-view.tsx`) che riusa i

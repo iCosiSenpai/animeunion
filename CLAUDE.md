@@ -46,7 +46,8 @@ Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
 - [x] **Step 7** — Pagina "Notifiche" rifatta + Discord (webhook) + PWA install stato-aware
 - [x] **Step 7.5** — Setup più user-friendly: stepper etichettato + verifica cartelle live + Aspetto (Tema) + step Jellyfin opzionale + copy
 - [x] **Step 8** — Neural Export: spostare tra Download e Pianificazione + spiegare + guida
-- [ ] **Step 9** — Upscale locale (scaricati + collegati) — con verifica tecnica preliminare
+- [x] **Step 9** — Upscale locale (scaricati + collegati) — con verifica tecnica preliminare
+  (dec. B "solo scaricati": external rimandati a post-collaudo GPU)
 - [ ] **Step 10** — Audit "Verifica integrità download" + coerenza con upscale GPU
 - [ ] **Step 11** — FAQ/tutorial su GitHub + GitHub Pages
 - [ ] **Step 12** — Rimozione totale riferimenti a Plex (solo Jellyfin)
@@ -108,9 +109,40 @@ razionale (incl. worker nativo vs container, nota CUDA/NVENC) nel piano.
 
 **Batch attivo: v0.16.0 — "Doctor sempre attivo + Premium visibile + UX rifinita"** (piano
 [plan/doctor-premium-ux.md](plan/doctor-premium-ux.md), branch `feat/doctor-premium-ux`). 16 step
-pianificati + Step 7.5 inserito. **Step 1-8 + 7.5 COMPLETI (2026-07-17)**; prossima sessione: Step 9
-(Upscale locale scaricati + collegati — con verifica tecnica preliminare bloccante). Cadenza un solo
-step per sessione.
+pianificati + Step 7.5 inserito. **Step 1-9 + 7.5 COMPLETI (2026-07-17)** (Step 9 chiuso con
+decisione B — "solo scaricati", vedi sotto); prossima sessione: Step 10 (Audit "Verifica integrità
+download" + coerenza con upscale GPU). Cadenza un solo step per sessione.
+
+- **v0.16.0 Step 9 (2026-07-17): upscale neurale locale — decisione B "solo scaricati".** Lo step
+  chiedeva di estendere il download neurale (XQ/XQ+) anche agli anime **collegati senza scaricare**
+  (`downloadStatus === 'external'`), con una **verifica tecnica preliminare bloccante**: confermare
+  che il worker (ffmpeg+libplacebo) upscala correttamente file **non** provenienti dal download
+  AnimeUnion. Quel collaudo end-to-end gira **solo sul PC con RTX 5070 Ti** dell'utente, non
+  eseguibile in sessione. Dall'analisi del codice il fail-safe è garantito by design (l'output va
+  sempre su `renamer.computeEpisodePath` → libreria dell'app, **mai** sull'originale collegato; unico
+  punto di rottura `-c:a copy` su audio non-MP4-muxabile → fallimento **pulito per-job**, nessuna
+  corruzione). **L'utente ha scelto B — "solo scaricati"**: finché il collaudo GPU su un external
+  reale non è fatto, l'upscale sugli external **non si abilita**. Nessuna modifica al comportamento
+  runtime: il gate `exportEpisode` (`neural-export-service.ts:420`) resta `downloaded` + `localPath`;
+  aggiunto **solo un commento** al gate che spiega l'esclusione volontaria in attesa del collaudo.
+  L'apertura agli external (opzione A) è **pronta e documentata** nel piano (backend gate + test +
+  UI `anime-detail`) per una sessione futura dopo il collaudo. Zero migrazioni/endpoint; 456 test
+  verdi (invariati), lint/typecheck/build web verdi.
+
+- **v0.16.0 Step 9 (2026-07-17): upscale locale — decisione "solo scaricati" (opzione B).** Lo step
+  aveva una **verifica tecnica preliminare bloccante**: confermare che il worker (ffmpeg+libplacebo)
+  upscala correttamente MP4/MKV **non** provenienti dal download AnimeUnion (i file `external`,
+  collegati senza scaricare). Quel collaudo end-to-end gira **solo sul PC con RTX 5070 Ti** dell'utente,
+  non eseguibile in sessione. **Decisione utente: opzione B — restare a "solo scaricati"** finché il
+  collaudo GPU su un external reale non è fatto. Nessun cambio al comportamento runtime: il gate
+  `exportEpisode` (`neural-export-service.ts:420`) resta `downloaded` + `localPath`; aggiunto solo un
+  **commento** che spiega l'esclusione volontaria degli `external` in attesa del collaudo (Regola #10).
+  Dal codice il fail-safe è comunque garantito e documentato (output sempre su `renamer.computeEpisodePath`,
+  mai sull'originale collegato; unico punto di rottura `-c:a copy` su audio non-MP4-muxabile →
+  fallimento pulito per-job). L'apertura agli external (opzione A: gate + test + UI `anime-detail` con
+  stato "Collegato") è **progettata e pronta** nel piano, da implementare in una sessione futura **dopo**
+  il collaudo. Zero migrazioni, zero endpoint nuovi, zero cambi funzionali → 456 test verdi (invariati),
+  lint/typecheck/build web verdi. Prossima sessione: Step 10 (audit "Verifica integrità download").
 
 - **v0.16.0 Step 8 (2026-07-17): Neural Export spostato in sezione dedicata "Download Neurale".**
   Prima la config del worker GPU (`neuralExportEnabled`/`neuralWorkerUrl`/`neuralWorkerToken`) +

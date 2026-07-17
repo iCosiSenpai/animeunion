@@ -417,6 +417,9 @@ export function createNeuralExportService(deps: NeuralExportServiceDeps): Neural
       if (src.quality !== 'SD') {
         throw new PreconditionError('La sorgente da upscalare deve essere in qualita SD');
       }
+      // Solo sorgenti scaricate dall'app. Gli external (file collegati senza scaricare) hanno
+      // anch'essi un localPath e sarebbero candidati validi, ma restano esclusi finche' il collaudo
+      // end-to-end del worker su MP4/MKV non-AnimeUnion non e' fatto sul PC con GPU (Step 9, dec. B).
       if (src.downloadStatus !== 'downloaded' || !src.localPath) {
         throw new PreconditionError('Scarica prima l episodio in SD');
       }

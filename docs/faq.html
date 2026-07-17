@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="it" class="scroll-smooth">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AnimeUnion Docker — FAQ e guide</title>
+    <meta
+      name="description"
+      content="Guida e domande frequenti di AnimeUnion Docker: setup, HTTPS/Tailscale, app installabile e notifiche push, download neurale (worker GPU), Jellyfin, backup e upscale locale."
+    />
+    <meta name="theme-color" content="#0ea5e9" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: { brand: { DEFAULT: '#0ea5e9', dark: '#0369a1' } },
+          },
+        },
+      };
+    </script>
+  </head>
+  <body class="min-h-screen bg-slate-950 text-slate-100 antialiased">
+    <!-- HEADER -->
+    <header class="border-b border-slate-800">
+      <div class="mx-auto flex max-w-4xl items-center justify-between px-6 py-6">
+        <a href="index.html" class="text-sm text-slate-400 transition hover:text-brand">&larr; Home</a>
+        <a
+          href="https://github.com/iCosiSenpai/animeunion"
+          class="text-sm text-slate-400 transition hover:text-brand"
+          >Repository</a
+        >
+      </div>
+      <div class="mx-auto max-w-4xl px-6 pb-10">
+        <p class="mb-3 inline-block rounded-full border border-brand/40 bg-brand/10 px-4 py-1 text-sm font-medium text-brand">
+          FAQ e guide
+        </p>
+        <h1 class="text-4xl font-extrabold tracking-tight sm:text-5xl">Domande frequenti</h1>
+        <p class="mt-4 max-w-2xl text-lg text-slate-300">
+          Tutto quello che serve per far girare AnimeUnion Docker: dall'installazione al download
+          neurale sulla GPU. Se qualcosa non torna, quasi sempre la risposta è qui.
+        </p>
+      </div>
+    </header>
+
+    <main class="mx-auto max-w-4xl px-6 py-12">
+      <!-- SOMMARIO -->
+      <nav class="mb-14 rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
+        <h2 class="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-400">In questa pagina</h2>
+        <ul class="grid gap-2 sm:grid-cols-2">
+          <li><a href="#setup" class="text-brand hover:underline">Installazione e primo avvio</a></li>
+          <li><a href="#https" class="text-brand hover:underline">HTTPS e Tailscale</a></li>
+          <li><a href="#pwa-push" class="text-brand hover:underline">App installabile e notifiche push</a></li>
+          <li><a href="#neural" class="text-brand hover:underline">Download neurale (worker GPU)</a></li>
+          <li><a href="#jellyfin" class="text-brand hover:underline">Jellyfin</a></li>
+          <li><a href="#backup" class="text-brand hover:underline">Backup del database</a></li>
+          <li><a href="#upscale" class="text-brand hover:underline">Upscale di anime già scaricati</a></li>
+        </ul>
+      </nav>
+
+      <!-- SETUP -->
+      <section id="setup" class="mb-14 scroll-mt-6">
+        <h2 class="mb-4 text-2xl font-bold">Installazione e primo avvio</h2>
+        <div class="space-y-4 text-slate-300">
+          <p>
+            AnimeUnion Docker gira come container sul tuo NAS o server. Con
+            <a href="https://github.com/iCosiSenpai/animeunion#readme" class="text-brand hover:underline">Docker Compose</a>
+            bastano pochi minuti:
+          </p>
+          <div class="rounded-xl border border-slate-800 bg-black/60 p-5">
+            <pre class="overflow-x-auto text-sm text-slate-300"><code>docker compose up -d</code></pre>
+          </div>
+          <p>
+            <strong class="text-slate-100">Le cartelle.</strong> Il container vede un percorso interno
+            (di solito <code class="text-brand">/media</code>): nel <code>docker-compose.yml</code> ci
+            mappi la tua libreria reale (es. <code>/volume1/Anime:/media/Anime</code>). Nell'app, alla
+            voce <em>Cartelle di download</em>, scegli quel percorso interno con <strong>Sfoglia</strong>.
+            Se una cartella risulta «non scrivibile / non montata», controlla il volume nel compose.
+          </p>
+          <p>
+            <strong class="text-slate-100">Il wizard.</strong> Al primo accesso una procedura guidata
+            ti fa impostare login, cartelle (con verifica di scrivibilità), aspetto e, se vuoi, Jellyfin.
+            Puoi rivedere e cambiare tutto in seguito da <em>Impostazioni</em>.
+          </p>
+        </div>
+      </section>
+
+      <!-- HTTPS -->
+      <section id="https" class="mb-14 scroll-mt-6">
+        <h2 class="mb-4 text-2xl font-bold">HTTPS e Tailscale</h2>
+        <div class="space-y-4 text-slate-300">
+          <p>
+            Alcune funzioni del browser — <strong>notifiche push</strong> e
+            <strong>installazione come app (PWA)</strong> — funzionano solo su un indirizzo sicuro
+            <strong>HTTPS</strong> (oppure su <code>localhost</code>). È una regola del browser, non
+            dell'app: se apri AnimeUnion via <code>http://192.168…</code> quelle funzioni restano
+            disattivate.
+          </p>
+          <p>
+            <strong class="text-slate-100">La via più semplice è Tailscale.</strong> Ti dà un indirizzo
+            HTTPS valido in automatico, senza dominio né porte aperte sul router:
+          </p>
+          <ol class="list-decimal space-y-2 pl-6">
+            <li>Installa Tailscale sull'host/NAS e fai il login (stessa tailnet del telefono/PC).</li>
+            <li>
+              Nella console Tailscale abilita <strong>HTTPS Certificates</strong> per la tua tailnet
+              (una volta sola).
+            </li>
+            <li>
+              Esponi l'app con <code>tailscale serve</code> (o l'integrazione del tuo NAS) e apri
+              l'indirizzo <code>https://&lt;nome&gt;.&lt;tailnet&gt;.ts.net</code> dal telefono.
+            </li>
+          </ol>
+          <p>
+            Dettagli passo-passo (anche per reverse proxy con dominio proprio) nel
+            <a
+              href="https://github.com/iCosiSenpai/animeunion#https-app-installabile-pwa-e-notifiche-push"
+              class="text-brand hover:underline"
+              >README, sezione HTTPS</a
+            >.
+          </p>
+        </div>
+      </section>
+
+      <!-- PWA / PUSH -->
+      <section id="pwa-push" class="mb-14 scroll-mt-6">
+        <h2 class="mb-4 text-2xl font-bold">App installabile e notifiche push</h2>
+        <div class="space-y-4 text-slate-300">
+          <p>
+            Puoi installare AnimeUnion come <strong>app dedicata</strong> (PWA) sul telefono o sul
+            desktop, e ricevere <strong>notifiche push</strong> del browser (episodio completato,
+            nuove stagioni) anche ad app chiusa.
+          </p>
+          <p>
+            <strong class="text-slate-100">Requisito:</strong> serve HTTPS (vedi
+            <a href="#https" class="text-brand hover:underline">sopra</a>). Su un indirizzo non sicuro
+            il pulsante «Installa» e il toggle delle push non compaiono — non è un bug.
+          </p>
+          <ul class="list-disc space-y-2 pl-6">
+            <li>
+              <strong>Installare:</strong> apri l'app in HTTPS, poi usa «Installa» dal menu del browser
+              (o il pulsante in <em>Impostazioni &rsaquo; Notifiche</em> quando disponibile).
+            </li>
+            <li>
+              <strong>Push:</strong> in <em>Impostazioni &rsaquo; Notifiche</em> attiva «Push del
+              browser» e concedi il permesso quando richiesto.
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- NEURAL -->
+      <section id="neural" class="mb-14 scroll-mt-6">
+        <h2 class="mb-4 text-2xl font-bold">Download neurale (worker GPU)</h2>
+        <div class="space-y-4 text-slate-300">
+          <p>
+            Il <strong>download neurale</strong> migliora la qualità di un episodio già scaricato
+            portandolo a <strong>XQ (1080p)</strong> o <strong>XQ+ (4K)</strong> con gli shader
+            <a href="https://github.com/bloc97/Anime4K" class="text-brand hover:underline">Anime4K</a>
+            (gli stessi del player del sito). La sorgente SD resta sempre disponibile: l'upscale crea
+            un file in più, non sostituisce l'originale. È una funzione <strong>Premium</strong>.
+          </p>
+          <p>
+            <strong class="text-slate-100">Perché serve un PC con GPU.</strong> L'upscale è pesante e
+            richiede una scheda video con Vulkan; il NAS in genere non ce l'ha. Per questo il render
+            gira su un <strong>worker separato</strong> (un tuo PC con GPU nella stessa rete), e l'app
+            gli manda i lavori via LAN.
+          </p>
+          <p><strong class="text-slate-100">Come si configura:</strong></p>
+          <ol class="list-decimal space-y-2 pl-6">
+            <li>Sul PC con la GPU avvia il worker (vedi <code>apps/worker/README.md</code>): serve ffmpeg con libplacebo + Vulkan.</li>
+            <li>Il worker espone un <strong>URL</strong> (es. <code>http://192.168.1.20:8787</code>) e usa un <strong>token</strong> condiviso.</li>
+            <li>In <em>Impostazioni &rsaquo; Download Neurale</em> incolla URL e token, salva e premi «Verifica worker».</li>
+            <li>Quando lo stato è «Pronto», dal catalogo scegli «Migliora a XQ/XQ+» su un episodio già scaricato.</li>
+          </ol>
+          <p class="text-sm text-slate-400">
+            Se lo stato resta «Non pronto»: controlla che il PC sia acceso e il worker avviato, che URL
+            e token combacino, e che ffmpeg sul worker abbia libplacebo + Vulkan.
+          </p>
+        </div>
+      </section>
+
+      <!-- JELLYFIN -->
+      <section id="jellyfin" class="mb-14 scroll-mt-6">
+        <h2 class="mb-4 text-2xl font-bold">Jellyfin</h2>
+        <div class="space-y-4 text-slate-300">
+          <p>
+            I file vengono rinominati con il layout che Jellyfin riconosce
+            (<code class="text-brand">&lt;Titolo&gt;/Season 02/&lt;Titolo&gt; - S02E01.mp4</code>) e
+            organizzati per serie e stagione, con sidecar <code>.nfo</code>.
+          </p>
+          <p>
+            In <em>Impostazioni &rsaquo; Jellyfin</em> puoi inserire URL del server e API key e attivare
+            il <strong>refresh automatico</strong>: dopo ogni nuovo episodio l'app chiede a Jellyfin di
+            aggiornare la libreria interessata, così l'episodio compare senza scansioni manuali.
+          </p>
+        </div>
+      </section>
+
+      <!-- BACKUP -->
+      <section id="backup" class="mb-14 scroll-mt-6">
+        <h2 class="mb-4 text-2xl font-bold">Backup del database</h2>
+        <div class="space-y-4 text-slate-300">
+          <p>
+            L'app fa un <strong>backup automatico</strong> del database SQLite (follow, stato dei
+            download, impostazioni). I file video non sono nel backup: sono già sul tuo disco.
+          </p>
+          <p>
+            Se vuoi una copia fuori sede, in <em>Impostazioni &rsaquo; Backup</em> puoi collegare
+            <strong>Google Drive</strong> (client OAuth «Desktop», scope minimo <code>drive.file</code>):
+            l'app carica il backup più recente e mantiene solo gli ultimi secondo la retention scelta.
+          </p>
+        </div>
+      </section>
+
+      <!-- UPSCALE LOCALE -->
+      <section id="upscale" class="mb-14 scroll-mt-6">
+        <h2 class="mb-4 text-2xl font-bold">Upscale di anime già scaricati</h2>
+        <div class="space-y-4 text-slate-300">
+          <p>
+            Il download neurale è disponibile sugli episodi <strong>scaricati dall'app</strong>: li
+            trovi nel catalogo con la voce «Migliora a XQ/XQ+» quando il worker è pronto. L'originale
+            SD non viene toccato — l'upscale è un file aggiuntivo nella tua libreria.
+          </p>
+          <p>
+            L'apertura anche agli anime <em>collegati senza scaricare</em> è in valutazione: verrà
+            abilitata dopo un collaudo dedicato del worker su file di provenienza arbitraria.
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <!-- FOOTER -->
+    <footer class="border-t border-slate-800 py-10 text-center text-sm text-slate-500">
+      <p>
+        Powered by
+        <a href="https://animeunion.tv" class="text-brand hover:underline">AnimeUnion</a>
+        — Applicazione ufficiale affiliata.
+      </p>
+      <p class="mt-1">
+        Sviluppata da
+        <a href="https://github.com/iCosiSenpai" class="text-brand hover:underline">iCosiSenpai</a>.
+      </p>
+    </footer>
+  </body>
+</html>

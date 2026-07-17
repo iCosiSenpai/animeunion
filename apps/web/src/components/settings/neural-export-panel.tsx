@@ -5,7 +5,16 @@ import { Button } from '@/components/ui/button';
 import { trpc } from '@/lib/trpc';
 import { cn } from '@/lib/utils';
 import type { NeuralExportJobView } from '@animeunion/shared';
-import { AlertCircle, CheckCircle2, Loader2, RefreshCw, Sparkles, X, XCircle } from 'lucide-react';
+import {
+  AlertCircle,
+  CheckCircle2,
+  ExternalLink,
+  Loader2,
+  RefreshCw,
+  Sparkles,
+  X,
+  XCircle,
+} from 'lucide-react';
 import { toast } from 'sonner';
 
 const QUALITY_LABEL: Record<'XQ' | 'XQPLUS', string> = {
@@ -131,6 +140,15 @@ export function NeuralExportPanel() {
           Upscale degli episodi a XQ (1080p) / XQ+ (4K) con gli shader ufficiali del sito, eseguito
           dal worker GPU. La sorgente SD resta sempre disponibile.
         </p>
+        <a
+          href="https://icosisenpai.github.io/animeunion/faq.html#neural"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-2 inline-flex items-center gap-1 text-sm text-primary underline-offset-4 hover:underline"
+        >
+          <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+          Come si configura il worker?
+        </a>
 
         {status.isLoading ? (
           <p className="mt-4 text-sm text-muted-foreground">Verifica in corso…</p>

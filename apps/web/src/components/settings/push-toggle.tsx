@@ -106,7 +106,7 @@ export function PushToggle() {
           automatico, senza certificati da gestire.
         </p>
         <a
-          href="https://github.com/iCosiSenpai/animeunion#https-app-installabile-pwa-e-notifiche-push"
+          href="https://icosisenpai.github.io/animeunion/faq.html#https"
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex items-center gap-1 text-primary underline-offset-4 hover:underline"

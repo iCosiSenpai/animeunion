@@ -49,7 +49,7 @@ Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
 - [x] **Step 9** — Upscale locale (scaricati + collegati) — con verifica tecnica preliminare
   (dec. B "solo scaricati": external rimandati a post-collaudo GPU)
 - [x] **Step 10** — Audit "Verifica integrità download" + coerenza con upscale GPU
-- [ ] **Step 11** — FAQ/tutorial su GitHub + GitHub Pages
+- [x] **Step 11** — FAQ/tutorial su GitHub + GitHub Pages
 - [ ] **Step 12** — Rimozione totale riferimenti a Plex (solo Jellyfin)
 - [ ] **Step 13** — Statistiche oneste (episodi distinti, "Episodi totali" onesta)
 - [ ] **Step 14** — Polish UI diffuso (Carica altri, empty state, hover sidebar, footer Doctor)
@@ -109,9 +109,22 @@ razionale (incl. worker nativo vs container, nota CUDA/NVENC) nel piano.
 
 **Batch attivo: v0.16.0 — "Doctor sempre attivo + Premium visibile + UX rifinita"** (piano
 [plan/doctor-premium-ux.md](plan/doctor-premium-ux.md), branch `feat/doctor-premium-ux`). 16 step
-pianificati + Step 7.5 inserito. **Step 1-10 + 7.5 COMPLETI (2026-07-17)** (Step 9 chiuso con
-decisione B — "solo scaricati", vedi sotto); prossima sessione: Step 11 (FAQ/tutorial su GitHub +
-GitHub Pages). Cadenza un solo step per sessione.
+pianificati + Step 7.5 inserito. **Step 1-11 + 7.5 COMPLETI (2026-07-17)** (Step 9 chiuso con
+decisione B — "solo scaricati", vedi sotto); prossima sessione: Step 12 (rimozione totale riferimenti
+a Plex, solo Jellyfin). Cadenza un solo step per sessione.
+
+- **v0.16.0 Step 11 (2026-07-17): FAQ su GitHub Pages + link dall'app.** Prima le funzioni che
+  confondono (Push/PWA) rimandavano alle ancore del README su github.com e il Neural Export non aveva
+  alcuna guida. Ora c'è una **pagina FAQ dedicata su Pages** — nuova `docs/faq.html` (stesso stile di
+  `docs/index.html`: Tailwind CDN, palette slate/brand, `lang=it`) con sommario ad ancore e 7 sezioni:
+  `#setup` (installazione, cartelle/volumi, wizard), `#https` (HTTPS/Tailscale), `#pwa-push` (app
+  installabile + push), `#neural` (worker GPU: cos'è, perché serve una GPU, come si configura
+  URL+token), `#jellyfin`, `#backup` (Google Drive), `#upscale` (upscale locale, solo scaricati).
+  La landing `docs/index.html` ha un pulsante **«FAQ e guide»** → `faq.html`. I punti dell'app
+  rimandano alla FAQ su `https://icosisenpai.github.io/animeunion/faq.html`: `install-button.tsx` e
+  `push-toggle.tsx` → `#https` (prima ancore README), e `neural-export-panel.tsx` ha un **nuovo link**
+  «Come si configura il worker?» → `#neural`. HTML statico, nessuna dipendenza/env/migrazione. 457
+  test invariati, lint/typecheck/build web verdi.
 
 - **v0.16.0 Step 10 (2026-07-17): audit "Verifica integrità download" + coerenza con upscale GPU.**
   Audit del flusso di verifica integrità. **Confermato:** il motore `verifyVideoFile`

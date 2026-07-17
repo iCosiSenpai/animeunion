@@ -62,7 +62,7 @@ export function InstallButton() {
         push, richiede un indirizzo sicuro <strong>HTTPS</strong> (o <code>localhost</code>).
       </p>
       <a
-        href="https://github.com/iCosiSenpai/animeunion#https-app-installabile-pwa-e-notifiche-push"
+        href="https://icosisenpai.github.io/animeunion/faq.html#https"
         target="_blank"
         rel="noopener noreferrer"
         className="inline-flex items-center gap-1 text-primary underline-offset-4 hover:underline"

@@ -48,7 +48,7 @@ Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
 - [x] **Step 8** — Neural Export: spostare tra Download e Pianificazione + spiegare + guida
 - [x] **Step 9** — Upscale locale (scaricati + collegati) — con verifica tecnica preliminare
   (dec. B "solo scaricati": external rimandati a post-collaudo GPU)
-- [ ] **Step 10** — Audit "Verifica integrità download" + coerenza con upscale GPU
+- [x] **Step 10** — Audit "Verifica integrità download" + coerenza con upscale GPU
 - [ ] **Step 11** — FAQ/tutorial su GitHub + GitHub Pages
 - [ ] **Step 12** — Rimozione totale riferimenti a Plex (solo Jellyfin)
 - [ ] **Step 13** — Statistiche oneste (episodi distinti, "Episodi totali" onesta)
@@ -109,9 +109,26 @@ razionale (incl. worker nativo vs container, nota CUDA/NVENC) nel piano.
 
 **Batch attivo: v0.16.0 — "Doctor sempre attivo + Premium visibile + UX rifinita"** (piano
 [plan/doctor-premium-ux.md](plan/doctor-premium-ux.md), branch `feat/doctor-premium-ux`). 16 step
-pianificati + Step 7.5 inserito. **Step 1-9 + 7.5 COMPLETI (2026-07-17)** (Step 9 chiuso con
-decisione B — "solo scaricati", vedi sotto); prossima sessione: Step 10 (Audit "Verifica integrità
-download" + coerenza con upscale GPU). Cadenza un solo step per sessione.
+pianificati + Step 7.5 inserito. **Step 1-10 + 7.5 COMPLETI (2026-07-17)** (Step 9 chiuso con
+decisione B — "solo scaricati", vedi sotto); prossima sessione: Step 11 (FAQ/tutorial su GitHub +
+GitHub Pages). Cadenza un solo step per sessione.
+
+- **v0.16.0 Step 10 (2026-07-17): audit "Verifica integrità download" + coerenza con upscale GPU.**
+  Audit del flusso di verifica integrità. **Confermato:** il motore `verifyVideoFile`
+  (`apps/api/src/lib/video-verify.ts`) fa un full-decode `ffmpeg -xerror -f null -` che cattura le
+  corruzioni a metà file (non solo Content-Length), degrada in sicurezza se ffmpeg manca (`skipped`),
+  ha timeout 120s ed è già testato (3 test). Il percorso **download** (`download-worker.ts:379-389`) è
+  opt-in via `config.verifyDownloads` e verifica il `.part` prima della finalizzazione (su KO
+  rimuove + riprova da zero). Il percorso **upscale GPU** (`neural-export-service.ts` `finalize`)
+  verifica l'output **sempre** (a prescindere dal toggle) via `verify` iniettabile; su KO il job va in
+  `error` senza creare la riga XQ e senza toccare la sorgente SD. **Coerenza download→upscale→verifica
+  confermata.** **Gap colmati (audit + fix mirati):** aggiunto un test del ramo prima non coperto
+  ("output upscalato corrotto → job error, nessuna XQ, SD intatta"; `makeService` ora accetta un
+  `verifyImpl` per-test) e chiarita la copy del toggle in Impostazioni (gli upscale neurali XQ/XQ+
+  sono sempre verificati, a prescindere dall'interruttore). Scartati per Regola #1: seam DI a
+  `verifyVideoFile` nel download-worker (invasivo, motore già testato a parte) e la feature
+  "re-verifica libreria on-demand" (non richiesta). Zero migrazioni/endpoint/env. 457 test verdi (+1),
+  lint/typecheck/build web verdi.
 
 - **v0.16.0 Step 9 (2026-07-17): upscale neurale locale — decisione B "solo scaricati".** Lo step
   chiedeva di estendere il download neurale (XQ/XQ+) anche agli anime **collegati senza scaricare**

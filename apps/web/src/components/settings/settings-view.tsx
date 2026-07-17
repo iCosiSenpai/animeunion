@@ -600,7 +600,7 @@ export function SettingsView() {
             </Field>
             <Field
               label="Verifica integrità download"
-              hint="Dopo ogni download, controlla con ffmpeg che il file sia un video riproducibile (cattura le corruzioni). Aggiunge un po’ di lavoro alla CPU per ogni file."
+              hint="Dopo ogni download, controlla con ffmpeg che il file sia un video riproducibile (cattura le corruzioni). Aggiunge un po’ di lavoro alla CPU per ogni file. Gli upscale neurali (XQ/XQ+) sono sempre verificati prima di essere salvati, a prescindere da questo interruttore."
             >
               <Select
                 value={draft.verifyDownloads ? 'on' : 'off'}

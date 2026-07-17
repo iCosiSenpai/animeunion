@@ -126,6 +126,7 @@ describe('neural-export-service', () => {
   function makeService(opts?: {
     profile?: ProfileService;
     fetchImpl?: NeuralFetch;
+    verifyImpl?: typeof verifyImpl;
   }) {
     return createNeuralExportService({
       db,
@@ -136,7 +137,7 @@ describe('neural-export-service', () => {
       logger: testLogger,
       fetchImpl: opts?.fetchImpl ?? makeFetch(),
       downloadFileImpl,
-      verifyImpl,
+      verifyImpl: opts?.verifyImpl ?? verifyImpl,
       pollIntervalMs: 1,
       pollTimeoutMs: 60_000,
     });
@@ -206,6 +207,28 @@ describe('neural-export-service', () => {
     expect(xq).toBeUndefined();
     const sd = db.select().from(schema.episodeFile).where(eq(schema.episodeFile.id, 'ef-sd')).get();
     expect(sd?.downloadStatus).toBe('downloaded');
+  });
+
+  it('output upscalato corrotto (verifica KO) -> job error, nessuna XQ, SD intatta', async () => {
+    const svc = makeService({
+      verifyImpl: vi.fn(async () => ({ ok: false, reason: 'output non riproducibile' })),
+    });
+    const { jobId } = await svc.exportEpisode({ episodeFileId: 'ef-sd', quality: 'XQ' });
+    await svc.waitForIdle();
+
+    const job = svc.listJobs().find((j) => j.id === jobId);
+    expect(job?.state).toBe('error');
+    expect(job?.error ?? '').toMatch(/integrit/i);
+
+    const xq = db
+      .select()
+      .from(schema.episodeFile)
+      .where(and(eq(schema.episodeFile.episodeId, 'e1'), eq(schema.episodeFile.quality, 'XQ')))
+      .get();
+    expect(xq).toBeUndefined();
+    const sd = db.select().from(schema.episodeFile).where(eq(schema.episodeFile.id, 'ef-sd')).get();
+    expect(sd?.downloadStatus).toBe('downloaded');
+    expect(sd?.localPath).toBe(srcPath);
   });
 
   it('idempotenza: chiamare export due volte riusa lo stesso job attivo', async () => {

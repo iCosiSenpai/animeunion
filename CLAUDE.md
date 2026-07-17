@@ -52,7 +52,7 @@ Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
 - [x] **Step 11** — FAQ/tutorial su GitHub + GitHub Pages
 - [x] **Step 12** — Rimozione totale riferimenti a Plex (solo Jellyfin)
 - [x] **Step 13** — Statistiche oneste (catalogo dai dati ufficiali, episodi scaricati distinti)
-- [ ] **Step 14** — Polish UI diffuso (Carica altri, empty state, hover sidebar, footer Doctor)
+- [x] **Step 14** — Polish UI diffuso (empty state Home, tooltip sidebar, footer Doctor)
 - [ ] **Step 15** — Ricerca feature Premium del sito + Assistenza prioritaria Telegram
 - [ ] **Step 16** — Release v0.16.0
 
@@ -109,10 +109,18 @@ razionale (incl. worker nativo vs container, nota CUDA/NVENC) nel piano.
 
 **Batch attivo: v0.16.0 — "Doctor sempre attivo + Premium visibile + UX rifinita"** (piano
 [plan/doctor-premium-ux.md](plan/doctor-premium-ux.md), branch `feat/doctor-premium-ux`). 16 step
-pianificati + Step 7.5 inserito. **Step 1-13 + 7.5 COMPLETI (2026-07-17)** (Step 9 chiuso con
-decisione B — "solo scaricati", vedi sotto); prossima sessione: Step 14 (polish UI diffuso —
-Carica altri, empty state, hover sidebar, footer Doctor). Cadenza un solo step per sessione.
+pianificati + Step 7.5 inserito. **Step 1-14 + 7.5 COMPLETI (2026-07-17)** (Step 9 chiuso con
+decisione B — "solo scaricati", vedi sotto); prossima sessione: Step 15 (feature Premium del sito
++ Assistenza prioritaria Telegram). Cadenza un solo step per sessione.
 
+- **v0.16.0 Step 14 (2026-07-17): polish UI diffuso.** Sezioni Home paginate "essenziali" ("In onda
+  oggi", "Stagione in corso") non spariscono più da vuote: mostrano un empty-state "È tutto!" con
+  invito al catalogo (nuovo prop opt-in `emptyLabel` su `Section`; le altre sezioni continuano a
+  nascondersi). Sidebar compressa: tooltip custom (Radix) con la destinazione al posto del `title`
+  nativo (niente doppio tooltip del browser) + barra "attivo" a sinistra della voce; voce estratta in
+  `DesktopNavItem`. Footer: "Diagnostica" → **"Doctor"** reso pill evidente (bordo/bg primary) coerente
+  con lo Step 1. Header di sezione Home rifinito (icona con gradiente + ring). Solo web/presentazionale:
+  typecheck+lint+build verdi, nessun test web esistente da toccare.
 - **v0.16.0 Step 13 (2026-07-17): statistiche oneste.** "Anime a catalogo" e "Episodi totali" ora
   vengono dai dati ufficiali (`source.getStats()` via nuovo `catalog.siteStats`, cache TTL 5min, "—"
   + hint se l'API è offline) invece dai conteggi locali: il mirror importa solo i summary, quindi

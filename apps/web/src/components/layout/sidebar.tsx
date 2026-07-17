@@ -3,6 +3,7 @@
 import { SearchTrigger } from '@/components/layout/search-trigger';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { navLinks, primaryNavLinks, secondaryNavLinks } from '@/lib/nav';
 import { useSidebar } from '@/lib/sidebar-store';
 import { cn } from '@/lib/utils';
@@ -44,6 +45,57 @@ function isActive(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
+// Voce del menu desktop. Da sidebar compressa mostra un tooltip custom con la destinazione (niente
+// `title` nativo: eviterebbe il doppio tooltip del browser); da espansa l'etichetta è già visibile.
+function DesktopNavItem({
+  href,
+  label,
+  active,
+  expanded,
+}: {
+  href: string;
+  label: string;
+  active: boolean;
+  expanded: boolean;
+}) {
+  const Icon = ICONS[href] ?? Home;
+  const item = (
+    <Link
+      href={href}
+      className={cn(
+        'relative flex items-center gap-3 rounded-md px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground',
+        active && 'bg-accent text-foreground',
+      )}
+    >
+      {/* Barra "attivo" a sinistra: affordance in più della sola evidenziazione dello sfondo. */}
+      <span
+        className={cn(
+          'absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-r-full bg-primary transition-opacity',
+          active ? 'opacity-100' : 'opacity-0',
+        )}
+      />
+      <Icon className={cn('shrink-0', expanded ? 'h-5 w-5' : 'h-6 w-6')} />
+      <span
+        className={cn(
+          'whitespace-nowrap transition-opacity duration-200',
+          expanded ? 'opacity-100' : 'w-0 opacity-0',
+        )}
+      >
+        {label}
+      </span>
+    </Link>
+  );
+  if (expanded) {
+    return item;
+  }
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{item}</TooltipTrigger>
+      <TooltipContent side="right">{label}</TooltipContent>
+    </Tooltip>
+  );
+}
+
 export function Sidebar() {
   const pathname = usePathname();
   const expanded = useSidebar((s) => s.expanded);
@@ -83,32 +135,19 @@ export function Sidebar() {
           </span>
         </div>
 
-        <nav className="flex flex-1 flex-col gap-1 p-2">
-          {navLinks.map((link) => {
-            const Icon = ICONS[link.href] ?? Home;
-            return (
-              <Link
+        <TooltipProvider delayDuration={200}>
+          <nav className="flex flex-1 flex-col gap-1 p-2">
+            {navLinks.map((link) => (
+              <DesktopNavItem
                 key={link.href}
                 href={link.href}
-                className={cn(
-                  'flex items-center gap-3 rounded-md px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground',
-                  isActive(pathname, link.href) && 'bg-accent text-foreground',
-                )}
-                title={link.label}
-              >
-                <Icon className={cn('shrink-0', expanded ? 'h-5 w-5' : 'h-6 w-6')} />
-                <span
-                  className={cn(
-                    'whitespace-nowrap transition-opacity duration-200',
-                    expanded ? 'opacity-100' : 'w-0 opacity-0',
-                  )}
-                >
-                  {link.label}
-                </span>
-              </Link>
-            );
-          })}
-        </nav>
+                label={link.label}
+                active={isActive(pathname, link.href)}
+                expanded={expanded}
+              />
+            ))}
+          </nav>
+        </TooltipProvider>
       </aside>
 
       {/* Dock mobile: voci principali + "Altro" (drawer) */}

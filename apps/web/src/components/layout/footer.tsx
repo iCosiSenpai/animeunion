@@ -143,12 +143,14 @@ export function Footer() {
           </div>
 
           <div className="flex items-center gap-4">
+            {/* "Doctor": pulsante evidente (coerente con la voce sidebar/diagnostica dello Step 1),
+                non un semplice link testuale — è lo strumento a cui si torna quando qualcosa non va. */}
             <Link
               href="/diagnostica"
-              className="inline-flex items-center gap-1.5 underline-offset-4 transition-colors hover:text-foreground hover:underline"
+              className="inline-flex items-center gap-2 rounded-full border border-primary/40 bg-primary/10 px-4 py-2 font-medium text-foreground transition-colors hover:border-primary/60 hover:bg-primary/20"
             >
-              <Stethoscope className="h-4 w-4" />
-              Diagnostica
+              <Stethoscope className="h-4 w-4 text-primary" />
+              Doctor
             </Link>
             {version ? <span className="tabular-nums">v{version}</span> : null}
           </div>

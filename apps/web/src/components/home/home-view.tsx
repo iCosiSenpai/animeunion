@@ -4,6 +4,7 @@ import { AnimeCard } from '@/components/anime/anime-card';
 import { useAnimationsOn } from '@/components/layout/animation-provider';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
 import { QueryError } from '@/components/ui/query-error';
 import { trpc } from '@/lib/trpc';
 import type {
@@ -22,6 +23,7 @@ import {
   ChevronRight,
   ChevronUp,
   Clock,
+  Compass,
   Newspaper,
   Play,
   Sparkles,
@@ -82,8 +84,8 @@ function SectionHeader({
 }) {
   return (
     <div className="mb-3 flex items-center justify-between">
-      <div className="flex items-center gap-2">
-        <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/10 text-primary">
+      <div className="flex items-center gap-2.5">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary/20 to-primary/5 text-primary ring-1 ring-primary/10">
           <Icon className="h-4 w-4" />
         </div>
         <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
@@ -110,6 +112,7 @@ function Section({
   href,
   carouselClassName,
   loadMore,
+  emptyLabel,
 }: {
   title: string;
   icon: ElementType;
@@ -119,6 +122,8 @@ function Section({
   carouselClassName?: string;
   /** Carica la pagina successiva (sezioni paginate): abilita "Carica altri" da espanse. */
   loadMore?: (page: number) => Promise<PaginatedAnime>;
+  /** Se presente, una sezione vuota mostra un empty-state (invece di sparire) con questo contesto. */
+  emptyLabel?: string;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [extra, setExtra] = useState<AnimeSummary[]>([]);
@@ -131,7 +136,27 @@ function Section({
   const all = [...items, ...extra].filter((a) => (seen.has(a.id) ? false : seen.add(a.id)));
 
   if (!isLoading && all.length === 0) {
-    return null;
+    // Sezioni con `emptyLabel` (es. "In onda oggi") restano visibili con un invito al catalogo:
+    // meglio un "È tutto!" chiaro che una sezione che sparisce senza spiegazione. Le altre si
+    // nascondono come prima (nessun buco per sezioni non essenziali).
+    if (!emptyLabel) {
+      return null;
+    }
+    return (
+      <section className="space-y-1">
+        <SectionHeader icon={icon} title={title} />
+        <EmptyState
+          icon={Compass}
+          title="È tutto!"
+          description={`Nessun titolo in "${emptyLabel}" al momento. Se cerchi altro, dai un'occhiata al catalogo.`}
+          action={
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/catalog">Vai al catalogo</Link>
+            </Button>
+          }
+        />
+      </section>
+    );
   }
 
   // Espandere ha senso se possiamo caricare altro (paginata) o se c'e' gia' piu' di una riga.
@@ -564,6 +589,7 @@ export function HomeView() {
         items={todayAnime}
         isLoading={week.isLoading}
         href="/calendar"
+        emptyLabel="In onda oggi"
       />
     ),
     currentSeason: (
@@ -574,6 +600,7 @@ export function HomeView() {
         isLoading={seasonal.isLoading}
         href={`/catalog?season=${season}&year=${year}`}
         loadMore={(page) => utils.catalog.bySeason.fetch({ season, year, page })}
+        emptyLabel={`Stagione in corso · ${SEASON_LABELS[season]} ${year}`}
       />
     ),
     topRated: (

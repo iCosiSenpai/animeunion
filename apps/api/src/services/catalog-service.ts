@@ -12,6 +12,7 @@ import type {
   PaginatedAnime,
   RelatedAnime,
   Season,
+  SiteStats,
   WeekDay,
 } from '@animeunion/shared';
 import { animeSummarySchema } from '@animeunion/shared';
@@ -29,6 +30,9 @@ const PER_PAGE = 24;
 const SYNC_TIMESTAMP_KEY = 'catalog_synced_at';
 const CALENDAR_TTL_MS = 30 * 60 * 1000;
 const EPISODES_CACHE_TTL_MS = 5 * 60 * 1_000;
+// Totali di catalogo del sito (source.getStats): cambiano di rado e la pagina Statistiche fa
+// polling ogni 30s, quindi cache breve per non martellare l'API ufficiale (rate limit 120 req/min).
+const SITE_STATS_TTL_MS = 5 * 60 * 1_000;
 // Gli ONGOING ricevono episodi nuovi spesso: cap di freschezza piu' corto per il dettaglio, cosi'
 // la cache non nasconde l'ultimo episodio (gia' presente nel feed globale "ultimi episodi").
 const ONGOING_DETAIL_TTL_MS = 60 * 60 * 1000;
@@ -67,6 +71,13 @@ export interface CatalogService {
   filters(): Promise<CatalogFilters>;
   syncCatalog(): Promise<{ synced: number }>;
   syncStatus(): SyncStatus;
+  /**
+   * Totali onesti del catalogo del sito (anime + episodi), presi dall'API ufficiale via
+   * `source.getStats()`. NON sono i conteggi locali (il mirror ha episodi solo per gli anime
+   * di cui si e' aperto il dettaglio). Ritorna null se l'API non risponde (offline/errore):
+   * il chiamante mostra un placeholder invece di un numero fuorviante.
+   */
+  siteStats(): Promise<SiteStats | null>;
   listEpisodes(animeSlug: string): Promise<EpisodeSummary[]>;
   /**
    * Risolve il file episodio + URL di download. `forceResolve` (usato dal worker prima di
@@ -85,6 +96,7 @@ export function createCatalogService(options: CatalogServiceOptions): CatalogSer
   const now = options.now ?? (() => new Date());
   let syncRunning = false;
   let calendarCache: { fetchedAt: number; week: CalendarWeek } | null = null;
+  let siteStatsCache: { fetchedAt: number; stats: SiteStats | null } | null = null;
   // Cache in-memory degli episodi per slug: evita di scaricare l'intera lista ad ogni
   // pre-download (getEpisodeFile con forceResolve). TTL 5min; invalidata su syncCatalog.
   const episodesCache = new Map<string, { episodes: SourceEpisode[]; ts: number }>();
@@ -793,6 +805,22 @@ export function createCatalogService(options: CatalogServiceOptions): CatalogSer
 
     syncStatus(): SyncStatus {
       return { running: syncRunning, lastSyncedAt: getLastSyncedAt() };
+    },
+
+    async siteStats(): Promise<SiteStats | null> {
+      if (siteStatsCache && now().getTime() - siteStatsCache.fetchedAt < SITE_STATS_TTL_MS) {
+        return siteStatsCache.stats;
+      }
+      try {
+        const stats = await source.getStats();
+        siteStatsCache = { fetchedAt: now().getTime(), stats };
+        return stats;
+      } catch (error) {
+        logger.debug({ err: error }, 'Statistiche catalogo non disponibili');
+        // Cache anche il fallimento (breve): evita di ripetere la chiamata a ogni poll se l'API e' giu'.
+        siteStatsCache = { fetchedAt: now().getTime(), stats: null };
+        return null;
+      }
     },
 
     async listEpisodes(animeSlug): Promise<EpisodeSummary[]> {

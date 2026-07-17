@@ -3,6 +3,7 @@ import {
   catalogBrowseInputSchema,
   catalogFiltersSchema,
   seasonSchema,
+  siteStatsSchema,
 } from '@animeunion/shared';
 import { z } from 'zod';
 import { publicProcedure, router } from '../trpc';
@@ -59,4 +60,11 @@ export const catalogRouter = router({
   }),
 
   syncStatus: publicProcedure.query(({ ctx }) => ctx.services.catalog.syncStatus()),
+
+  // Totali onesti del catalogo del sito (dall'API ufficiale). Separata da stats.dashboard perche'
+  // e' una chiamata di rete che puo' fallire: null → la UI mostra un placeholder, senza rompere i
+  // contatori locali del dashboard.
+  siteStats: publicProcedure
+    .output(siteStatsSchema.nullable())
+    .query(({ ctx }) => ctx.services.catalog.siteStats()),
 });

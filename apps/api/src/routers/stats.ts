@@ -1,5 +1,5 @@
 import { dashboardStatsSchema } from '@animeunion/shared';
-import { count, inArray, sql } from 'drizzle-orm';
+import { count, countDistinct, inArray, sql } from 'drizzle-orm';
 import { schema } from '../db';
 import { publicProcedure, router } from '../trpc';
 
@@ -8,9 +8,11 @@ export const statsRouter = router({
     const { db } = ctx;
     const totalAnime = db.select({ n: count() }).from(schema.anime).get()?.n ?? 0;
     const totalEpisodes = db.select({ n: count() }).from(schema.episode).get()?.n ?? 0;
+    // Conteggio per episodio distinto, non per file: SUB/DUB e le varianti upscalate (XQ/XQPLUS)
+    // dello stesso episodio sono piu' righe episode_file ma un solo "episodio scaricato".
     const downloadedEpisodes =
       db
-        .select({ n: count() })
+        .select({ n: countDistinct(schema.episodeFile.episodeId) })
         .from(schema.episodeFile)
         // Include gli `external` (collegati senza scaricare): contano come episodi presenti.
         .where(inArray(schema.episodeFile.downloadStatus, ['downloaded', 'external']))

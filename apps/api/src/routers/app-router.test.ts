@@ -271,6 +271,73 @@ describe('appRouter (integrazione)', () => {
     expect(stats.downloadQueueSize).toBe(0);
   });
 
+  it('stats.dashboard conta gli episodi scaricati per episodio distinto, non per variante', async () => {
+    const { caller, ctx } = makeCaller();
+    const anime = (await caller.catalog.search({ query: '' })).data[0];
+    expect(anime).toBeDefined();
+    if (!anime) return;
+    const now = new Date().toISOString();
+    ctx.db
+      .insert(schema.episode)
+      .values({ id: 'ep-stats-1', animeId: anime.id, number: 1, createdAt: now, updatedAt: now })
+      .run();
+    // Stesso episodio, tre file: SUB, DUB e la variante upscalata XQ. Devono contare come 1.
+    ctx.db
+      .insert(schema.episodeFile)
+      .values([
+        {
+          id: 'ef-sub',
+          episodeId: 'ep-stats-1',
+          language: 'SUB',
+          quality: 'SD',
+          downloadStatus: 'downloaded',
+          createdAt: now,
+          updatedAt: now,
+        },
+        {
+          id: 'ef-dub',
+          episodeId: 'ep-stats-1',
+          language: 'DUB',
+          quality: 'SD',
+          downloadStatus: 'downloaded',
+          createdAt: now,
+          updatedAt: now,
+        },
+        {
+          id: 'ef-xq',
+          episodeId: 'ep-stats-1',
+          language: 'SUB',
+          quality: 'XQ',
+          downloadStatus: 'external',
+          createdAt: now,
+          updatedAt: now,
+        },
+      ])
+      .run();
+
+    const stats = await caller.stats.dashboard();
+
+    expect(stats.downloadedEpisodes).toBe(1);
+  });
+
+  it('catalog.siteStats ritorna i totali dall API ufficiale', async () => {
+    const { caller } = makeCaller();
+    const expected = await createMockSource().getStats();
+
+    const stats = await caller.catalog.siteStats();
+
+    expect(stats).toEqual(expected);
+  });
+
+  it('catalog.siteStats ritorna null se la source fallisce', async () => {
+    const { caller, ctx } = makeCaller();
+    ctx.source.getStats = () => Promise.reject(new Error('offline'));
+
+    const stats = await caller.catalog.siteStats();
+
+    expect(stats).toBeNull();
+  });
+
   it('catalog.browse filtra e ordina i risultati', async () => {
     const { caller } = makeCaller();
     await caller.catalog.sync();

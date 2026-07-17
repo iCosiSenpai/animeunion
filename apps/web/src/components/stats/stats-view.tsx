@@ -73,23 +73,30 @@ function StatsSection({
 }
 
 function Loaded({ data }: { data: DashboardStats }) {
+  // Totali del catalogo del sito: dall'API ufficiale, non dai conteggi locali (il mirror ha episodi
+  // solo per gli anime aperti). Query separata: puo' essere offline → placeholder "—".
+  const site = trpc.catalog.siteStats.useQuery(undefined, { staleTime: 5 * 60_000 });
+  const catalogValue = (n: number | undefined): string => (n === undefined ? '—' : num(n));
+
   return (
     <div className="space-y-8">
-      {/* Numeri globali del sito, mirrorati in locale per la ricerca: NON sono la libreria
-          dell'utente, quindi sono non-zero anche su un'installazione appena creata. */}
+      {/* Numeri globali del sito, dall'API ufficiale: NON sono la libreria dell'utente, quindi sono
+          non-zero anche su un'installazione appena creata (e non dipendono dal sync locale). */}
       <StatsSection
         title="Catalogo AnimeUnion"
-        description="L'intero catalogo del sito, sincronizzato in locale per la ricerca. È uguale per tutti: non è la tua libreria."
+        description="L'intero catalogo del sito, dai dati ufficiali di AnimeUnion. È uguale per tutti: non è la tua libreria."
       >
         <StatCard
           icon={<Clapperboard className="h-5 w-5" />}
           label="Anime a catalogo"
-          value={num(data.totalAnime)}
+          value={catalogValue(site.data?.totalAnime)}
+          hint={site.data === null ? 'Dato non disponibile ora' : undefined}
         />
         <StatCard
           icon={<ListVideo className="h-5 w-5" />}
           label="Episodi totali"
-          value={num(data.totalEpisodes)}
+          value={catalogValue(site.data?.totalEpisodes)}
+          hint={site.data === null ? 'Dato non disponibile ora' : undefined}
         />
       </StatsSection>
 

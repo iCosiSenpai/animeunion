@@ -51,7 +51,7 @@ Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
 - [x] **Step 10** — Audit "Verifica integrità download" + coerenza con upscale GPU
 - [x] **Step 11** — FAQ/tutorial su GitHub + GitHub Pages
 - [x] **Step 12** — Rimozione totale riferimenti a Plex (solo Jellyfin)
-- [ ] **Step 13** — Statistiche oneste (episodi distinti, "Episodi totali" onesta)
+- [x] **Step 13** — Statistiche oneste (catalogo dai dati ufficiali, episodi scaricati distinti)
 - [ ] **Step 14** — Polish UI diffuso (Carica altri, empty state, hover sidebar, footer Doctor)
 - [ ] **Step 15** — Ricerca feature Premium del sito + Assistenza prioritaria Telegram
 - [ ] **Step 16** — Release v0.16.0
@@ -109,10 +109,17 @@ razionale (incl. worker nativo vs container, nota CUDA/NVENC) nel piano.
 
 **Batch attivo: v0.16.0 — "Doctor sempre attivo + Premium visibile + UX rifinita"** (piano
 [plan/doctor-premium-ux.md](plan/doctor-premium-ux.md), branch `feat/doctor-premium-ux`). 16 step
-pianificati + Step 7.5 inserito. **Step 1-12 + 7.5 COMPLETI (2026-07-17)** (Step 9 chiuso con
-decisione B — "solo scaricati", vedi sotto); prossima sessione: Step 13 (statistiche oneste —
-rietichettare "Episodi totali", contare episodi distinti). Cadenza un solo step per sessione.
+pianificati + Step 7.5 inserito. **Step 1-13 + 7.5 COMPLETI (2026-07-17)** (Step 9 chiuso con
+decisione B — "solo scaricati", vedi sotto); prossima sessione: Step 14 (polish UI diffuso —
+Carica altri, empty state, hover sidebar, footer Doctor). Cadenza un solo step per sessione.
 
+- **v0.16.0 Step 13 (2026-07-17): statistiche oneste.** "Anime a catalogo" e "Episodi totali" ora
+  vengono dai dati ufficiali (`source.getStats()` via nuovo `catalog.siteStats`, cache TTL 5min, "—"
+  + hint se l'API è offline) invece dai conteggi locali: il mirror importa solo i summary, quindi
+  "Episodi totali" locale contava solo gli episodi degli anime aperti — piccolo e fuorviante sotto
+  l'etichetta "l'intero catalogo del sito". "Episodi scaricati" passa da `count(episode_file)` a
+  `countDistinct(episode_id)`: le varianti SUB/DUB/XQ/XQPLUS di un episodio contano una volta. La
+  sezione "La tua libreria" resta sui contatori DB locali. Zero migrazioni/env; rete solo via backend.
 - **v0.16.0 Step 12 (2026-07-17): rimozione totale dei riferimenti a Plex (solo Jellyfin).** Scoperta:
   *non esisteva alcun codice Plex funzionale* — nessuna API/logica dedicata, solo copy e commenti (21
   hit). Ripuliti 14 file live tenendo solo Jellyfin: UI (`settings-view.tsx` titolo sezione + hint NFO,

@@ -44,6 +44,7 @@ Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
 - [x] **Step 5** — Fix "Salva" pagina Aspetto (fetch→invalidate + Tema next-themes)
 - [x] **Step 6** — Pagina "Aspetto" rifatta + filtri ricerca sfondo (incl. "Più votati")
 - [x] **Step 7** — Pagina "Notifiche" rifatta + Discord (webhook) + PWA install stato-aware
+- [x] **Step 7.5** — Setup più user-friendly: stepper etichettato + verifica cartelle live + Aspetto (Tema) + step Jellyfin opzionale + copy
 - [ ] **Step 8** — Neural Export: spostare tra Download e Pianificazione + spiegare + guida
 - [ ] **Step 9** — Upscale locale (scaricati + collegati) — con verifica tecnica preliminare
 - [ ] **Step 10** — Audit "Verifica integrità download" + coerenza con upscale GPU
@@ -107,8 +108,29 @@ razionale (incl. worker nativo vs container, nota CUDA/NVENC) nel piano.
 
 **Batch attivo: v0.16.0 — "Doctor sempre attivo + Premium visibile + UX rifinita"** (piano
 [plan/doctor-premium-ux.md](plan/doctor-premium-ux.md), branch `feat/doctor-premium-ux`). 16 step
-pianificati. **Step 1-7 COMPLETI (2026-07-14)**; prossima sessione: Step 8 (Neural Export: spostare
-tra Download e Pianificazione + spiegare + guida). Cadenza un solo step per sessione.
+pianificati + Step 7.5 inserito. **Step 1-7 + 7.5 COMPLETI (2026-07-17)**; prossima sessione: Step 8
+(Neural Export: spostare tra Download e Pianificazione + spiegare + guida). Cadenza un solo step per
+sessione.
+
+- **v0.16.0 Step 7.5 (2026-07-17): setup più user-friendly (login + wizard).** Step inserito prima
+  dello Step 8 su richiesta utente ("miglioramento setup, sia design che informazioni, più user
+  friendly"). Prima il wizard aveva 4 passi con pallini muti (`StepDots`), cartelle salvate senza
+  alcun feedback di scrivibilità, Aspetto coi vecchi picker inline (senza scelta Tema), nessun setup
+  Jellyfin. Ora `setup-wizard.tsx`: **`SetupStepper`** etichettato a 5 passi (Benvenuto·Cartelle·
+  Aspetto·Jellyfin·Fine, numeri→spunta, `aria-current="step"`, label nascoste sotto `sm`); **step
+  Cartelle a due tempi** — "Salva e verifica" rilegge `config.downloadDirs` e mostra un **badge** per
+  ogni cartella configurata (verde "Scrivibile" / ambra "Non scrivibile / non montata") + banner che
+  spiega il mapping `docker-compose`; il required non-scrivibile **segnala ma non blocca** (ogni
+  modifica al percorso resetta la verifica); **Aspetto** riusa `AppearanceSection` dello Step 6 (Tema
+  chiaro/scuro/sistema via `next-themes` `useTheme`, accent/sfondo/animazioni via `applyTheme`); **nuovo
+  step Jellyfin opzionale** tra Aspetto e Fine (URL + API key + "Prova connessione" via
+  `jellyfin.testConnection` con nome+versione/errore + toggle auto-refresh; "Salta" avanza senza
+  salvare; salva su `jellyfinServerUrl`/`jellyfinApiKey` (solo se digitata, è segreto)/`jellyfinAutoRefresh`).
+  Copy: benvenuto con box "Come funzionano le cartelle" (`/media`), messaggio finale rivisto,
+  `setup-screen.tsx` con riga di contesto post-login. **Zero migrazioni, zero endpoint nuovi** (riuso
+  di `config.downloadDirs`, `jellyfin.testConnection`, `AppearanceSection`). `auth-gate.tsx` intatto:
+  la guardia resta `seriesPathSub`, lo step Jellyfin non blocca. 456 test verdi (invariati),
+  lint/typecheck/build web verdi.
 
 - **v0.16.0 Step 7 (2026-07-14): pagina "Notifiche" rifatta + Discord + PWA stato-aware.** Prima la
   sezione Notifiche era una lista piatta di `Field` (in-app/Telegram/push/PWA mischiati) con un blocco

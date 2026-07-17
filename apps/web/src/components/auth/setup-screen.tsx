@@ -52,7 +52,8 @@ export function SetupScreen() {
             <div className="space-y-1.5">
               <h1 className="text-2xl font-bold tracking-tight">AnimeUnion Docker</h1>
               <p className="text-sm text-muted-foreground">
-                Accedi con il tuo account AnimeUnion per iniziare.
+                Accedi con il tuo account AnimeUnion. Dopo il login bastano due minuti per scegliere
+                dove salvare i download e sei pronto.
               </p>
             </div>
           </div>

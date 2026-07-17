@@ -50,7 +50,7 @@ Regole:
 - Se SUB e DUB finiscono nella **stessa** cartella, al nome file viene aggiunto un suffisso
   (` - SUB ITA`/` - DUB ITA`) così i due non si sovrascrivono. Con cartelle separate i nomi restano
   puliti.
-- Struttura serie: `<cartella>/<Titolo>/Season NN/<Titolo> - S01E01.mp4` (compatibile Jellyfin/Plex).
+- Struttura serie: `<cartella>/<Titolo>/Season NN/<Titolo> - S01E01.mp4` (compatibile Jellyfin).
   Film: `<cartella>/<Titolo>/<Titolo>.mp4`.
 
 ---
@@ -76,7 +76,7 @@ L'API **non** è pubblicata sull'host (la usa solo il web sulla rete interna).
 ## 4. Volumi e backup
 
 - `./data` → `/data` — database SQLite (`/data/animeunion.db`) e token. **Fai il backup di questa cartella.**
-- `/media` → la tua libreria (serie/film). I file scaricati restano leggibili da Jellyfin/Plex.
+- `/media` → la tua libreria (serie/film). I file scaricati restano leggibili da Jellyfin.
 
 Permessi su NAS: se vedi errori di scrittura, assicurati che l'utente del container possa scrivere
 nelle cartelle montate.

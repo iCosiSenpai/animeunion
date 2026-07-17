@@ -6,7 +6,7 @@
 
 <p align="center">
   <b>La tua libreria anime, sempre aggiornata.</b><br/>
-  Segui un anime e ogni nuovo episodio viene scaricato, rinominato e organizzato da solo — pronto per Jellyfin/Plex.
+  Segui un anime e ogni nuovo episodio viene scaricato, rinominato e organizzato da solo — pronto per Jellyfin.
 </p>
 
 <p align="center">
@@ -25,7 +25,7 @@
 ## ✨ Cosa fa
 
 Cerchi un anime, clicchi **Segui**, e basta: quando esce un nuovo episodio il container lo scarica,
-lo rinomina con layout **Jellyfin/Plex** (`<Titolo>/Season 02/<Titolo> - S02E01.mp4`) e lo mette in
+lo rinomina con layout **Jellyfin** (`<Titolo>/Season 02/<Titolo> - S02E01.mp4`) e lo mette in
 libreria, già pronto da guardare. Tutto da un'interfaccia web, senza aprire il sito ogni giorno.
 
 | | |
@@ -35,7 +35,7 @@ libreria, già pronto da guardare. Tutto da un'interfaccia web, senza aprire il 
 | 📌 **Segui con opzioni** | Stato, auto-download per-serie e "scarica subito i già usciti" al volo |
 | ⬇️ **Download "a contenitori"** | Pagina stile qBittorrent: un riquadro per anime con avanzamento, **velocità ed ETA**, resume dei download interrotti |
 | 🎬 **Stagioni intelligenti** | Rilevamento sequel/stagione (anche quando l'API non lo fornisce) + conferma/correzione manuale e cartella `Specials` |
-| 📁 **Libreria organizzata** | Naming Jellyfin/Plex, **gestione file** (elimina episodio/stagione/serie dall'app) |
+| 📁 **Libreria organizzata** | Naming Jellyfin, **gestione file** (elimina episodio/stagione/serie dall'app) |
 | 🔔 **Notifiche** | Centro notifiche in-app (completati/falliti/nuovi episodi) + inoltro **Telegram** opzionale |
 | 🩺 **Diagnostica** | Stato worker, spazio disco per cartella, ultima sync, connessione |
 | 📲 **App installabile + push** | Installa AnimeUnion come app (PWA) e ricevi notifiche del browser anche ad app chiusa (richiede HTTPS — [guida](#https-app-installabile-pwa-e-notifiche-push)) |

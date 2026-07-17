@@ -1,7 +1,7 @@
 {
   "name": "AnimeUnion Docker",
   "short_name": "AnimeUnion",
-  "description": "Download self-hosted di anime, organizzati per Jellyfin/Plex.",
+  "description": "Download self-hosted di anime, organizzati per Jellyfin.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

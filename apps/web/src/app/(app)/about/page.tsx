@@ -13,7 +13,7 @@ export default function AboutPage() {
         <p className="text-muted-foreground">
           Applicazione ufficiale affiliata ad AnimeUnion per il download self-hosted degli anime. La
           tua libreria anime, sempre aggiornata: segui una serie e ogni nuovo episodio viene
-          scaricato e organizzato automaticamente per Plex/Jellyfin.
+          scaricato e organizzato automaticamente per Jellyfin.
         </p>
       </div>
 
@@ -24,8 +24,7 @@ export default function AboutPage() {
         <p className="text-sm text-muted-foreground">
           L&apos;idea è semplice: la tua libreria anime sempre aggiornata, senza pensieri. Segui una
           serie e ogni nuovo episodio viene scaricato (uno alla volta), rinominato e ordinato per
-          Jellyfin/Plex. È self-hosted, gira in casa tua su Docker ed è pensata per un singolo
-          utente.
+          Jellyfin. È self-hosted, gira in casa tua su Docker ed è pensata per un singolo utente.
         </p>
         <ul className="ml-4 list-disc space-y-1 text-sm text-muted-foreground">
           <li>

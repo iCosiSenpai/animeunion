@@ -169,7 +169,7 @@ export function createAppContext(options: { env?: Env; databasePath?: string } =
   }
 
   worker.on('complete', ({ episodeFileId, localPath }) => {
-    // Sidecar NFO + artwork per Jellyfin/Plex (best-effort, gated da config writeNfo).
+    // Sidecar NFO + artwork per Jellyfin (best-effort, gated da config writeNfo).
     void nfo.writeForEpisodeFile(episodeFileId);
     // Refresh Jellyfin a fine download (best-effort + debounce, gated da config jellyfinAutoRefresh).
     // Passa il path del file: il servizio rinfresca solo la libreria che lo contiene, non tutto l'HDD.

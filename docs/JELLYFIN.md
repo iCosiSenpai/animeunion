@@ -2,10 +2,10 @@
 
 > **Stato: solo documentazione.** Nessuna di queste idee è implementata. Questo file raccoglie le
 > direzioni possibili per dare più senso all'app collegandola a Jellyfin (e, dove gli `.nfo` lo
-> permettono, anche a Plex/Kodi/Emby). Si decide e si implementa in un batch successivo, una idea
+> permettono, anche a Kodi/Emby). Si decide e si implementa in un batch successivo, una idea
 > alla volta, con i suoi test (Regola #5) e il suo commit (Regola #9).
 
-L'app oggi scarica e organizza i file in un layout già pensato per Jellyfin/Plex
+L'app oggi scarica e organizza i file in un layout già pensato per Jellyfin
 (`<root>/<Serie>/Season NN/<Serie> - SxxExx.mp4`, film in cartella propria, speciali in `Specials/`
 — vedi [renamer-service.ts](../apps/api/src/services/renamer-service.ts)). Il passo successivo è
 **chiudere il cerchio** con il media server: aggiornarlo quando arrivano/spariscono episodi,
@@ -72,7 +72,7 @@ Scrivere accanto ai video i file metadati standard, attingendo ai dati già in D
   per emettere i sidecar accanto al `.mp4` finale.
 - **Sforzo:** medio. **Valore:** alto.
 - **Pro chiave:** **funziona anche senza server Jellyfin né API key** — sono file locali, validi pure
-  per Plex/Kodi/Emby. Risolve alla radice il matching anime sbagliato.
+  per Kodi/Emby. Risolve alla radice il matching anime sbagliato.
   **Contro:** va mantenuto allineato quando i metadati cambiano (vedi #11).
 
 ---

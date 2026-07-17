@@ -75,7 +75,7 @@ export const appConfigSchema = z.object({
   themeBackgroundUrl: z.string().default(''),
   // Animazioni e micro-interazioni dell'interfaccia (off = movimento ridotto).
   animationsEnabled: z.boolean().default(true),
-  // Scrive i sidecar NFO + artwork (poster/fanart) accanto ai video per Jellyfin/Plex/Kodi/Emby.
+  // Scrive i sidecar NFO + artwork (poster/fanart) accanto ai video per Jellyfin (e in generale Kodi/Emby).
   writeNfo: z.boolean().default(false),
   // Integrazione Jellyfin: URL del server + API key (segreta) + refresh automatico a fine download.
   jellyfinServerUrl: z.string().default(''),

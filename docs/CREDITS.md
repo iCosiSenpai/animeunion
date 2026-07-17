@@ -14,7 +14,7 @@ degli anime dal catalogo [AnimeUnion](https://animeunion.tv).
 
 Sviluppata in collaborazione con il team di AnimeUnion, permette a chiunque — su NAS,
 Windows, macOS o Linux — di creare la propria libreria anime personale, con download
-automatici e file organizzati per Jellyfin e Plex.
+automatici e file organizzati per Jellyfin.
 
 - **Sviluppatore**: [iCosiSenpai](https://github.com/iCosiSenpai)
 - **Team AnimeUnion**: team e contributori

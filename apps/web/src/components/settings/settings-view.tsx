@@ -1228,10 +1228,10 @@ export function SettingsView() {
             )}
           </div>
 
-          <Section id="integrazioni" hidden={active !== 'integrazioni'} title="Jellyfin / Plex">
+          <Section id="integrazioni" hidden={active !== 'integrazioni'} title="Jellyfin">
             <Field
               label="Sidecar NFO + artwork"
-              hint="Scrive metadati .nfo e poster/fanart accanto ai video: i media server (Jellyfin/Plex/Kodi/Emby) mostrano i dati corretti. Funziona anche senza server configurato."
+              hint="Scrive metadati .nfo e poster/fanart accanto ai video: i media server (Jellyfin, e in generale Kodi/Emby) mostrano i dati corretti. Funziona anche senza server configurato."
             >
               <Select
                 value={draft.writeNfo ? 'on' : 'off'}

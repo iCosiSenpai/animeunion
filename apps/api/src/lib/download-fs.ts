@@ -31,7 +31,7 @@ const FS_ILLEGAL = new Set(['/', ':', '*', '?', '"', '<', '>', '|', String.fromC
 
 /**
  * Nome leggibile FS-safe: rimuove solo i caratteri illegali e di controllo, MANTENENDO
- * spazi, maiuscole e accenti (compatibile con Jellyfin/Plex). Es. "Koori no Jouheki".
+ * spazi, maiuscole e accenti (compatibile con Jellyfin). Es. "Koori no Jouheki".
  */
 export function sanitizeTitleForFs(title: string): string {
   let out = '';
@@ -74,7 +74,7 @@ export async function ensureDir(dir: string, logger?: Logger): Promise<void> {
 /**
  * Sposta atomicamente `from` in `to`. Garantisce che la cartella di destinazione esista
  * (creandola ricorsivamente). Su filesystem locali (ext4/ntfs/apfs) `rename` è atomico:
- * il consumer (Jellyfin/Plex) vede o il nome vecchio o quello nuovo, mai un mix.
+ * il consumer (Jellyfin) vede o il nome vecchio o quello nuovo, mai un mix.
  */
 export async function atomicMove(from: string, to: string, logger?: Logger): Promise<void> {
   await ensureDir(dirname(to), logger);

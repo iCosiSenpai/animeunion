@@ -50,7 +50,7 @@ Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
   (dec. B "solo scaricati": external rimandati a post-collaudo GPU)
 - [x] **Step 10** — Audit "Verifica integrità download" + coerenza con upscale GPU
 - [x] **Step 11** — FAQ/tutorial su GitHub + GitHub Pages
-- [ ] **Step 12** — Rimozione totale riferimenti a Plex (solo Jellyfin)
+- [x] **Step 12** — Rimozione totale riferimenti a Plex (solo Jellyfin)
 - [ ] **Step 13** — Statistiche oneste (episodi distinti, "Episodi totali" onesta)
 - [ ] **Step 14** — Polish UI diffuso (Carica altri, empty state, hover sidebar, footer Doctor)
 - [ ] **Step 15** — Ricerca feature Premium del sito + Assistenza prioritaria Telegram
@@ -109,9 +109,19 @@ razionale (incl. worker nativo vs container, nota CUDA/NVENC) nel piano.
 
 **Batch attivo: v0.16.0 — "Doctor sempre attivo + Premium visibile + UX rifinita"** (piano
 [plan/doctor-premium-ux.md](plan/doctor-premium-ux.md), branch `feat/doctor-premium-ux`). 16 step
-pianificati + Step 7.5 inserito. **Step 1-11 + 7.5 COMPLETI (2026-07-17)** (Step 9 chiuso con
-decisione B — "solo scaricati", vedi sotto); prossima sessione: Step 12 (rimozione totale riferimenti
-a Plex, solo Jellyfin). Cadenza un solo step per sessione.
+pianificati + Step 7.5 inserito. **Step 1-12 + 7.5 COMPLETI (2026-07-17)** (Step 9 chiuso con
+decisione B — "solo scaricati", vedi sotto); prossima sessione: Step 13 (statistiche oneste —
+rietichettare "Episodi totali", contare episodi distinti). Cadenza un solo step per sessione.
+
+- **v0.16.0 Step 12 (2026-07-17): rimozione totale dei riferimenti a Plex (solo Jellyfin).** Scoperta:
+  *non esisteva alcun codice Plex funzionale* — nessuna API/logica dedicata, solo copy e commenti (21
+  hit). Ripuliti 14 file live tenendo solo Jellyfin: UI (`settings-view.tsx` titolo sezione + hint NFO,
+  `about/page.tsx`, `manifest.webmanifest`), commenti codice (`config.ts`, `context.ts`,
+  `download-fs.ts`), e docs (`docs/index.html`, `README.md`, `ARCHITECTURE.md`, `CREDITS.md`,
+  `DEPLOYMENT.md`, `JELLYFIN.md`). Dove aveva senso ho tenuto "Kodi/Emby" come compatibilità di fatto
+  degli `.nfo`, togliendo Plex come integrazione di prima classe. `CHANGELOG.md` e `PLAN.md` lasciati
+  intatti (record storici). Grep finale sulle superfici live: 0 occorrenze. 457 test invariati,
+  lint/typecheck/build web verdi.
 
 - **v0.16.0 Step 11 (2026-07-17): FAQ su GitHub Pages + link dall'app.** Prima le funzioni che
   confondono (Push/PWA) rimandavano alle ancore del README su github.com e il Neural Export non aveva

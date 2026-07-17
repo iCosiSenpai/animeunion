@@ -55,7 +55,7 @@ export function PremiumView() {
                 </p>
               </div>
               <Button asChild variant="outline" size="sm">
-                <Link href="/settings?section=premium">Configura il worker</Link>
+                <Link href="/settings?section=downloadNeurale">Configura il worker</Link>
               </Button>
             </div>
           </div>

@@ -53,6 +53,7 @@ import {
   Shield,
   SlidersHorizontal,
   Smartphone,
+  Sparkles,
   Webhook,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
@@ -155,6 +156,7 @@ function NotifyGroup({
 
 type SectionId =
   | 'download'
+  | 'downloadNeurale'
   | 'pianificazione'
   | 'catalogo'
   | 'lingua'
@@ -169,6 +171,7 @@ type SectionId =
 
 const SECTIONS: { id: SectionId; label: string; icon: LucideIcon }[] = [
   { id: 'download', label: 'Download', icon: FolderDown },
+  { id: 'downloadNeurale', label: 'Download Neurale', icon: Sparkles },
   { id: 'pianificazione', label: 'Pianificazione', icon: CalendarClock },
   { id: 'catalogo', label: 'Catalogo', icon: Compass },
   { id: 'lingua', label: 'Lingua', icon: Languages },
@@ -643,6 +646,159 @@ export function SettingsView() {
             </Field>
           </Section>
 
+          <Section
+            id="downloadNeurale"
+            hidden={active !== 'downloadNeurale'}
+            title="Download Neurale"
+          >
+            {isPremiumActive(profileQuery.data) ? (
+              <div className="space-y-6">
+                <div className="flex items-start gap-3 rounded-xl border border-primary/30 bg-primary/5 p-4">
+                  <Sparkles className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
+                  <div className="min-w-0 space-y-1">
+                    <p className="text-sm font-medium">Cos'è il Download Neurale</p>
+                    <p className="text-xs text-muted-foreground">
+                      Migliora la qualità dei tuoi episodi con l'upscale a XQ (1080p) o XQ+ (4K),
+                      usando gli stessi shader Anime4K del player del sito. La sorgente SD resta
+                      sempre intatta: l'episodio migliorato viene salvato come versione aggiuntiva.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-3 rounded-xl border p-4">
+                  <div className="flex items-center gap-2">
+                    <Server className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                    <p className="text-sm font-medium">Perché serve un PC con GPU</p>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    L'upscale neurale è pesante e richiede una scheda video: il NAS non ne ha. Per
+                    questo il lavoro gira su un PC con GPU sulla tua rete (il “worker”), che
+                    AnimeUnion contatta via LAN quando chiedi di migliorare un episodio. Il PC deve
+                    essere acceso e il worker avviato solo durante l'upscale.
+                  </p>
+                  <ol className="ml-4 list-decimal space-y-1.5 text-xs text-muted-foreground">
+                    <li>
+                      Avvia il worker sul PC con GPU (istruzioni in{' '}
+                      <code className="rounded bg-muted px-1 py-0.5">apps/worker/README.md</code>).
+                    </li>
+                    <li>
+                      Incolla qui l'URL LAN del worker e il token (lo stesso{' '}
+                      <code className="rounded bg-muted px-1 py-0.5">WORKER_TOKEN</code> del
+                      worker).
+                    </li>
+                    <li>Salva, poi usa “Verifica worker” per controllare che sia raggiungibile.</li>
+                    <li>Dal catalogo, sul singolo episodio, scegli “Migliora a XQ / XQ+”.</li>
+                  </ol>
+                </div>
+
+                <div className="space-y-4 rounded-xl border p-4">
+                  <div>
+                    <h3 className="text-sm font-medium">Configurazione del worker</h3>
+                    <p className="text-xs text-muted-foreground">
+                      Il PC con GPU che esegue l'upscale sulla LAN.
+                    </p>
+                  </div>
+                  <Field
+                    label="Abilita download neurale"
+                    hint="Master del Download Neurale. Off = XQ/XQ+ nascosti ovunque."
+                  >
+                    <Select
+                      value={draft.neuralExportEnabled ? 'on' : 'off'}
+                      onValueChange={(v) => update('neuralExportEnabled', v === 'on')}
+                    >
+                      <SelectTrigger className="w-40">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="on">Attivo</SelectItem>
+                        <SelectItem value="off">Disattivo</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  <Field
+                    label="URL del worker"
+                    hint="Indirizzo LAN del worker GPU. Es. http://192.168.1.50:8787"
+                  >
+                    <Input
+                      autoComplete="off"
+                      placeholder="http://…:8787"
+                      value={draft.neuralWorkerUrl}
+                      onChange={(e) => update('neuralWorkerUrl', e.target.value)}
+                    />
+                  </Field>
+                  <Field
+                    label="Token del worker"
+                    hint="Deve combaciare con WORKER_TOKEN impostato sul worker."
+                  >
+                    <div className="space-y-1.5">
+                      <Input
+                        type="password"
+                        autoComplete="off"
+                        placeholder={
+                          original?.neuralWorkerToken === SECRET_MASK
+                            ? 'Configurato — digita per sostituirlo'
+                            : 'incolla il token'
+                        }
+                        value={
+                          draft.neuralWorkerToken === SECRET_MASK ? '' : draft.neuralWorkerToken
+                        }
+                        onChange={(e) => update('neuralWorkerToken', e.target.value)}
+                      />
+                      {original?.neuralWorkerToken === SECRET_MASK &&
+                      draft.neuralWorkerToken === SECRET_MASK ? (
+                        <p className="text-xs text-muted-foreground">
+                          Token configurato (mascherato). Lascia vuoto per mantenerlo, digita per
+                          sostituirlo o{' '}
+                          <button
+                            type="button"
+                            className="text-primary underline-offset-4 hover:underline"
+                            onClick={() => update('neuralWorkerToken', '')}
+                          >
+                            rimuovilo
+                          </button>
+                          .
+                        </p>
+                      ) : null}
+                    </div>
+                  </Field>
+                  <p className="text-xs text-muted-foreground">
+                    Salva le modifiche, poi usa “Verifica worker” qui sotto per controllare la
+                    connessione.
+                  </p>
+                </div>
+                <NeuralExportPanel />
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-start gap-3 rounded-xl border border-primary/30 bg-primary/5 p-4">
+                  <Sparkles className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
+                  <div className="min-w-0 space-y-1">
+                    <p className="text-sm font-medium">Cos'è il Download Neurale</p>
+                    <p className="text-xs text-muted-foreground">
+                      Migliora la qualità dei tuoi episodi con l'upscale a XQ (1080p) o XQ+ (4K),
+                      usando gli stessi shader Anime4K del player del sito. È una funzione Premium:
+                      richiede un PC con GPU sulla tua rete che esegue l'upscale.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3 rounded-xl border p-4">
+                  <Crown className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
+                  <div className="min-w-0 space-y-2">
+                    <div>
+                      <p className="text-sm font-medium">Sbloccalo con il Premium</p>
+                      <p className="text-xs text-muted-foreground">
+                        Il Download Neurale è incluso in AnimeUnion Premium.
+                      </p>
+                    </div>
+                    <Button asChild variant="outline" size="sm">
+                      <Link href="/premium">Vai alla pagina Premium</Link>
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </Section>
+
           <Section id="pianificazione" hidden={active !== 'pianificazione'} title="Pianificazione">
             <Field
               label="Auto-download"
@@ -1024,15 +1180,14 @@ export function SettingsView() {
 
           <div className={cn(active !== 'premium' && 'hidden')}>
             {isPremiumActive(profileQuery.data) ? (
-              <div className="space-y-6">
+              <div className="space-y-4">
                 <div className="flex items-start gap-3 rounded-xl border border-primary/30 bg-primary/5 p-5">
                   <Crown className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
                   <div className="min-w-0 space-y-2">
                     <div>
                       <p className="text-sm font-medium">Il tuo Premium è attivo</p>
                       <p className="text-xs text-muted-foreground">
-                        Stato, piano e funzioni sbloccate sono nella pagina Premium. Qui sotto resta
-                        la configurazione del worker Neural Export.
+                        Stato, piano e funzioni sbloccate sono nella pagina Premium.
                       </p>
                     </div>
                     <Button asChild variant="outline" size="sm">
@@ -1040,83 +1195,20 @@ export function SettingsView() {
                     </Button>
                   </div>
                 </div>
-                <div className="space-y-4 rounded-xl border p-5">
-                  <div>
-                    <h3 className="text-base font-semibold">Worker Neural Export</h3>
-                    <p className="text-sm text-muted-foreground">
-                      Il PC con GPU che esegue l'upscale sulla LAN. Istruzioni in
-                      apps/worker/README.md.
-                    </p>
-                  </div>
-                  <Field
-                    label="Abilita download neurale"
-                    hint="Master del Neural Export. Off = XQ/XQ+ nascosti ovunque."
-                  >
-                    <Select
-                      value={draft.neuralExportEnabled ? 'on' : 'off'}
-                      onValueChange={(v) => update('neuralExportEnabled', v === 'on')}
-                    >
-                      <SelectTrigger className="w-40">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="on">Attivo</SelectItem>
-                        <SelectItem value="off">Disattivo</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </Field>
-                  <Field
-                    label="URL del worker"
-                    hint="Indirizzo LAN del worker GPU. Es. http://192.168.1.50:8787"
-                  >
-                    <Input
-                      autoComplete="off"
-                      placeholder="http://…:8787"
-                      value={draft.neuralWorkerUrl}
-                      onChange={(e) => update('neuralWorkerUrl', e.target.value)}
-                    />
-                  </Field>
-                  <Field
-                    label="Token del worker"
-                    hint="Deve combaciare con WORKER_TOKEN impostato sul worker."
-                  >
-                    <div className="space-y-1.5">
-                      <Input
-                        type="password"
-                        autoComplete="off"
-                        placeholder={
-                          original?.neuralWorkerToken === SECRET_MASK
-                            ? 'Configurato — digita per sostituirlo'
-                            : 'incolla il token'
-                        }
-                        value={
-                          draft.neuralWorkerToken === SECRET_MASK ? '' : draft.neuralWorkerToken
-                        }
-                        onChange={(e) => update('neuralWorkerToken', e.target.value)}
-                      />
-                      {original?.neuralWorkerToken === SECRET_MASK &&
-                      draft.neuralWorkerToken === SECRET_MASK ? (
-                        <p className="text-xs text-muted-foreground">
-                          Token configurato (mascherato). Lascia vuoto per mantenerlo, digita per
-                          sostituirlo o{' '}
-                          <button
-                            type="button"
-                            className="text-primary underline-offset-4 hover:underline"
-                            onClick={() => update('neuralWorkerToken', '')}
-                          >
-                            rimuovilo
-                          </button>
-                          .
-                        </p>
-                      ) : null}
+                <div className="flex items-start gap-3 rounded-xl border p-5">
+                  <Sparkles className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
+                  <div className="min-w-0 space-y-2">
+                    <div>
+                      <p className="text-sm font-medium">Download Neurale (XQ/XQ+)</p>
+                      <p className="text-xs text-muted-foreground">
+                        La configurazione del worker GPU ora ha una sezione dedicata.
+                      </p>
                     </div>
-                  </Field>
-                  <p className="text-xs text-muted-foreground">
-                    Salva le modifiche, poi usa “Verifica worker” qui sotto per controllare la
-                    connessione.
-                  </p>
+                    <Button asChild variant="outline" size="sm">
+                      <Link href="/settings?section=downloadNeurale">Vai a Download Neurale</Link>
+                    </Button>
+                  </div>
                 </div>
-                <NeuralExportPanel />
               </div>
             ) : (
               <div className="flex items-start gap-3 rounded-xl border p-5">

@@ -45,7 +45,7 @@ Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
 - [x] **Step 6** — Pagina "Aspetto" rifatta + filtri ricerca sfondo (incl. "Più votati")
 - [x] **Step 7** — Pagina "Notifiche" rifatta + Discord (webhook) + PWA install stato-aware
 - [x] **Step 7.5** — Setup più user-friendly: stepper etichettato + verifica cartelle live + Aspetto (Tema) + step Jellyfin opzionale + copy
-- [ ] **Step 8** — Neural Export: spostare tra Download e Pianificazione + spiegare + guida
+- [x] **Step 8** — Neural Export: spostare tra Download e Pianificazione + spiegare + guida
 - [ ] **Step 9** — Upscale locale (scaricati + collegati) — con verifica tecnica preliminare
 - [ ] **Step 10** — Audit "Verifica integrità download" + coerenza con upscale GPU
 - [ ] **Step 11** — FAQ/tutorial su GitHub + GitHub Pages
@@ -108,9 +108,27 @@ razionale (incl. worker nativo vs container, nota CUDA/NVENC) nel piano.
 
 **Batch attivo: v0.16.0 — "Doctor sempre attivo + Premium visibile + UX rifinita"** (piano
 [plan/doctor-premium-ux.md](plan/doctor-premium-ux.md), branch `feat/doctor-premium-ux`). 16 step
-pianificati + Step 7.5 inserito. **Step 1-7 + 7.5 COMPLETI (2026-07-17)**; prossima sessione: Step 8
-(Neural Export: spostare tra Download e Pianificazione + spiegare + guida). Cadenza un solo step per
-sessione.
+pianificati + Step 7.5 inserito. **Step 1-8 + 7.5 COMPLETI (2026-07-17)**; prossima sessione: Step 9
+(Upscale locale scaricati + collegati — con verifica tecnica preliminare bloccante). Cadenza un solo
+step per sessione.
+
+- **v0.16.0 Step 8 (2026-07-17): Neural Export spostato in sezione dedicata "Download Neurale".**
+  Prima la config del worker GPU (`neuralExportEnabled`/`neuralWorkerUrl`/`neuralWorkerToken`) +
+  `NeuralExportPanel` erano sepolti **inline nel tab Premium** di Impostazioni (`settings-view.tsx`,
+  solo sotto `isPremiumActive`), poco scopribili e senza spiegazioni. Ora una **sezione di primo
+  livello "Download Neurale"** (icona `Sparkles`) tra "Download" e "Pianificazione": nuovo `SectionId`
+  `downloadNeurale` + voce in `SECTIONS`. La sezione è **didattica** (branch Premium): card "Cos'è il
+  Download Neurale" (upscale XQ/XQ+ con shader Anime4K, sorgente SD intatta), card "Perché serve un PC
+  con GPU" con lista passo-passo (avvia worker → incolla URL+token → Verifica worker → "Migliora a
+  XQ/XQ+" dal catalogo), poi la config del worker (spostata 1:1, stessa maschera `SECRET_MASK` sul
+  token) e `NeuralExportPanel`. Ramo non-Premium: spiegazione + rimando a `/premium`. Il **tab Premium**
+  ora mostra una card "Download Neurale (XQ/XQ+)" che rimanda a `?section=downloadNeurale` (niente più
+  config duplicata). Link interni aggiornati: `premium-view.tsx` ("Configura il worker" →
+  `downloadNeurale`), command palette (nuova voce "Impostazioni: Download Neurale"), toast export in
+  `anime-detail.tsx` ("vedi la coda in Impostazioni › Download Neurale"). **Guida/FAQ:** la sezione è
+  auto-esplicativa; la FAQ GitHub Pages resta di competenza dello Step 11 (nessuna duplicazione,
+  Regola #1). **Zero migrazioni, zero endpoint nuovi** (riuso di `config`/`neuralExport.*`). 456 test
+  verdi (invariati, cambi solo frontend), lint/typecheck/build web verdi.
 
 - **v0.16.0 Step 7.5 (2026-07-17): setup più user-friendly (login + wizard).** Step inserito prima
   dello Step 8 su richiesta utente ("miglioramento setup, sia design che informazioni, più user

@@ -388,7 +388,7 @@ function EpisodeList({ anime }: { anime: AnimeDetailType }) {
   const neuralAvailable = neuralStatus.data?.available ?? false;
   const neuralExportMutation = trpc.neuralExport.export.useMutation({
     onSuccess: () => {
-      toast.success('Export neurale avviato — vedi la coda in Impostazioni › Premium');
+      toast.success('Export neurale avviato — vedi la coda in Impostazioni › Download Neurale');
       void utils.neuralExport.jobs.invalidate();
     },
     onError: (e) => toast.error(e.message || 'Impossibile avviare l’export'),

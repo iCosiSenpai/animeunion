@@ -30,6 +30,7 @@ import {
   Settings,
   Shield,
   SlidersHorizontal,
+  Sparkles,
   Stethoscope,
   Webhook,
 } from 'lucide-react';
@@ -210,6 +211,12 @@ export function CommandPalette() {
       label: 'Impostazioni: Download',
       icon: <FolderDown className="h-4 w-4" />,
       onSelect: () => go('/settings?section=download'),
+    },
+    {
+      id: 'settings-download-neurale',
+      label: 'Impostazioni: Download Neurale',
+      icon: <Sparkles className="h-4 w-4" />,
+      onSelect: () => go('/settings?section=downloadNeurale'),
     },
     {
       id: 'settings-pianificazione',

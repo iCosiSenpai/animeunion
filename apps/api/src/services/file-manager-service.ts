@@ -1,6 +1,5 @@
-import { randomUUID } from 'node:crypto';
 import { existsSync, statSync } from 'node:fs';
-import { readFile, readdir, rm, rmdir, stat, writeFile } from 'node:fs/promises';
+import { readdir, rm, rmdir, stat } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import type {
   FileEntry,
@@ -18,23 +17,11 @@ import { atomicMove, deleteFileAndPrune, ensureDir } from '../lib/download-fs';
 import { listEpisodeFilesInDir } from '../lib/episode-file-match';
 import { NotFoundError, PreconditionError } from '../lib/errors';
 import type { Logger } from '../lib/logger';
+import { TRASH_DIR, TRASH_ID, moveToTrash, readTrashInfo } from '../lib/trash';
 import type { ConfigService } from './config-service';
 import type { RenamerService } from './renamer-service';
 
 const VIDEO_EXTENSIONS = new Set(['.mp4', '.mkv', '.avi', '.mov', '.webm']);
-
-// Cartella cestino dentro ogni root configurata. Inizia con '.' → già esclusa dal `list`.
-const TRASH_DIR = '.trash';
-const TRASH_INFO = '.trashinfo.json';
-// Id voce cestino sicuro: `<timestamp>_<hex>`. Vincola l'input di restore (no path traversal).
-const TRASH_ID = /^\d+_[a-f0-9]+$/;
-
-interface TrashInfo {
-  originalPath: string;
-  name: string;
-  deletedAt: string;
-  type: 'dir' | 'file';
-}
 
 function isVideo(name: string): boolean {
   const dot = name.lastIndexOf('.');
@@ -355,39 +342,6 @@ export function createFileManagerService(deps: FileManagerDeps): FileManagerServ
     return { path: '', parent: null, atRoot: false, entries };
   }
 
-  /** Sposta `target` nel cestino della sua root, scrivendo i metadati per il ripristino. */
-  async function moveToTrash(target: string, root: string, isDir: boolean): Promise<void> {
-    const id = `${Date.now()}_${randomUUID().slice(0, 8)}`;
-    const entryDir = join(root, TRASH_DIR, id);
-    await ensureDir(entryDir, logger);
-    const moved = join(entryDir, basename(target));
-    await atomicMove(target, moved, logger);
-    const info: TrashInfo = {
-      originalPath: target,
-      name: basename(target),
-      deletedAt: new Date().toISOString(),
-      type: isDir ? 'dir' : 'file',
-    };
-    await writeFile(join(entryDir, TRASH_INFO), JSON.stringify(info), 'utf8');
-  }
-
-  /** Legge i metadati di una voce cestino, o null se assenti/corrotti. */
-  async function readTrashInfo(entryDir: string): Promise<TrashInfo | null> {
-    const raw = await readFile(join(entryDir, TRASH_INFO), 'utf8').catch(() => null);
-    if (!raw) {
-      return null;
-    }
-    try {
-      const parsed = JSON.parse(raw) as TrashInfo;
-      if (typeof parsed.originalPath === 'string' && typeof parsed.deletedAt === 'string') {
-        return parsed;
-      }
-    } catch {
-      // corrotto
-    }
-    return null;
-  }
-
   function safeSize(p: string): number {
     try {
       return statSync(p).size;
@@ -431,7 +385,7 @@ export function createFileManagerService(deps: FileManagerDeps): FileManagerServ
     }
     // Cestino (soft-delete): sposta in `.trash` invece di cancellare subito, così è recuperabile.
     if (config.get('trashEnabled') && root) {
-      await moveToTrash(target, root, isDir);
+      await moveToTrash(target, root, isDir, logger);
       syncDeletedPaths(target);
       return { ok: true };
     }

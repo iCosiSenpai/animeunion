@@ -35,6 +35,9 @@ export function FollowCard({ follow }: { follow: FollowWithAnime }) {
   const [confirmDeleteFiles, setConfirmDeleteFiles] = useState(false);
   const [deleteFolder, setDeleteFolder] = useState(false);
   const [askDownload, setAskDownload] = useState(false);
+  // Cestino attivo: le eliminazioni spostano in `.trash` (recuperabile), quindi adattiamo la copy.
+  const trashEnabled = trpc.config.getAll.useQuery(undefined, { staleTime: 60_000 }).data
+    ?.trashEnabled;
 
   const invalidate = () => {
     void utils.follow.list.invalidate();
@@ -80,6 +83,10 @@ export function FollowCard({ follow }: { follow: FollowWithAnime }) {
         );
       } else if (res.deletedFiles === 0) {
         toast.info('Nessun file scaricato da eliminare per questa serie.');
+      } else if (trashEnabled) {
+        toast.success(
+          `${res.deletedFiles} file spostati nel cestino · ${formatBytes(res.freedBytes)} recuperabili`,
+        );
       } else {
         toast.success(
           `Eliminati ${res.deletedFiles} file · ${formatBytes(res.freedBytes)} liberati`,
@@ -254,7 +261,17 @@ export function FollowCard({ follow }: { follow: FollowWithAnime }) {
             <DialogTitle className="text-destructive">Eliminare i file scaricati?</DialogTitle>
             <DialogDescription>
               Verranno cancellati tutti i file scaricati di &laquo;{title}&raquo; (tutte le stagioni
-              e le lingue collegate). L&apos;operazione &egrave; <strong>irreversibile</strong>.
+              e le lingue collegate).{' '}
+              {trashEnabled ? (
+                <>
+                  I file verranno spostati nel <strong>cestino</strong> e restano recuperabili dal
+                  Gestore file.
+                </>
+              ) : (
+                <>
+                  L&apos;operazione &egrave; <strong>irreversibile</strong>.
+                </>
+              )}{' '}
               L&apos;anime resta tra i seguiti.
             </DialogDescription>
           </DialogHeader>
@@ -285,7 +302,7 @@ export function FollowCard({ follow }: { follow: FollowWithAnime }) {
               onClick={() => deleteFiles.mutate({ animeId: anime.id, deleteFolder })}
             >
               <Trash2 className="h-4 w-4" />
-              Elimina definitivamente
+              {trashEnabled ? 'Sposta nel cestino' : 'Elimina definitivamente'}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -15,6 +15,7 @@ import type { Db } from '../db';
 import { schema } from '../db';
 import { deleteFileAndPrune } from '../lib/download-fs';
 import type { Logger } from '../lib/logger';
+import { moveToTrash } from '../lib/trash';
 import type { ConfigService } from './config-service';
 import { loadGenresByAnimeIds, toAnimeSummary } from './mappers';
 import type { RenamerService } from './renamer-service';
@@ -187,6 +188,42 @@ export function createLibraryService(deps: LibraryServiceDeps): LibraryService {
     return dirname(abs); // fallback: nessun pruning oltre la cartella diretta
   }
 
+  /** Root configurata che contiene `filePath`, o null se il path è fuori da tutte le root.
+   *  A differenza di `pruneRootFor` NON ha fallback su dirname: serve al cestino, che deve
+   *  spostare dentro `<root>/.trash` solo se il file vive davvero sotto una root. */
+  function rootForTrash(filePath: string): string | null {
+    const abs = resolve(filePath);
+    for (const root of config.distinctDownloadRoots()) {
+      const absRoot = resolve(root);
+      if (abs === absRoot || abs.startsWith(absRoot + sep)) {
+        return absRoot;
+      }
+    }
+    return null;
+  }
+
+  /** True se il cestino (soft-delete) è attivo. Le eliminazioni della libreria, come quelle del
+   *  Gestore file, spostano in `<root>/.trash` invece di cancellare subito, così sono recuperabili. */
+  function trashOn(): boolean {
+    return config.get('trashEnabled');
+  }
+
+  /** Elimina un file: se il cestino è attivo e il file è sotto una root lo sposta in `.trash`
+   *  (recuperabile), altrimenti hard-delete + prune delle cartelle vuote. Ritorna true se il file
+   *  non è più al percorso originale (spostato o cancellato). */
+  async function deleteOrTrashFile(filePath: string): Promise<boolean> {
+    const trashRoot = rootForTrash(filePath);
+    if (trashOn() && trashRoot) {
+      await moveToTrash(filePath, trashRoot, false, logger);
+      return true;
+    }
+    await deleteFileAndPrune(filePath, pruneRootFor(filePath), logger);
+    const stillThere = await stat(filePath)
+      .then(() => true)
+      .catch(() => false);
+    return !stillThere;
+  }
+
   /** Percorso reale di un episode_file: il `localPath` salvato (fonte di verita') o, solo se
    *  assente, quello ricalcolato dal renamer. */
   function pathFor(file: typeof schema.episodeFile.$inferSelect): string | null {
@@ -227,12 +264,11 @@ export function createLibraryService(deps: LibraryServiceDeps): LibraryService {
       let failed = false;
       if (path) {
         try {
-          await deleteFileAndPrune(path, pruneRootFor(path), logger);
-          // Conferma che il file sia davvero sparito (un rm fallito silenzioso lascerebbe il NAS sporco).
-          const stillThere = await stat(path)
-            .then(() => true)
-            .catch(() => false);
-          failed = stillThere;
+          // Cestino (soft-delete) se attivo: sposta in `.trash` invece di cancellare, così è
+          // recuperabile. `deleteOrTrashFile` conferma che il file non sia più al percorso originale
+          // (un rm fallito silenzioso lascerebbe il NAS sporco).
+          const gone = await deleteOrTrashFile(path);
+          failed = !gone;
         } catch (error) {
           logger.error({ err: error, episodeFileId: id }, 'Eliminazione file libreria fallita');
           failed = true;
@@ -304,12 +340,94 @@ export function createLibraryService(deps: LibraryServiceDeps): LibraryService {
             deletedFiles += 1;
           }
         }
-        await rm(folder, { recursive: true, force: true });
+        // Cestino (soft-delete) se attivo: sposta l'intera cartella serie in `<root>/.trash`
+        // (recuperabile), altrimenti rimozione ricorsiva definitiva.
+        const trashRoot = rootForTrash(folder);
+        if (trashOn() && trashRoot) {
+          await moveToTrash(folder, trashRoot, true, logger);
+        } else {
+          await rm(folder, { recursive: true, force: true });
+        }
       } catch (error) {
         logger.error({ err: error, folder }, 'Rimozione cartella serie fallita');
       }
     }
     return { deletedFiles, freedBytes };
+  }
+
+  /** Azzera lo stato dei tracciati indicati e pulisce la coda (i file non sono più al percorso
+   *  originale perché la loro cartella è stata spostata nel cestino). */
+  function resetTracked(ids: string[]): void {
+    const now = new Date().toISOString();
+    for (const id of ids) {
+      db.update(schema.episodeFile)
+        .set({
+          downloadStatus: 'not_downloaded',
+          localPath: null,
+          fileSize: null,
+          downloadedAt: null,
+          updatedAt: now,
+        })
+        .where(eq(schema.episodeFile.id, id))
+        .run();
+      db.delete(schema.downloadQueue).where(eq(schema.downloadQueue.episodeFileId, id)).run();
+    }
+  }
+
+  /** Percorso "deleteFolder" col cestino attivo: sposta ogni cartella serie in `.trash` come UNICA
+   *  voce (tracciati + extra insieme), evitando le N+1 voci frammentate del flusso hard-delete.
+   *  I rari file tracciati che vivono FUORI dalle cartelle confinate vengono spostati singolarmente
+   *  (parità col flusso hard-delete, che cancella ogni file per path). Azzera poi il DB. */
+  async function trashSeriesFolders(ids: string[], paths: string[]): Promise<LibraryDeleteResult> {
+    const folders = await seriesFoldersOf(paths);
+    let deletedFiles = 0;
+    let freedBytes = 0;
+    let failedFiles = 0;
+
+    // 1) Tracciati fuori dalle cartelle serie confinate: spostali singolarmente (via removeFiles,
+    //    che gestisce cestino/hard-delete e azzera il DB per quegli id).
+    const insideFolder = (p: string): boolean => {
+      const abs = resolve(p);
+      return folders.some((f) => abs === f || abs.startsWith(f + sep));
+    };
+    const outsideIds = ids.filter((id) => {
+      const file = db.select().from(schema.episodeFile).where(eq(schema.episodeFile.id, id)).get();
+      const p = file ? pathFor(file) : null;
+      return p != null && !insideFolder(p);
+    });
+    if (outsideIds.length > 0) {
+      const r = await removeFiles(outsideIds);
+      deletedFiles += r.deletedFiles;
+      freedBytes += r.freedBytes;
+      failedFiles += r.failedFiles;
+    }
+
+    // 2) Sposta ogni cartella serie nel cestino in un colpo solo (una voce per cartella).
+    for (const folder of folders) {
+      try {
+        const files = await walk(folder, logger);
+        for (const f of files) {
+          const info = await stat(f).catch(() => null);
+          if (info) {
+            freedBytes += Number(info.size);
+            deletedFiles += 1;
+          }
+        }
+        const trashRoot = rootForTrash(folder);
+        if (trashRoot) {
+          await moveToTrash(folder, trashRoot, true, logger);
+        } else {
+          await rm(folder, { recursive: true, force: true });
+        }
+      } catch (error) {
+        logger.error({ err: error, folder }, 'Spostamento cartella serie nel cestino fallito');
+        failedFiles += 1;
+      }
+    }
+
+    // 3) Azzera i tracciati rimasti (quelli dentro le cartelle spostate).
+    resetTracked(ids.filter((id) => !outsideIds.includes(id)));
+    return { deletedFiles, freedBytes, failedFiles };
   }
 
   /** Risolve i percorsi reali (localPath o ricalcolo) degli episode_file indicati. */
@@ -761,6 +879,11 @@ export function createLibraryService(deps: LibraryServiceDeps): LibraryService {
         )
         .all()
         .map((row) => row.id);
+      // Col cestino attivo + deleteFolder: sposta la cartella serie in `.trash` come voce unica
+      // (niente N file + cartella frammentati). Altrimenti hard-delete file + rimozione cartella.
+      if (deleteFolder && trashOn()) {
+        return trashSeriesFolders(ids, collectPaths(ids));
+      }
       const paths = deleteFolder ? collectPaths(ids) : [];
       const result = await removeFiles(ids);
       if (deleteFolder) {
@@ -793,6 +916,10 @@ export function createLibraryService(deps: LibraryServiceDeps): LibraryService {
         )
         .all()
         .map((row) => row.id);
+      // Col cestino attivo + deleteFolder: cartella serie → `.trash` come voce unica (vedi deleteEntry).
+      if (deleteFolder && trashOn()) {
+        return trashSeriesFolders(ids, collectPaths(ids));
+      }
       const paths = deleteFolder ? collectPaths(ids) : [];
       const result = await removeFiles(ids);
       if (deleteFolder) {
@@ -859,7 +986,8 @@ export function createLibraryService(deps: LibraryServiceDeps): LibraryService {
       for (const path of paths) {
         try {
           const info = await stat(path).catch(() => null);
-          const removed = await deleteFileAndPrune(path, pruneRootFor(path), logger);
+          // Cestino (soft-delete) se attivo: sposta in `.trash` invece di cancellare.
+          const removed = await deleteOrTrashFile(path);
           if (removed) {
             deletedFiles += 1;
             freedBytes += info ? Number(info.size) : 0;

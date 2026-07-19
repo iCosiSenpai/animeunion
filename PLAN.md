@@ -1086,7 +1086,7 @@ Frontend (Next.js)                   Backend (Fastify)                AnimeUnion
 
 ---
 
-### Settimana 8 — Test E2E, Beta, Release v0.1.0  ✅ COMPLETATA (v0.1.0; E2E in CI ancora aperto → §10bis)
+### Settimana 8 — Test E2E, Beta, Release v0.1.0  ✅ COMPLETATA (v0.1.0; E2E girano in CI come job non bloccante, gate da promuovere → §10bis)
 - [ ] Test unitari (Vitest):
 
   - MockSource: tutti i metodi restituiscono dati consistenti
@@ -1148,9 +1148,9 @@ rilasciate. Restano aperti solo i seguenti punti, tracciati anche nella sezione 
 del `CHANGELOG.md`:
 
 - [ ] **Setup wizard migliorato** (Step F, rimandato)
-- [ ] **GitHub Pages** — landing pubblica + spazio mascotte (vedi §12, mai realizzata)
-- [ ] **E2E Playwright in CI** — lo scaffolding esiste (`e2e/smoke.e2e.ts`, `playwright.config.ts`) ma non gira ancora in pipeline
-- [ ] **Update ottimistici + routing del cestino** per `library.deleteSeries` (rimandati)
+- [ ] **GitHub Pages** — la landing statica esiste già (`docs/index.html` + `docs/faq.html`, con placeholder mascotte); resta da abilitare Pages nelle impostazioni del repo e sostituire i placeholder con l'artwork ufficiale (vedi §12)
+- [ ] **E2E Playwright come gate bloccante** — gli E2E girano già in CI (job `e2e` in `.github/workflows/ci.yml`, `npm run test:e2e`) ma come job **non bloccante** (`continue-on-error: true`); resta da promuoverli a gate una volta stabili
+- [x] **Routing del cestino esteso alla Libreria** (`deleteEpisode`/`deleteEntry`/`deleteSeries`/`deleteOrphans` rispettano `trashEnabled`, modulo condiviso `lib/trash.ts`); restano rimandati solo gli update ottimistici della UI
 
 Gli "Orizzonti futuri" (§11) restano volutamente non pianificati: sono direzioni post-v1, non debiti.
 

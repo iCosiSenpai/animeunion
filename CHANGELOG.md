@@ -25,12 +25,26 @@ e il progetto aderisce al [Semantic Versioning](https://semver.org/lang/it/).
   `navigator.standalone` iOS → conferma), **installabile** (prompt `beforeinstallprompt` disponibile →
   pulsante "Installa app"), **non disponibile** (manca il prompt → spiegazione del requisito HTTPS con
   link alla guida, coerente con il toggle push).
+- **Cestino condiviso tra Gestore file e Libreria.** Le eliminazioni della Libreria (`deleteEpisode`,
+  `deleteEntry`, `deleteSeries`, `deleteOrphans`) ora rispettano `trashEnabled`: con il cestino attivo
+  i file finiscono in `<root>/.trash/<timestamp>_<hex>/` (con `.trashinfo.json` per il ripristino)
+  invece di essere cancellati subito, esattamente come il Gestore file. Estratto il modulo condiviso
+  `apps/api/src/lib/trash.ts` (`moveToTrash`/`readTrashInfo`), usato da entrambi i servizi. La pulizia
+  a retention (`pruneTrash`) resta schedulata in `scheduler.ts`.
+- **Copy delle eliminazioni Libreria/Seguiti coerente col cestino.** I dialog di
+  `library-series-card.tsx` e `follow-card.tsx` non dicono più "irreversibile" quando il cestino è
+  attivo: mostrano "spostati nel cestino, recuperabili" e il pulsante diventa "Sposta nel cestino"
+  (letto da `trpc.config.getAll.trashEnabled`); toast di successo allineati.
+- **`deleteEntry`/`deleteSeries` con "elimina cartella" + cestino: voce unica.** Prima il flusso
+  spostava nel cestino ogni file tracciato e poi anche la cartella serie, creando N+1 voci
+  frammentate. Ora, col cestino attivo e `deleteFolder`, la cartella serie viene spostata in `.trash`
+  in un colpo solo (i rari tracciati fuori dalla cartella restano gestiti singolarmente).
 
 ### Da fare
 - Setup wizard migliorato (Step F, rimandato).
-- GitHub Pages (landing pubblica + spazio mascotte).
-- Esecuzione degli E2E Playwright in CI (scaffolding già presente).
-- Update ottimistici e routing del cestino anche per `library.deleteSeries` (rimandati).
+- GitHub Pages: la landing statica esiste già (`docs/index.html` + `docs/faq.html`); resta da abilitare Pages nel repo e sostituire i placeholder mascotte con l'artwork ufficiale.
+- Promuovere gli E2E Playwright a gate bloccante: girano già in CI (job `e2e`, `continue-on-error: true`), ma non bloccano ancora la pipeline.
+- Update ottimistici della UI dopo le eliminazioni della Libreria (rimandati).
 
 ## [0.15.0] - 2026-07-09
 

@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { Language } from '@animeunion/shared';
@@ -90,7 +90,7 @@ function makeService(db: ReturnType<typeof createTestDb>, basePath: string) {
   const renamer = createRenamerService({ db, config });
   const resolver = createSeriesResolver({ db });
   const service = createLibraryService({ db, config, renamer, resolver, logger: testLogger });
-  return { service, renamer };
+  return { service, renamer, config };
 }
 
 /** Crea il file dell'episodio nel path che il renamer si aspetta (10 byte). */
@@ -380,7 +380,9 @@ describe('LibraryService', () => {
     insertAnime(db, 'show-d');
     insertEpisode(db, 'ep-d-1', 'show-d', 1);
     insertFile(db, 'file-d-1', 'ep-d-1', 'SUB_ITA');
-    const { service, renamer } = makeService(db, tmpDir);
+    const { service, renamer, config } = makeService(db, tmpDir);
+    // Cestino disattivo: verifichiamo l'hard-delete con pruning delle cartelle vuote.
+    config.set('trashEnabled', false);
     const file = await placeEpisode(renamer, 'show-d', 1, 'SUB_ITA');
     await service.scan();
     db.insert(schema.downloadQueue)
@@ -408,6 +410,39 @@ describe('LibraryService', () => {
     expect(row?.downloadStatus).toBe('not_downloaded');
     expect(row?.localPath).toBeNull();
     expect(db.select().from(schema.downloadQueue).all()).toHaveLength(0);
+  });
+
+  it('deleteEpisodeFile con cestino attivo sposta il file in .trash (recuperabile) e azzera la riga', async () => {
+    const db = createTestDb();
+    insertAnime(db, 'show-t');
+    insertEpisode(db, 'ep-t-1', 'show-t', 1);
+    insertFile(db, 'file-t-1', 'ep-t-1', 'SUB_ITA');
+    const { service, renamer, config } = makeService(db, tmpDir);
+    config.set('trashEnabled', true); // default, esplicito per chiarezza
+    const file = await placeEpisode(renamer, 'show-t', 1, 'SUB_ITA');
+    await service.scan();
+
+    const res = await service.deleteEpisodeFile('file-t-1');
+    expect(res).toEqual({ deletedFiles: 1, freedBytes: 10, failedFiles: 0 });
+    // Il file non è più al percorso originale...
+    expect(existsSync(file)).toBe(false);
+    // ...ma è recuperabile nel cestino della root (una voce .trash/<id>/<nome>).
+    const trashRoot = join(tmpDir, '.trash');
+    expect(existsSync(trashRoot)).toBe(true);
+    const entries = await readdir(trashRoot);
+    expect(entries).toHaveLength(1);
+    // La voce cestino contiene il file spostato + il .trashinfo.json dei metadati.
+    const entryFiles = await readdir(join(trashRoot, entries[0] as string));
+    expect(entryFiles.some((f) => f.endsWith('.mp4'))).toBe(true);
+    expect(entryFiles).toContain('.trashinfo.json');
+
+    const row = db
+      .select()
+      .from(schema.episodeFile)
+      .where(eq(schema.episodeFile.id, 'file-t-1'))
+      .get();
+    expect(row?.downloadStatus).toBe('not_downloaded');
+    expect(row?.localPath).toBeNull();
   });
 
   it('deleteEntry cancella solo i file della lingua indicata', async () => {
@@ -463,6 +498,51 @@ describe('LibraryService', () => {
     expect(existsSync(seriesDir)).toBe(false);
     expect(res.deletedFiles).toBeGreaterThanOrEqual(2); // tracciato + extra
     expect(res.failedFiles).toBe(0);
+  });
+
+  it('deleteEntry con deleteFolder + cestino attivo sposta la cartella serie in .trash come voce unica', async () => {
+    const db = createTestDb();
+    insertAnime(db, 'show-tf');
+    insertEpisode(db, 'ep-tf-1', 'show-tf', 1);
+    insertEpisode(db, 'ep-tf-2', 'show-tf', 2);
+    insertFile(db, 'file-tf-1', 'ep-tf-1', 'SUB_ITA');
+    insertFile(db, 'file-tf-2', 'ep-tf-2', 'SUB_ITA');
+    const { service, renamer, config } = makeService(db, tmpDir);
+    config.set('trashEnabled', true);
+    const f1 = await placeEpisode(renamer, 'show-tf', 1, 'SUB_ITA');
+    await placeEpisode(renamer, 'show-tf', 2, 'SUB_ITA');
+    await service.scan();
+    // File extra non tracciato nella cartella serie (deve finire nel cestino con la cartella).
+    const seriesDir = join(tmpDir, 'show-tf');
+    const extra = join(seriesDir, 'Specials', 'OP1.mp4');
+    await mkdir(dirname(extra), { recursive: true });
+    await writeFile(extra, 'op-bytes');
+
+    const res = await service.deleteEntry({
+      animeId: 'show-tf',
+      language: 'SUB_ITA',
+      deleteFolder: true,
+    });
+    expect(res.failedFiles).toBe(0);
+    expect(res.deletedFiles).toBeGreaterThanOrEqual(2);
+    // Niente più al percorso originale (cartella intera spostata).
+    expect(existsSync(f1)).toBe(false);
+    expect(existsSync(extra)).toBe(false);
+    expect(existsSync(seriesDir)).toBe(false);
+    // Cestino: UNA sola voce (la cartella serie), non N file + cartella.
+    const trashRoot = join(tmpDir, '.trash');
+    const entries = await readdir(trashRoot);
+    expect(entries).toHaveLength(1);
+    const entryFiles = await readdir(join(trashRoot, entries[0] as string));
+    expect(entryFiles).toContain('show-tf'); // la cartella serie spostata
+    expect(entryFiles).toContain('.trashinfo.json');
+
+    // DB azzerato per entrambi i tracciati.
+    for (const id of ['file-tf-1', 'file-tf-2']) {
+      const row = db.select().from(schema.episodeFile).where(eq(schema.episodeFile.id, id)).get();
+      expect(row?.downloadStatus).toBe('not_downloaded');
+      expect(row?.localPath).toBeNull();
+    }
   });
 
   it('deleteOrphans cancella i file orfani indicati', async () => {

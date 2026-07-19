@@ -71,10 +71,17 @@ export function LibrarySeriesCard({ group }: { group: LibraryGroup }) {
   const seasonCount = seasons.length;
 
   const utils = trpc.useUtils();
+  // Cestino attivo: le eliminazioni spostano in `.trash` (recuperabile), quindi adattiamo la copy.
+  const trashEnabled = trpc.config.getAll.useQuery(undefined, { staleTime: 60_000 }).data
+    ?.trashEnabled;
   const onSuccess = (res: { deletedFiles: number; freedBytes: number; failedFiles: number }) => {
     if (res.failedFiles > 0) {
       toast.warning(
         `${res.deletedFiles} file eliminati, ${res.failedFiles} non eliminati (controlla permessi o usa il Gestore file).`,
+      );
+    } else if (trashEnabled) {
+      toast.success(
+        `${res.deletedFiles} file spostati nel cestino · ${formatBytes(res.freedBytes)} recuperabili`,
       );
     } else {
       toast.success(`Eliminati ${res.deletedFiles} file · ${formatBytes(res.freedBytes)} liberati`);
@@ -396,7 +403,17 @@ export function LibrarySeriesCard({ group }: { group: LibraryGroup }) {
           <DialogHeader>
             <DialogTitle className="text-destructive">{target?.title}</DialogTitle>
             <DialogDescription>
-              {target?.warning} L&apos;operazione &egrave; <strong>irreversibile</strong>.
+              {target?.warning}{' '}
+              {trashEnabled ? (
+                <>
+                  I file verranno spostati nel <strong>cestino</strong> e restano recuperabili dal
+                  Gestore file.
+                </>
+              ) : (
+                <>
+                  L&apos;operazione &egrave; <strong>irreversibile</strong>.
+                </>
+              )}
             </DialogDescription>
           </DialogHeader>
           {target?.scope === 'entry' || target?.scope === 'series' ? (
@@ -424,7 +441,7 @@ export function LibrarySeriesCard({ group }: { group: LibraryGroup }) {
               disabled={pending}
             >
               <Trash2 className="h-4 w-4" />
-              Elimina definitivamente
+              {trashEnabled ? 'Sposta nel cestino' : 'Elimina definitivamente'}
             </Button>
           </DialogFooter>
         </DialogContent>

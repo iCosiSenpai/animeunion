@@ -750,12 +750,12 @@ Frontend (Next.js)                   Backend (Fastify)                AnimeUnion
 
 ## 10. Roadmap Dettagliata (8 settimane)
 
-> **Stato (aggiornato 2026-07-09)**: tutta la roadmap 8 settimane è stata completata e superata.
-> Il progetto è arrivato alla **v0.15.0** (vedi `CHANGELOG.md`) con funzionalità non previste nel
+> **Stato (aggiornato 2026-07-19)**: tutta la roadmap 8 settimane è stata completata e superata.
+> Il progetto è arrivato alla **v0.16.0** (vedi `CHANGELOG.md`) con funzionalità non previste nel
 > piano originale (API ufficiale, richieste stile Seerr, integrazione Jellyfin/Plex, backup Google
-> Drive, cifratura segreti, ricerca FTS5, cestino gestore file, Neural Export/upscale Anime4K,
-> Premium, notifiche Telegram/Discord). Le checkbox qui sotto sono state riallineate. I residui
-> aperti sono raccolti nella nuova sezione **§10bis — Residui**.
+> Drive, cifratura segreti, ricerca FTS5, cestino condiviso Gestore file + Libreria, Neural
+> Export/upscale Anime4K, Premium, notifiche Telegram/Discord, Doctor). Le checkbox qui sotto sono
+> state riallineate. I residui aperti sono raccolti nella nuova sezione **§10bis — Residui**.
 
 
 ### Settimana 0 — Fondazioni  ✅ COMPLETATA
@@ -1141,16 +1141,17 @@ Frontend (Next.js)                   Backend (Fastify)                AnimeUnion
 
 ---
 
-## 10bis. Residui aperti (aggiornato 2026-07-09)
+## 10bis. Residui aperti (aggiornato 2026-07-19)
 
 Tutta la roadmap 8 settimane e le appendici di polish (STEP 2.5 / 2.6) sono state completate e
-rilasciate. Restano aperti solo i seguenti punti, tracciati anche nella sezione `[Unreleased] → Da fare`
-del `CHANGELOG.md`:
+rilasciate (ultima release **v0.16.0**). Restano aperti solo i seguenti punti, tracciati anche nella
+sezione `[Unreleased] → Da fare` del `CHANGELOG.md`:
 
 - [ ] **Setup wizard migliorato** (Step F, rimandato)
 - [ ] **GitHub Pages** — la landing statica esiste già (`docs/index.html` + `docs/faq.html`, con placeholder mascotte); resta da abilitare Pages nelle impostazioni del repo e sostituire i placeholder con l'artwork ufficiale (vedi §12)
 - [ ] **E2E Playwright come gate bloccante** — gli E2E girano già in CI (job `e2e` in `.github/workflows/ci.yml`, `npm run test:e2e`) ma come job **non bloccante** (`continue-on-error: true`); resta da promuoverli a gate una volta stabili
-- [x] **Routing del cestino esteso alla Libreria** (`deleteEpisode`/`deleteEntry`/`deleteSeries`/`deleteOrphans` rispettano `trashEnabled`, modulo condiviso `lib/trash.ts`); restano rimandati solo gli update ottimistici della UI
+- [ ] **Update ottimistici della UI dopo le eliminazioni della Libreria** (rimandati)
+- [x] **Routing del cestino esteso alla Libreria** (`deleteEpisode`/`deleteEntry`/`deleteSeries`/`deleteOrphans` rispettano `trashEnabled`, modulo condiviso `lib/trash.ts`) — rilasciato in v0.16.0
 
 Gli "Orizzonti futuri" (§11) restano volutamente non pianificati: sono direzioni post-v1, non debiti.
 

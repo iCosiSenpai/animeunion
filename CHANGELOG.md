@@ -7,6 +7,17 @@ e il progetto aderisce al [Semantic Versioning](https://semver.org/lang/it/).
 
 ## [Unreleased]
 
+### Da fare
+- Setup wizard migliorato (Step F, rimandato).
+- GitHub Pages: la landing statica esiste già (`docs/index.html` + `docs/faq.html`); resta da abilitare Pages nel repo e sostituire i placeholder mascotte con l'artwork ufficiale.
+- Promuovere gli E2E Playwright a gate bloccante: girano già in CI (job `e2e`, `continue-on-error: true`), ma non bloccano ancora la pipeline.
+- Update ottimistici della UI dopo le eliminazioni della Libreria (rimandati).
+
+## [0.16.0] - 2026-07-19
+
+Cestino condiviso tra Gestore file e Libreria (soft-delete recuperabile per tutte le eliminazioni),
+più il nuovo canale di notifiche Discord e le rifiniture alla pagina Notifiche.
+
 ### Added
 - **Notifiche Discord (webhook).** Nuovo canale di inoltro parallelo a Telegram: l'utente incolla un
   webhook URL del proprio server Discord (Impostazioni server → Integrazioni → Webhook) e le notifiche
@@ -39,12 +50,6 @@ e il progetto aderisce al [Semantic Versioning](https://semver.org/lang/it/).
   spostava nel cestino ogni file tracciato e poi anche la cartella serie, creando N+1 voci
   frammentate. Ora, col cestino attivo e `deleteFolder`, la cartella serie viene spostata in `.trash`
   in un colpo solo (i rari tracciati fuori dalla cartella restano gestiti singolarmente).
-
-### Da fare
-- Setup wizard migliorato (Step F, rimandato).
-- GitHub Pages: la landing statica esiste già (`docs/index.html` + `docs/faq.html`); resta da abilitare Pages nel repo e sostituire i placeholder mascotte con l'artwork ufficiale.
-- Promuovere gli E2E Playwright a gate bloccante: girano già in CI (job `e2e`, `continue-on-error: true`), ma non bloccano ancora la pipeline.
-- Update ottimistici della UI dopo le eliminazioni della Libreria (rimandati).
 
 ## [0.15.0] - 2026-07-09
 

@@ -750,7 +750,16 @@ Frontend (Next.js)                   Backend (Fastify)                AnimeUnion
 
 ## 10. Roadmap Dettagliata (8 settimane)
 
-### Settimana 0 — Fondazioni
+> **Stato (aggiornato 2026-07-09)**: tutta la roadmap 8 settimane è stata completata e superata.
+> Il progetto è arrivato alla **v0.15.0** (vedi `CHANGELOG.md`) con funzionalità non previste nel
+> piano originale (API ufficiale, richieste stile Seerr, integrazione Jellyfin/Plex, backup Google
+> Drive, cifratura segreti, ricerca FTS5, cestino gestore file, Neural Export/upscale Anime4K,
+> Premium, notifiche Telegram/Discord). Le checkbox qui sotto sono state riallineate. I residui
+> aperti sono raccolti nella nuova sezione **§10bis — Residui**.
+
+
+### Settimana 0 — Fondazioni  ✅ COMPLETATA
+
 - [ ] Crea repo `iCosiSenpai/animeunion` pubblico su GitHub
 - [ ] Branch protection su `main` (require PR, require CI pass)
 - [ ] `.github/workflows/ci.yml`: checkout → setup node 20 → npm ci → Biome check → tsc --noEmit → vitest (se test esistono)
@@ -837,7 +846,7 @@ Frontend (Next.js)                   Backend (Fastify)                AnimeUnion
 
 ---
 
-### Settimana 3 — Frontend Shell + Prime Pagine
+### Settimana 3 — Frontend Shell + Prime Pagine  ✅ COMPLETATA (v0.1.0)
 - [ ] `apps/web/` → `npx create-next-app@latest` con TypeScript, App Router, Tailwind
 - [ ] `npx shadcn@latest init` (base: neutral, css variables)
 - [ ] Aggiungi componenti shadcn: button, card, input, badge, select, dialog, sheet, tabs, separator, scroll-area, skeleton, dropdown-menu, tooltip
@@ -878,8 +887,9 @@ Frontend (Next.js)                   Backend (Fastify)                AnimeUnion
 
 ---
 
-### Settimana 4 — Follow, Library, Calendar (frontend)
+### Settimana 4 — Follow, Library, Calendar (frontend)  ✅ COMPLETATA (v0.1.0)
 - [ ] Pagina `/follows`:
+
   - Griglia anime seguiti, raggruppati per status (tab: Da guardare | In corso | In pausa | Completati | Droppati)
   - Ogni card mostra: cover, titolo, progresso (ep scaricati / ep totali), ultimo check
   - Azioni: cambia status, rimuovi, vai al dettaglio
@@ -908,8 +918,9 @@ Frontend (Next.js)                   Backend (Fastify)                AnimeUnion
 
 ---
 
-### Settimana 5 — Download Engine
+### Settimana 5 — Download Engine  ✅ COMPLETATA (v0.1.0)
 - [ ] `apps/api/src/lib/ffmpeg-bridge.ts`:
+
   - `hlsToMp4(inputUrl, outputPath, onProgress?)` → scarica stream HLS, converte in MP4 con ffmpeg
   - Supporto resume (se il file esiste parzialmente)
   - Progress callback (0.0-1.0)
@@ -959,8 +970,9 @@ Frontend (Next.js)                   Backend (Fastify)                AnimeUnion
 
 ---
 
-### Settimana 6 — Renamer + Library Scanner + Settings
+### Settimana 6 — Renamer + Library Scanner + Settings  ✅ COMPLETATA (v0.1.0)
 - [ ] `apps/api/src/services/renamer-service.ts`:
+
   - `renameEpisode(episode, anime, namingFormat)` → rinomina il file dopo il download
   - Formato `SXXEXX` (default): `Edens Zero/Season 1/S01E01.mp4` (la season number è calcolata dagli episodi: ep 1-?? = S01, ep ??+1 = S02, ecc.)
   - Formato `NUMERIC`: `Edens Zero/Season 1/01.mp4`
@@ -1004,8 +1016,9 @@ Frontend (Next.js)                   Backend (Fastify)                AnimeUnion
 
 ---
 
-### Settimana 7 — Docker, Multi-Arch, PWA, Notifiche
+### Settimana 7 — Docker, Multi-Arch, PWA, Notifiche  ✅ COMPLETATA (v0.1.0 / v0.3.0)
 - [ ] `apps/api/Dockerfile`:
+
   - Multi-stage: builder (node:20-alpine) → runner (node:20-alpine)
   - Copia solo `dist/` e `node_modules` (production)
   - HEALTHCHECK: `wget -qO- http://localhost:3001/api/health`
@@ -1073,8 +1086,9 @@ Frontend (Next.js)                   Backend (Fastify)                AnimeUnion
 
 ---
 
-### Settimana 8 — Test E2E, Beta, Release v0.1.0
+### Settimana 8 — Test E2E, Beta, Release v0.1.0  ✅ COMPLETATA (v0.1.0; E2E in CI ancora aperto → §10bis)
 - [ ] Test unitari (Vitest):
+
   - MockSource: tutti i metodi restituiscono dati consistenti
   - Renamer: formati SXXEXX e NUMERIC corretti, edge case
   - Download engine: coda, priorità, retry, concorrenza
@@ -1127,7 +1141,23 @@ Frontend (Next.js)                   Backend (Fastify)                AnimeUnion
 
 ---
 
+## 10bis. Residui aperti (aggiornato 2026-07-09)
+
+Tutta la roadmap 8 settimane e le appendici di polish (STEP 2.5 / 2.6) sono state completate e
+rilasciate. Restano aperti solo i seguenti punti, tracciati anche nella sezione `[Unreleased] → Da fare`
+del `CHANGELOG.md`:
+
+- [ ] **Setup wizard migliorato** (Step F, rimandato)
+- [ ] **GitHub Pages** — landing pubblica + spazio mascotte (vedi §12, mai realizzata)
+- [ ] **E2E Playwright in CI** — lo scaffolding esiste (`e2e/smoke.e2e.ts`, `playwright.config.ts`) ma non gira ancora in pipeline
+- [ ] **Update ottimistici + routing del cestino** per `library.deleteSeries` (rimandati)
+
+Gli "Orizzonti futuri" (§11) restano volutamente non pianificati: sono direzioni post-v1, non debiti.
+
+---
+
 ## 11. Post-v1 (Orizzonti futuri)
+
 
 Dopo il rilascio v0.1.0 e l'integrazione con l'API ufficiale di AnimeUnion:
 

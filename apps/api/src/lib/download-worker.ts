@@ -7,6 +7,7 @@ import type { Db } from '../db';
 import { schema } from '../db';
 import type { CatalogService } from '../services/catalog-service';
 import type { ConfigService } from '../services/config-service';
+import type { FileMutationCoordinator } from '../services/file-mutation-coordinator';
 import type { RenamerService } from '../services/renamer-service';
 import { atomicMove, ensureDir, freeDiskBytes, sweepPartFiles, tempPath } from './download-fs';
 import {
@@ -46,7 +47,7 @@ interface InFlight {
 }
 
 export interface DownloadWorker {
-  start(): void;
+  start(): Promise<void>;
   stop(): void;
   on<E extends keyof WorkerEvents>(event: E, listener: (...args: WorkerEvents[E]) => void): void;
   off<E extends keyof WorkerEvents>(event: E, listener: (...args: WorkerEvents[E]) => void): void;
@@ -57,8 +58,12 @@ export interface DownloadWorker {
   tryStartNext(): Promise<void>;
   /** Inserisce un nuovo job in coda. Se esiste già per lo stesso episodeFileId, ritorna quello esistente. */
   enqueue(episodeFileId: string, priority?: number): string;
-  /** Cancella un job. Se era in downloading, interrompe l'AbortController. */
-  cancel(queueId: string): boolean;
+  /**
+   * Cancella un job. La decisione è serializzata con la finalizzazione filesystem: `true` implica
+   * che nessun file finale verrà pubblicato; se finalize ha già acquisito il coordinatore ritorna
+   * `false` dopo il relativo commit.
+   */
+  cancel(queueId: string): Promise<boolean>;
   /** Riavvia un job in failed (azzera retry_count). */
   retry(queueId: string): boolean;
   /**
@@ -118,17 +123,24 @@ export interface DownloadWorkerDeps {
   config: ConfigService;
   logger: Logger;
   renamer: RenamerService;
+  coordinator: FileMutationCoordinator;
   /**
    * Limite corrente di download simultanei, ri-valutato ad ogni decisione di scheduling. Assente =
    * fallback a 1 (compat). `context.ts` lo cabla su `isPremiumActive` + `config.maxConcurrent`.
    */
   resolveMaxConcurrent?: () => number | Promise<number>;
+  /** Seam deterministico per la verifica del `.part` nei test di cancellazione. */
+  verifyVideoFileImpl?: typeof verifyVideoFile;
+  /** Seam deterministico per linearizzare i test durante la pubblicazione finale. */
+  atomicMoveImpl?: typeof atomicMove;
 }
 
 export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
-  const { db, catalog, config, logger, renamer } = deps;
+  const { db, catalog, config, logger, renamer, coordinator } = deps;
   const resolveMaxConcurrent =
     deps.resolveMaxConcurrent ?? ((): number => MAX_CONCURRENT_DOWNLOADS);
+  const verifyDownloadedFile = deps.verifyVideoFileImpl ?? verifyVideoFile;
+  const publishDownload = deps.atomicMoveImpl ?? atomicMove;
   const emitter = new EventEmitter();
   const inFlight = new Map<string, InFlight>();
   // Campionamento per stima velocità (in memoria, non persistito).
@@ -138,7 +150,10 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
   >();
 
   let timer: NodeJS.Timeout | null = null;
+  let startup: Promise<void> | null = null;
+  let startupGeneration = 0;
   let stopped = true;
+  let ready = false;
   let paused = false;
   // Fairness round-robin: numero di sequenza dell'ultima volta che ogni anime è stato servito (in
   // memoria, resetta al riavvio). A parità di priorità il prossimo job è di un anime servito meno di
@@ -380,7 +395,7 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
       // il .part e' inutilizzabile (un resume vi appenderebbe sopra) → lo rimuoviamo e lanciamo un
       // errore TRANSITORIO: il worker riprova da zero (un troncamento puo' essere un glitch di rete).
       if (config.get('verifyDownloads')) {
-        const verify = await verifyVideoFile(partial, { logger });
+        const verify = await verifyDownloadedFile(partial, { logger });
         if (!verify.ok) {
           await rm(partial).catch(() => {});
           throw new Error(
@@ -389,35 +404,94 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
         }
       }
 
-      updateQueue(queueId, { status: 'processing', progress: 1, speedBps: null });
-      await atomicMove(partial, finalPath, logger);
-
-      const completedAt = new Date().toISOString();
-      db.transaction((tx) => {
-        tx.update(schema.episodeFile)
-          .set({
-            downloadStatus: 'downloaded',
-            localPath: finalPath,
-            fileSize: result.bytes,
-            downloadedAt: completedAt,
-            updatedAt: completedAt,
-          })
-          .where(eq(schema.episodeFile.id, item.episodeFileId))
-          .run();
-        tx.update(schema.downloadQueue)
-          .set({
-            status: 'completed',
-            progress: 1,
-            completedAt,
-            error: null,
-            bytesDownloaded: result.bytes,
-            totalBytes: result.bytes,
-            speedBps: null,
-          })
+      // CAS post-verifica: ffmpeg può restare sospeso mentre cancel() porta la riga a cancelled.
+      // Solo il tentativo che possiede ancora `downloading` può entrare in finalizzazione.
+      const claimedForProcessing = db
+        .update(schema.downloadQueue)
+        .set({ status: 'processing', progress: 1, speedBps: null })
+        .where(
+          and(eq(schema.downloadQueue.id, queueId), eq(schema.downloadQueue.status, 'downloading')),
+        )
+        .run();
+      if (claimedForProcessing.changes === 0) {
+        await rm(partial, { force: true }).catch(() => {});
+        const current = db
+          .select({ status: schema.downloadQueue.status })
+          .from(schema.downloadQueue)
           .where(eq(schema.downloadQueue.id, queueId))
-          .run();
+          .get();
+        if (current?.status === 'cancelled') {
+          emitter.emit('cancelled', { queueId, episodeFileId: item.episodeFileId });
+        }
+        return;
+      }
+      const finalized = await coordinator.runExclusive(async () => {
+        const currentQueue = db
+          .select({ status: schema.downloadQueue.status })
+          .from(schema.downloadQueue)
+          .where(eq(schema.downloadQueue.id, queueId))
+          .get();
+        const currentFile = db
+          .select({ status: schema.episodeFile.downloadStatus })
+          .from(schema.episodeFile)
+          .where(eq(schema.episodeFile.id, item.episodeFileId))
+          .get();
+        // Una cancellazione può aver rimosso la coda mentre rete/verifica erano fuori lock; allo
+        // stesso modo un link external o un altro reconciler può aver reso autorevole il file.
+        // In entrambi i casi la finalizzazione è superata e non deve resuscitare/sovrascrivere dati.
+        if (currentQueue?.status !== 'processing' || currentFile?.status !== 'not_downloaded') {
+          await rm(partial, { force: true }).catch(() => {});
+          if (currentQueue?.status === 'processing') {
+            db.update(schema.downloadQueue)
+              .set({
+                status: 'cancelled',
+                error: 'Finalizzazione annullata da una mutation filesystem concorrente',
+                completedAt: new Date().toISOString(),
+                speedBps: null,
+              })
+              .where(eq(schema.downloadQueue.id, queueId))
+              .run();
+          }
+          return false;
+        }
+
+        // Finalize e cancel condividono il coordinatore: una volta entrati qui il move e il commit
+        // sono un'unica operazione logica. Un cancel accodato dopo questo punto osserverà completed
+        // e ritornerà false; uno accodato prima avrà già reso fallita la precondizione sopra.
+        await publishDownload(partial, finalPath, logger);
+
+        const completedAt = new Date().toISOString();
+        db.transaction((tx) => {
+          tx.update(schema.episodeFile)
+            .set({
+              downloadStatus: 'downloaded',
+              localPath: finalPath,
+              fileSize: result.bytes,
+              downloadedAt: completedAt,
+              updatedAt: completedAt,
+            })
+            .where(eq(schema.episodeFile.id, item.episodeFileId))
+            .run();
+          tx.update(schema.downloadQueue)
+            .set({
+              status: 'completed',
+              progress: 1,
+              completedAt,
+              error: null,
+              bytesDownloaded: result.bytes,
+              totalBytes: result.bytes,
+              speedBps: null,
+            })
+            .where(eq(schema.downloadQueue.id, queueId))
+            .run();
+        });
+        return true;
       });
 
+      if (!finalized) {
+        emitter.emit('cancelled', { queueId, episodeFileId: item.episodeFileId });
+        return;
+      }
       emitter.emit('complete', {
         queueId,
         episodeFileId: item.episodeFileId,
@@ -492,9 +566,12 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
   }
 
   async function tryStartNext(): Promise<void> {
-    if (stopped || paused) {
+    // `ready` è il gate comune a timer, enqueue, resume e chiamate dirette: nessun percorso può
+    // prelevare job mentre reconcile e sweep stanno ancora costruendo lo snapshot di startup.
+    if (stopped || !ready || paused) {
       return;
     }
+    const schedulingGeneration = startupGeneration;
     // Limite dinamico (perk Premium): ri-valutato ad ogni ingresso. Clampato a [1, CONCURRENCY_CAP].
     let limit = MAX_CONCURRENT_DOWNLOADS;
     try {
@@ -502,6 +579,11 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
     } catch (error) {
       logger.debug({ err: error }, 'resolveMaxConcurrent fallito: fallback a 1');
       limit = 1;
+    }
+    // Il resolver può sospendersi attraverso stop() e un nuovo start(): in quel caso questa
+    // invocazione appartiene allo startup precedente e non deve prenotare job durante il reconcile.
+    if (stopped || !ready || paused || schedulingGeneration !== startupGeneration) {
+      return;
     }
     while (activeCount() < limit) {
       const next = pickNext();
@@ -534,62 +616,141 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
 
   async function reconcileOrphans(): Promise<void> {
     // All'avvio nessun download e' davvero in volo: le righe lasciate 'downloading' o 'processing'
-    // da un processo precedente sono orfane. Self-healing: se il file e' gia' al target_path con la
-    // dimensione attesa (crash tra il rename atomico e il commit DB), finalizziamo invece di
-    // perdere il download; altrimenti marchiamo failed (riavviabile/cancellabile dalla UI).
-    const orphans = db
-      .select()
+    // da un processo precedente sono orfane. La select esterna serve solo a enumerare candidati:
+    // ogni decisione viene ripetuta sotto il coordinatore sullo stato autorevole corrente.
+    const candidates = db
+      .select({ id: schema.downloadQueue.id })
       .from(schema.downloadQueue)
       .where(inArray(schema.downloadQueue.status, ['downloading', 'processing']))
       .all();
-    if (orphans.length === 0) {
+    if (candidates.length === 0) {
       return;
     }
     const nowIso = new Date().toISOString();
     let healed = 0;
     let failed = 0;
-    for (const row of orphans) {
-      const size = row.targetPath
-        ? await stat(row.targetPath)
-            .then((s) => s.size)
-            .catch(() => null)
-        : null;
-      const sizeOk =
-        size != null && size > 0 && (row.expectedBytes == null || size === row.expectedBytes);
-      if (row.targetPath && sizeOk) {
-        const targetPath = row.targetPath;
-        db.transaction((tx) => {
-          tx.update(schema.episodeFile)
+    for (const candidate of candidates) {
+      const rowHealed = await coordinator.runExclusive(async (): Promise<boolean | null> => {
+        const currentQueue = db
+          .select()
+          .from(schema.downloadQueue)
+          .where(eq(schema.downloadQueue.id, candidate.id))
+          .get();
+        if (
+          !currentQueue ||
+          (currentQueue.status !== 'downloading' && currentQueue.status !== 'processing')
+        ) {
+          return null;
+        }
+        const currentFile = db
+          .select({ status: schema.episodeFile.downloadStatus })
+          .from(schema.episodeFile)
+          .where(eq(schema.episodeFile.id, currentQueue.episodeFileId))
+          .get();
+        // Una mutation passata prima del lock può aver cancellato la queue o reso autorevole il
+        // file (downloaded/external). Preserviamo il file ma terminalizziamo l'orfano: lasciarlo
+        // processing/downloading occuperebbe per sempre uno slot di concorrenza dopo la readiness.
+        if (!currentFile) {
+          db.update(schema.downloadQueue)
             .set({
-              downloadStatus: 'downloaded',
-              localPath: targetPath,
-              fileSize: size,
-              downloadedAt: nowIso,
-              updatedAt: nowIso,
-            })
-            .where(eq(schema.episodeFile.id, row.episodeFileId))
-            .run();
-          tx.update(schema.downloadQueue)
-            .set({
-              status: 'completed',
-              progress: 1,
+              status: 'failed',
+              error: 'Episode file non più presente durante il reconcile',
               completedAt: nowIso,
-              error: null,
-              bytesDownloaded: size,
-              totalBytes: size,
               speedBps: null,
             })
-            .where(eq(schema.downloadQueue.id, row.id))
+            .where(
+              and(
+                eq(schema.downloadQueue.id, currentQueue.id),
+                inArray(schema.downloadQueue.status, ['downloading', 'processing']),
+              ),
+            )
             .run();
-        });
-        healed += 1;
+          return false;
+        }
+        if (currentFile.status !== 'not_downloaded') {
+          db.update(schema.downloadQueue)
+            .set({
+              status: 'cancelled',
+              error: `Reconcile superato dallo stato autorevole ${currentFile.status}`,
+              completedAt: nowIso,
+              speedBps: null,
+            })
+            .where(
+              and(
+                eq(schema.downloadQueue.id, currentQueue.id),
+                inArray(schema.downloadQueue.status, ['downloading', 'processing']),
+              ),
+            )
+            .run();
+          return null;
+        }
+
+        const size = currentQueue.targetPath
+          ? await stat(currentQueue.targetPath)
+              .then((s) => s.size)
+              .catch(() => null)
+          : null;
+        const sizeOk =
+          size != null &&
+          size > 0 &&
+          (currentQueue.expectedBytes == null || size === currentQueue.expectedBytes);
+        if (currentQueue.targetPath && sizeOk) {
+          const targetPath = currentQueue.targetPath;
+          db.transaction((tx) => {
+            tx.update(schema.episodeFile)
+              .set({
+                downloadStatus: 'downloaded',
+                localPath: targetPath,
+                fileSize: size,
+                downloadedAt: nowIso,
+                updatedAt: nowIso,
+              })
+              .where(
+                and(
+                  eq(schema.episodeFile.id, currentQueue.episodeFileId),
+                  eq(schema.episodeFile.downloadStatus, 'not_downloaded'),
+                ),
+              )
+              .run();
+            tx.update(schema.downloadQueue)
+              .set({
+                status: 'completed',
+                progress: 1,
+                completedAt: nowIso,
+                error: null,
+                bytesDownloaded: size,
+                totalBytes: size,
+                speedBps: null,
+              })
+              .where(
+                and(
+                  eq(schema.downloadQueue.id, currentQueue.id),
+                  inArray(schema.downloadQueue.status, ['downloading', 'processing']),
+                ),
+              )
+              .run();
+          });
+          return true;
+        }
+        db.update(schema.downloadQueue)
+          .set({ status: 'failed', error: 'Interrotto da riavvio del server', completedAt: nowIso })
+          .where(
+            and(
+              eq(schema.downloadQueue.id, currentQueue.id),
+              inArray(schema.downloadQueue.status, ['downloading', 'processing']),
+            ),
+          )
+          .run();
+        return false;
+      });
+      if (rowHealed === null) {
         continue;
       }
-      db.update(schema.downloadQueue)
-        .set({ status: 'failed', error: 'Interrotto da riavvio del server', completedAt: nowIso })
-        .where(eq(schema.downloadQueue.id, row.id))
-        .run();
-      failed += 1;
+      if (rowHealed) {
+        healed += 1;
+      } else {
+        failed += 1;
+      }
     }
     if (healed > 0) {
       logger.info(
@@ -603,15 +764,17 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
   }
 
   const worker: DownloadWorker = {
-    start(): void {
+    start(): Promise<void> {
       if (!stopped) {
-        return;
+        return startup ?? Promise.resolve();
       }
       stopped = false;
+      ready = false;
       paused = false;
-      // Reconcile (con self-healing) PRIMA dello sweep: cosi' lo sweep calcola i job riavviabili
-      // sugli stati definitivi e fa partire i job solo dopo aver ripulito i .part orfani.
-      void (async () => {
+      const generation = ++startupGeneration;
+      // La Promise espone una readiness deterministica: reconcile e sweep terminano prima che il
+      // worker armi il safety timer o consenta a qualunque percorso di prelevare nuovi job.
+      startup = (async () => {
         await reconcileOrphans();
         // Conserva i .part dei job riavviabili (queued/failed) per riprenderli; rimuove gli orfani.
         const restartable = new Set(
@@ -633,17 +796,27 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
         } catch (error) {
           logger.error({ err: error }, "Sweep dei .part orfani all'avvio fallito");
         }
-        if (!stopped) {
-          void tryStartNext();
+        if (stopped || generation !== startupGeneration) {
+          return;
         }
+        ready = true;
+        timer = setInterval(safetyTick, SAFETY_TICK_MS);
+        timer.unref?.();
+        logger.info({ everyMs: SAFETY_TICK_MS }, 'Download worker avviato');
+        void tryStartNext();
       })();
-      timer = setInterval(safetyTick, SAFETY_TICK_MS);
-      timer.unref?.();
-      logger.info({ everyMs: SAFETY_TICK_MS }, 'Download worker avviato');
+      // Anche i caller lifecycle che non attendono start() non generano rejection non gestite.
+      void startup.catch((error) => {
+        ready = false;
+        logger.error({ err: error }, 'Inizializzazione download worker fallita');
+      });
+      return startup;
     },
 
     stop(): void {
       stopped = true;
+      ready = false;
+      startupGeneration += 1;
       paused = false;
       if (timer) {
         clearInterval(timer);
@@ -745,33 +918,41 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
       return id;
     },
 
-    cancel(queueId) {
-      const item = db
-        .select()
-        .from(schema.downloadQueue)
-        .where(eq(schema.downloadQueue.id, queueId))
-        .get();
-      if (!item) {
-        return false;
-      }
-      if (item.status === 'queued') {
-        updateQueue(queueId, { status: 'cancelled', completedAt: new Date().toISOString() });
-        emitter.emit('cancelled', { queueId, episodeFileId: item.episodeFileId });
-        return true;
-      }
-      if (item.status === 'downloading' || item.status === 'processing') {
-        const inflight = inFlight.get(queueId);
-        if (inflight) {
-          inflight.controller.abort();
+    async cancel(queueId) {
+      return coordinator.runExclusive(async () => {
+        const item = db
+          .select()
+          .from(schema.downloadQueue)
+          .where(eq(schema.downloadQueue.id, queueId))
+          .get();
+        if (!item) {
+          return false;
+        }
+        if (item.status === 'queued') {
+          updateQueue(queueId, { status: 'cancelled', completedAt: new Date().toISOString() });
+          emitter.emit('cancelled', { queueId, episodeFileId: item.episodeFileId });
           return true;
         }
-        // Orfano: il processo che lo scaricava non c'e' piu' (es. dopo un riavvio),
-        // quindi non c'e' nulla da abortire. Lo chiudiamo direttamente come cancelled.
-        updateQueue(queueId, { status: 'cancelled', completedAt: new Date().toISOString() });
-        emitter.emit('cancelled', { queueId, episodeFileId: item.episodeFileId });
-        return true;
-      }
-      return false;
+        if (item.status === 'downloading' || item.status === 'processing') {
+          // Questo tratto usa lo stesso lock di finalize. Se cancel entra prima, il CAS
+          // post-verifica o la precondizione di finalize vedranno cancelled; se finalize è già nel
+          // lock, cancel attende il commit completed e ritorna false alla rilettura qui sopra.
+          updateQueue(queueId, {
+            status: 'cancelled',
+            completedAt: new Date().toISOString(),
+            speedBps: null,
+          });
+          const inflight = inFlight.get(queueId);
+          if (inflight) {
+            inflight.controller.abort();
+          } else {
+            // Orfano: il processo che lo scaricava non c'e' piu' (es. dopo un riavvio).
+            emitter.emit('cancelled', { queueId, episodeFileId: item.episodeFileId });
+          }
+          return true;
+        }
+        return false;
+      });
     },
 
     retry(queueId) {

@@ -19,9 +19,14 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { countExternalEpisodes, countManagedEpisodes } from '@/lib/library-optimistic';
 import { trpc } from '@/lib/trpc';
+import {
+  type LibraryOptimisticTransaction,
+  useLibraryOptimisticCache,
+} from '@/lib/use-library-optimistic-cache';
 import { formatBytes, formatDate, pad2 } from '@/lib/utils';
-import type { Language, LibraryEntry, LibraryGroup } from '@animeunion/shared';
+import type { Language, LibraryDeleteResult, LibraryEntry, LibraryGroup } from '@animeunion/shared';
 import {
   ChevronDown,
   ChevronUp,
@@ -59,6 +64,14 @@ export function LibrarySeriesCard({ group }: { group: LibraryGroup }) {
   const [target, setTarget] = useState<DeleteTarget | null>(null);
   const [deleteFolder, setDeleteFolder] = useState(false);
   const title = group.anime.titleIta ?? group.anime.title;
+  const managedEpisodes = countManagedEpisodes(group);
+  const externalEpisodes = countExternalEpisodes(group);
+  const externalSeriesNotice =
+    externalEpisodes === 1
+      ? ' Il file esterno collegato resta intatto.'
+      : externalEpisodes > 1
+        ? ` I ${externalEpisodes} file esterni collegati restano intatti.`
+        : '';
 
   // Stagioni del gruppo, ciascuna con le sue lingue (le entries sono gia' ordinate dal backend).
   const seasonsMap = new Map<number, LibraryEntry[]>();
@@ -71,14 +84,36 @@ export function LibrarySeriesCard({ group }: { group: LibraryGroup }) {
   const seasonCount = seasons.length;
 
   const utils = trpc.useUtils();
+  const optimistic = useLibraryOptimisticCache();
   // Cestino attivo: le eliminazioni spostano in `.trash` (recuperabile), quindi adattiamo la copy.
   const trashEnabled = trpc.config.getAll.useQuery(undefined, { staleTime: 60_000 }).data
     ?.trashEnabled;
-  const onSuccess = (res: { deletedFiles: number; freedBytes: number; failedFiles: number }) => {
-    if (res.failedFiles > 0) {
-      toast.warning(
-        `${res.deletedFiles} file eliminati, ${res.failedFiles} non eliminati (controlla permessi o usa il Gestore file).`,
-      );
+  const onSuccess = (res: LibraryDeleteResult) => {
+    const protectedExternalFiles = res.protectedExternalFiles ?? 0;
+    const protectedNonTargetFiles = res.protectedNonTargetFiles ?? 0;
+    const failedFolders = res.failedFolders ?? 0;
+    if (
+      res.failedFiles > 0 ||
+      failedFolders > 0 ||
+      protectedExternalFiles > 0 ||
+      protectedNonTargetFiles > 0
+    ) {
+      const action = trashEnabled ? 'spostati nel cestino' : 'eliminati';
+      const issues = [
+        res.failedFiles > 0 ? `${res.failedFiles} non rimossi: controlla i permessi.` : '',
+        failedFolders > 0
+          ? `${failedFolders} cartelle non rimosse: i file contenuti restano sul disco.`
+          : '',
+        protectedExternalFiles > 0
+          ? `${protectedExternalFiles} file esterni protetti: la cartella è rimasta sul disco.`
+          : '',
+        protectedNonTargetFiles > 0
+          ? `${protectedNonTargetFiles} download fuori dalla selezione protetti: la cartella è rimasta sul disco.`
+          : '',
+      ].filter(Boolean);
+      toast.warning(`${res.deletedFiles} file ${action}. ${issues.join(' ')}`);
+    } else if (res.deletedFiles === 0) {
+      toast.info('Nessun file scaricato da eliminare.');
     } else if (trashEnabled) {
       toast.success(
         `${res.deletedFiles} file spostati nel cestino · ${formatBytes(res.freedBytes)} recuperabili`,
@@ -86,19 +121,39 @@ export function LibrarySeriesCard({ group }: { group: LibraryGroup }) {
     } else {
       toast.success(`Eliminati ${res.deletedFiles} file · ${formatBytes(res.freedBytes)} liberati`);
     }
-    void utils.library.list.invalidate();
-    void utils.library.stats.invalidate();
-    void utils.download.queue.invalidate();
-    // Invalida tutto il catalogo: il delete tocca piu' stagioni/sequel (slug diversi),
-    // cosi' i tag "Scaricato" delle schede anime si aggiornano ovunque al ritorno.
-    void utils.catalog.invalidate();
     setTarget(null);
     setDeleteFolder(false);
   };
-  const onError = () => toast.error('Eliminazione fallita');
-  const delEpisode = trpc.library.deleteEpisode.useMutation({ onSuccess, onError });
-  const delEntry = trpc.library.deleteEntry.useMutation({ onSuccess, onError });
-  const delSeries = trpc.library.deleteSeries.useMutation({ onSuccess, onError });
+  const onError = (
+    error: { message?: string },
+    snapshot: LibraryOptimisticTransaction | undefined,
+  ) => {
+    optimistic.restore(snapshot);
+    toast.error(error.message || 'Eliminazione fallita');
+  };
+  const delEpisode = trpc.library.deleteEpisode.useMutation({
+    onMutate: ({ episodeFileId }) => optimistic.remove({ scope: 'episode', episodeFileId }),
+    onSuccess,
+    onError: (error, _input, snapshot) => onError(error, snapshot),
+    onSettled: (_data, _error, _input, transaction) => optimistic.settle(transaction),
+  });
+  const delEntry = trpc.library.deleteEntry.useMutation({
+    onMutate: ({ animeId, language }) => optimistic.remove({ scope: 'entry', animeId, language }),
+    onSuccess,
+    onError: (error, _input, snapshot) => onError(error, snapshot),
+    onSettled: (_data, _error, _input, transaction) => optimistic.settle(transaction),
+  });
+  const delSeries = trpc.library.deleteSeries.useMutation({
+    onMutate: () =>
+      optimistic.remove({
+        scope: 'series',
+        animeId: group.anime.id,
+        seriesIdHint: group.seriesId,
+      }),
+    onSuccess,
+    onError: (error, _input, snapshot) => onError(error, snapshot),
+    onSettled: (_data, _error, _input, transaction) => optimistic.settle(transaction),
+  });
   const pending = delEpisode.isPending || delEntry.isPending || delSeries.isPending;
 
   // Scollega file esterni: non distruttivo (i file restano sul disco), conferma a parte.
@@ -194,35 +249,37 @@ export function LibrarySeriesCard({ group }: { group: LibraryGroup }) {
                 {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                 {expanded ? 'Nascondi episodi' : 'Vedi episodi'}
               </Button>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="destructive" size="sm" className="gap-1" disabled={pending}>
-                    <Trash2 className="h-4 w-4" />
-                    Elimina
-                    <ChevronDown className="h-3 w-3 opacity-70" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start">
-                  <DropdownMenuItem
-                    className="text-destructive focus:text-destructive"
-                    onClick={() =>
-                      setTarget({
-                        scope: 'series',
-                        title:
-                          group.category === 'film'
-                            ? 'Eliminare il film?'
-                            : 'Eliminare l’intera serie?',
-                        warning:
-                          group.category === 'film'
-                            ? `Verranno cancellati TUTTI i file scaricati di "${title}" (tutte le lingue).`
-                            : `Verranno cancellati TUTTI i file scaricati dell'intera serie di "${title}" (tutte le stagioni e le lingue collegate).`,
-                      })
-                    }
-                  >
-                    {group.category === 'film' ? 'Elimina il film' : 'Elimina intera serie'}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              {managedEpisodes > 0 ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="destructive" size="sm" className="gap-1" disabled={pending}>
+                      <Trash2 className="h-4 w-4" />
+                      Elimina
+                      <ChevronDown className="h-3 w-3 opacity-70" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start">
+                    <DropdownMenuItem
+                      className="text-destructive focus:text-destructive"
+                      onClick={() =>
+                        setTarget({
+                          scope: 'series',
+                          title:
+                            group.category === 'film'
+                              ? 'Eliminare il film?'
+                              : 'Eliminare l’intera serie?',
+                          warning:
+                            group.category === 'film'
+                              ? `Verranno rimossi tutti i ${managedEpisodes} file scaricati di "${title}" (tutte le lingue).${externalSeriesNotice}`
+                              : `Verranno rimossi tutti i ${managedEpisodes} file scaricati dell'intera serie di "${title}" (tutte le stagioni e le lingue collegate).${externalSeriesNotice}`,
+                        })
+                      }
+                    >
+                      {group.category === 'film' ? 'Elimina il film' : 'Elimina intera serie'}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : null}
             </div>
           </div>
         </div>
@@ -237,7 +294,12 @@ export function LibrarySeriesCard({ group }: { group: LibraryGroup }) {
                   </h4>
                 ) : null}
                 {entries.map((entry) => {
-                  const entryExternal = entry.episodes.filter((ep) => ep.external).length;
+                  const managed = entry.episodes.filter((episode) => !episode.external);
+                  const managedSize = managed.reduce(
+                    (total, episode) => total + (episode.fileSize ?? 0),
+                    0,
+                  );
+                  const entryExternal = entry.episodes.length - managed.length;
                   return (
                     <div key={`${entry.animeId}-${entry.language}`} className="space-y-2">
                       <div className="flex items-center justify-between gap-2">
@@ -271,30 +333,42 @@ export function LibrarySeriesCard({ group }: { group: LibraryGroup }) {
                               Scollega esterni
                             </Button>
                           ) : null}
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 gap-1 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                            disabled={pending}
-                            onClick={() =>
-                              setTarget({
-                                scope: 'entry',
-                                animeId: entry.animeId,
-                                language: entry.language,
-                                title: `Eliminare ${
-                                  group.category === 'film' ? 'il film' : seasonLabel(seasonNumber)
-                                } (${LANGUAGE_SHORT[entry.language]})?`,
-                                warning: `Verranno cancellati i ${entry.episodes.length} file di "${title}"${
-                                  group.category === 'film' ? '' : ` — ${seasonLabel(seasonNumber)}`
-                                } (${LANGUAGE_SHORT[entry.language]}), liberando ${formatBytes(
-                                  entrySize(entry),
-                                )}.`,
-                              })
-                            }
-                          >
-                            <Trash2 className="h-4 w-4" />
-                            Elimina
-                          </Button>
+                          {managed.length > 0 ? (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 gap-1 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                              disabled={pending}
+                              onClick={() =>
+                                setTarget({
+                                  scope: 'entry',
+                                  animeId: entry.animeId,
+                                  language: entry.language,
+                                  title: `Eliminare ${
+                                    group.category === 'film'
+                                      ? 'il film'
+                                      : seasonLabel(seasonNumber)
+                                  } (${LANGUAGE_SHORT[entry.language]})?`,
+                                  warning: `Verranno rimossi i ${managed.length} file scaricati di "${title}"${
+                                    group.category === 'film'
+                                      ? ''
+                                      : ` — ${seasonLabel(seasonNumber)}`
+                                  } (${LANGUAGE_SHORT[entry.language]}), liberando ${formatBytes(
+                                    managedSize,
+                                  )}.${
+                                    entryExternal === 1
+                                      ? ' Il file esterno collegato resta intatto.'
+                                      : entryExternal > 1
+                                        ? ` I ${entryExternal} file esterni collegati restano intatti.`
+                                        : ''
+                                  }`,
+                                })
+                              }
+                            >
+                              <Trash2 className="h-4 w-4" />
+                              Elimina
+                            </Button>
+                          ) : null}
                         </div>
                       </div>
                       <ul className="space-y-2">
@@ -364,7 +438,7 @@ export function LibrarySeriesCard({ group }: { group: LibraryGroup }) {
                                       scope: 'episode',
                                       episodeFileId: ep.episodeFileId,
                                       title: 'Eliminare questo episodio?',
-                                      warning: `Verra' cancellato il file S${pad2(seasonNumber)}E${pad2(
+                                      warning: `Verrà rimosso il file S${pad2(seasonNumber)}E${pad2(
                                         ep.episodeNumber,
                                       )} (${LANGUAGE_SHORT[entry.language]})${
                                         ep.fileSize != null
@@ -413,7 +487,12 @@ export function LibrarySeriesCard({ group }: { group: LibraryGroup }) {
                 <>
                   L&apos;operazione &egrave; <strong>irreversibile</strong>.
                 </>
-              )}
+              )}{' '}
+              {externalEpisodes > 0 ? (
+                <>
+                  I file <strong>esterni</strong> collegati non vengono mai eliminati.
+                </>
+              ) : null}
             </DialogDescription>
           </DialogHeader>
           {target?.scope === 'entry' || target?.scope === 'series' ? (
@@ -426,7 +505,9 @@ export function LibrarySeriesCard({ group }: { group: LibraryGroup }) {
               />
               <span>
                 Elimina anche la cartella della serie sul disco, compresi i{' '}
-                <strong>file non tracciati / extra</strong> (sigle, sottotitoli, ecc.).
+                <strong>file non tracciati / extra</strong> (sigle, sottotitoli, ecc.). Se contiene
+                file esterni collegati o download attivi fuori dalla selezione, la cartella viene
+                preservata e sono rimossi solo i file inclusi nell&apos;operazione.
               </span>
             </label>
           ) : null}

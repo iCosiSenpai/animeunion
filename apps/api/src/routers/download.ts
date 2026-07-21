@@ -11,8 +11,8 @@ import {
 import { publicProcedure, router } from '../trpc';
 
 export const downloadRouter = router({
-  addEpisode: publicProcedure.input(downloadAddInputSchema).mutation(({ ctx, input }) => ({
-    queueId: ctx.services.download.addEpisode(input),
+  addEpisode: publicProcedure.input(downloadAddInputSchema).mutation(async ({ ctx, input }) => ({
+    queueId: await ctx.services.download.addEpisode(input),
   })),
 
   addEpisodeRef: publicProcedure
@@ -21,12 +21,14 @@ export const downloadRouter = router({
       queueId: await ctx.services.download.addEpisodeByRef(input),
     })),
 
-  addMissing: publicProcedure.input(downloadAddMissingInputSchema).mutation(({ ctx, input }) => ({
-    enqueued: ctx.services.download.addMissing(input),
-  })),
+  addMissing: publicProcedure
+    .input(downloadAddMissingInputSchema)
+    .mutation(async ({ ctx, input }) => ({
+      enqueued: await ctx.services.download.addMissing(input),
+    })),
 
-  addAll: publicProcedure.input(downloadAddMissingInputSchema).mutation(({ ctx, input }) => ({
-    enqueued: ctx.services.download.addAll(input),
+  addAll: publicProcedure.input(downloadAddMissingInputSchema).mutation(async ({ ctx, input }) => ({
+    enqueued: await ctx.services.download.addAll(input),
   })),
 
   addAllBySlug: publicProcedure
@@ -45,13 +47,15 @@ export const downloadRouter = router({
     .input(downloadGroupItemsInputSchema)
     .query(({ ctx, input }) => ctx.services.download.getQueueGroupItems(input)),
 
-  cancel: publicProcedure.input(downloadActionInputSchema).mutation(({ ctx, input }) => ({
-    cancelled: ctx.services.download.cancel(input.queueId),
+  cancel: publicProcedure.input(downloadActionInputSchema).mutation(async ({ ctx, input }) => ({
+    cancelled: await ctx.services.download.cancel(input.queueId),
   })),
 
-  cancelGroup: publicProcedure.input(downloadGroupActionInputSchema).mutation(({ ctx, input }) => ({
-    cancelled: ctx.services.download.cancelGroup(input.animeId),
-  })),
+  cancelGroup: publicProcedure
+    .input(downloadGroupActionInputSchema)
+    .mutation(async ({ ctx, input }) => ({
+      cancelled: await ctx.services.download.cancelGroup(input.animeId),
+    })),
 
   retryGroup: publicProcedure.input(downloadGroupActionInputSchema).mutation(({ ctx, input }) => ({
     retried: ctx.services.download.retryGroup(input.animeId),
@@ -69,8 +73,8 @@ export const downloadRouter = router({
     removed: ctx.services.download.clearCompleted(),
   })),
 
-  cancelAll: publicProcedure.mutation(({ ctx }) => ({
-    cancelled: ctx.services.download.cancelAll(),
+  cancelAll: publicProcedure.mutation(async ({ ctx }) => ({
+    cancelled: await ctx.services.download.cancelAll(),
   })),
 
   retryAllFailed: publicProcedure.mutation(({ ctx }) => ({

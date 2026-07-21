@@ -13,6 +13,7 @@ import { createDoctorService } from '../services/doctor-service';
 import { createDownloadService } from '../services/download-service';
 import { createFavoritesService } from '../services/favorites-service';
 import { createFileManagerService } from '../services/file-manager-service';
+import { createFileMutationCoordinator } from '../services/file-mutation-coordinator';
 import { createFollowService } from '../services/follow-service';
 import { createHomeService } from '../services/home-service';
 import { createJellyfinService } from '../services/jellyfin-service';
@@ -46,8 +47,22 @@ function makeCaller() {
   const auth = createAuthService({ db, baseUrl: 'https://api.test', logger: testLogger });
   const resolver = createSeriesResolver({ db });
   const renamer = createRenamerService({ db, config, seriesResolver: resolver });
-  const library = createLibraryService({ db, config, renamer, resolver, logger: testLogger });
-  const files = createFileManagerService({ db, config, renamer, logger: testLogger });
+  const coordinator = createFileMutationCoordinator();
+  const library = createLibraryService({
+    db,
+    config,
+    renamer,
+    resolver,
+    logger: testLogger,
+    coordinator,
+  });
+  const files = createFileManagerService({
+    db,
+    config,
+    renamer,
+    logger: testLogger,
+    coordinator,
+  });
   const series = createSeriesService({ db, resolver, catalog, renamer, config });
   const notifications = createNotificationService({ db, config });
   const lock = createLockService({ db, env: { WEB_LOCK_DISABLED: undefined } });
@@ -69,6 +84,7 @@ function makeCaller() {
     config,
     renamer,
     logger: testLogger,
+    coordinator,
   });
   const requests = createRequestService({ db, catalog, resolver, follow, download, config });
   const neuralExport = createNeuralExportService({
@@ -78,6 +94,7 @@ function makeCaller() {
     profile,
     renamer,
     logger: testLogger,
+    coordinator,
   });
   const doctor = createDoctorService({ config, auth, jellyfin, notifications, logger: testLogger });
   const ctx: Context = {

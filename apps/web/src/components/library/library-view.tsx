@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { trpc } from '@/lib/trpc';
+import { useLibraryOptimisticCache } from '@/lib/use-library-optimistic-cache';
 import { formatBytes } from '@/lib/utils';
 import type { LibraryGroup, LibraryScanResult } from '@animeunion/shared';
 import {
@@ -140,8 +141,11 @@ function StatsCards({
 
 export function LibraryView() {
   const utils = trpc.useUtils();
+  const optimistic = useLibraryOptimisticCache();
   const statsQuery = trpc.library.stats.useQuery();
   const listQuery = trpc.library.list.useQuery();
+  const trashEnabled = trpc.config.getAll.useQuery(undefined, { staleTime: 60_000 }).data
+    ?.trashEnabled;
   const scanMutation = trpc.library.scan.useMutation({
     onSuccess: () => {
       void utils.library.stats.invalidate();
@@ -153,16 +157,51 @@ export function LibraryView() {
   const [confirmOrphans, setConfirmOrphans] = useState(false);
 
   const deleteOrphans = trpc.library.deleteOrphans.useMutation({
+    onMutate: ({ paths }) => {
+      const snapshot = lastScan;
+      const requested = new Set(paths);
+      setLastScan((previous) => {
+        if (!previous) {
+          return previous;
+        }
+        const orphanPaths = previous.orphanPaths.filter((path) => !requested.has(path));
+        return { ...previous, orphans: orphanPaths.length, orphanPaths };
+      });
+      return { lastScan: snapshot };
+    },
     onSuccess: (res) => {
-      toast.success(
-        `Eliminati ${res.deletedFiles} orfani · ${formatBytes(res.freedBytes)} liberati`,
-      );
-      void utils.library.stats.invalidate();
-      void utils.library.list.invalidate();
-      setLastScan((prev) => (prev ? { ...prev, orphans: 0, orphanPaths: [] } : prev));
+      const protectedExternalFiles = res.protectedExternalFiles ?? 0;
+      const protectedNonTargetFiles = res.protectedNonTargetFiles ?? 0;
+      if (res.failedFiles > 0 || protectedExternalFiles > 0 || protectedNonTargetFiles > 0) {
+        const issues = [
+          res.failedFiles > 0 ? `${res.failedFiles} non rimossi.` : '',
+          protectedExternalFiles > 0 ? `${protectedExternalFiles} file esterni protetti.` : '',
+          protectedNonTargetFiles > 0
+            ? `${protectedNonTargetFiles} file condivisi con download attivi preservati.`
+            : '',
+        ].filter(Boolean);
+        toast.warning(
+          `${res.deletedFiles} orfani rimossi. ${issues.join(' ')} Esegui una nuova scansione per aggiornare l’elenco.`,
+        );
+        setLastScan(null);
+      } else if (trashEnabled) {
+        toast.success(
+          `${res.deletedFiles} orfani spostati nel cestino · ${formatBytes(res.freedBytes)} recuperabili`,
+        );
+      } else {
+        toast.success(
+          `Eliminati ${res.deletedFiles} orfani · ${formatBytes(res.freedBytes)} liberati`,
+        );
+      }
       setConfirmOrphans(false);
     },
-    onError: () => toast.error('Eliminazione orfani fallita'),
+    onError: (error, _input, snapshot) => {
+      if (snapshot) {
+        setLastScan(snapshot.lastScan);
+      }
+      toast.error(error.message || 'Eliminazione orfani fallita');
+    },
+    onSettled: () => optimistic.invalidateRelated(),
   });
 
   async function onScan() {
@@ -283,11 +322,18 @@ export function LibraryView() {
           <DialogHeader>
             <DialogTitle className="text-destructive">Eliminare i file orfani?</DialogTitle>
             <DialogDescription>
-              Verranno cancellati {lastScan?.orphanPaths.length ?? 0} file presenti su disco ma non
-              collegati ad alcun episodio del catalogo. Spesso sono{' '}
+              {trashEnabled ? 'Verranno spostati nel cestino' : 'Verranno cancellati'}{' '}
+              {lastScan?.orphanPaths.length ?? 0} file presenti su disco ma non collegati ad alcun
+              episodio del catalogo. Spesso sono{' '}
               <strong>metadati, copertine, immagini o sigle</strong> (poster, backdrop, theme) e{' '}
-              <strong>non episodi</strong>: se non sei sicuro, controllali prima dal Gestore file.
-              L&apos;operazione &egrave; <strong>irreversibile</strong>.
+              <strong>non episodi</strong>: se non sei sicuro, controllali prima dal Gestore file.{' '}
+              {trashEnabled ? (
+                <>Restano recuperabili dal Gestore file.</>
+              ) : (
+                <>
+                  L&apos;operazione &egrave; <strong>irreversibile</strong>.
+                </>
+              )}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -305,7 +351,7 @@ export function LibraryView() {
               onClick={() => deleteOrphans.mutate({ paths: lastScan?.orphanPaths ?? [] })}
             >
               <Trash2 className="h-4 w-4" />
-              Elimina definitivamente
+              {trashEnabled ? 'Sposta nel cestino' : 'Elimina definitivamente'}
             </Button>
           </DialogFooter>
         </DialogContent>

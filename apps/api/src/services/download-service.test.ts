@@ -9,6 +9,7 @@ import { testLogger } from '../test/helpers';
 import type { CatalogService } from './catalog-service';
 import { createConfigService } from './config-service';
 import { createDownloadService } from './download-service';
+import { createFileMutationCoordinator } from './file-mutation-coordinator';
 import { createRenamerService } from './renamer-service';
 
 function buildStubCatalog(): CatalogService {
@@ -161,12 +162,14 @@ describe('DownloadService', () => {
     config.set('seriesPathSub', animePath);
     config.set('autoDownload', true);
     const renamer = createRenamerService({ db, config });
+    const coordinator = createFileMutationCoordinator();
     const realWorker = createDownloadWorker({
       db,
       catalog,
       config,
       logger: testLogger,
       renamer,
+      coordinator,
     });
     const worker = { ...realWorker, enqueue: enqueueSpy };
     const service = createDownloadService({
@@ -176,10 +179,11 @@ describe('DownloadService', () => {
       config,
       renamer,
       logger: testLogger,
+      coordinator,
       onAutoEnqueued,
     });
     service.start();
-    return { service, config };
+    return { service, config, coordinator, renamer };
   }
 
   // Servizio con worker mockato (enqueue + retry spy) e clock iniettato: per i test del cooldown
@@ -197,36 +201,39 @@ describe('DownloadService', () => {
       config,
       renamer: createRenamerService({ db, config }),
       logger: testLogger,
+      coordinator: createFileMutationCoordinator(),
       now: () => nowDate,
     });
     service.start();
     return { service, retrySpy };
   }
 
-  it('addEpisode accoda e ritorna un id', () => {
+  it('addEpisode accoda e ritorna un id', async () => {
     const { service } = makeService();
     insertAnime(db, 'a-1');
     insertEpisode(db, 'e-1', 'a-1', 1);
     insertFile(db, 'ef-1', 'e-1', 'SUB_ITA');
     enqueueSpy.mockReturnValue('q-123');
 
-    const id = service.addEpisode({ episodeFileId: 'ef-1' });
+    const id = await service.addEpisode({ episodeFileId: 'ef-1' });
     expect(id).toBe('q-123');
     expect(enqueueSpy).toHaveBeenCalledWith('ef-1', undefined);
   });
 
-  it('addEpisode lancia se le cartelle non sono configurate', () => {
+  it('addEpisode lancia se le cartelle non sono configurate', async () => {
     const { service, config } = makeService();
     config.set('seriesPathSub', '');
     insertAnime(db, 'a-1');
     insertEpisode(db, 'e-1', 'a-1', 1);
     insertFile(db, 'ef-1', 'e-1', 'SUB_ITA');
 
-    expect(() => service.addEpisode({ episodeFileId: 'ef-1' })).toThrow(/Configura le cartelle/);
+    await expect(service.addEpisode({ episodeFileId: 'ef-1' })).rejects.toThrow(
+      /Configura le cartelle/,
+    );
     expect(enqueueSpy).not.toHaveBeenCalled();
   });
 
-  it('addEpisode idempotente: ritorna id esistente se già in coda', () => {
+  it('addEpisode idempotente: ritorna id esistente se già in coda', async () => {
     const { service } = makeService();
     insertAnime(db, 'a-1');
     insertEpisode(db, 'e-1', 'a-1', 1);
@@ -242,12 +249,12 @@ describe('DownloadService', () => {
       })
       .run();
 
-    const id = service.addEpisode({ episodeFileId: 'ef-1' });
+    const id = await service.addEpisode({ episodeFileId: 'ef-1' });
     expect(id).toBe('q-existing');
     expect(enqueueSpy).not.toHaveBeenCalled();
   });
 
-  it('addMissing salta downloaded e già in coda, accoda il resto', () => {
+  it('addMissing salta downloaded e già in coda, accoda il resto', async () => {
     const { service } = makeService();
     insertAnime(db, 'a-1');
     insertEpisode(db, 'e-1', 'a-1', 1);
@@ -267,12 +274,12 @@ describe('DownloadService', () => {
       })
       .run();
 
-    const n = service.addMissing({ animeId: 'a-1' });
+    const n = await service.addMissing({ animeId: 'a-1' });
     expect(n).toBe(1);
     expect(enqueueSpy).toHaveBeenCalledWith('ef-2');
   });
 
-  it('addMissing salta i file external (collegati senza scaricare)', () => {
+  it('addMissing salta i file external (collegati senza scaricare)', async () => {
     const { service } = makeService();
     insertAnime(db, 'a-1');
     insertEpisode(db, 'e-1', 'a-1', 1);
@@ -280,13 +287,13 @@ describe('DownloadService', () => {
     insertFile(db, 'ef-1', 'e-1', 'SUB_ITA', 'external'); // gia presente: non si ri-scarica
     insertFile(db, 'ef-2', 'e-2', 'SUB_ITA', 'not_downloaded'); // accoda
 
-    const n = service.addMissing({ animeId: 'a-1' });
+    const n = await service.addMissing({ animeId: 'a-1' });
     expect(n).toBe(1);
     expect(enqueueSpy).toHaveBeenCalledWith('ef-2');
     expect(enqueueSpy).not.toHaveBeenCalledWith('ef-1');
   });
 
-  it('addMissing self-heal: file downloaded sparito dal disco viene riaccodato (root presente)', () => {
+  it('addMissing self-heal: file downloaded sparito dal disco viene riaccodato (root presente)', async () => {
     const { service } = makeService();
     insertAnime(db, 'a-1');
     insertEpisode(db, 'e-1', 'a-1', 1);
@@ -298,7 +305,7 @@ describe('DownloadService', () => {
       .run();
     insertQueue(db, 'q-old', 'ef-1', 'completed');
 
-    const n = service.addMissing({ animeId: 'a-1' });
+    const n = await service.addMissing({ animeId: 'a-1' });
     expect(n).toBe(1);
     expect(enqueueSpy).toHaveBeenCalledWith('ef-1');
     const ef = db.select().from(schema.episodeFile).where(eq(schema.episodeFile.id, 'ef-1')).get();
@@ -328,7 +335,7 @@ describe('DownloadService', () => {
     await mkdir(dirname(path), { recursive: true });
     await writeFile(path, 'x'.repeat(1234));
 
-    const n = service.addMissing({ animeId: 'a-1' });
+    const n = await service.addMissing({ animeId: 'a-1' });
 
     // Riconciliato, non ri-scaricato.
     expect(n).toBe(0);
@@ -367,7 +374,7 @@ describe('DownloadService', () => {
       await mkdir(dirname(canonical), { recursive: true });
       await writeFile(legacyPath, 'x'.repeat(999));
 
-      const n = service.addMissing({ animeId: 'a-1' });
+      const n = await service.addMissing({ animeId: 'a-1' });
 
       expect(n).toBe(0);
       expect(enqueueSpy).not.toHaveBeenCalled();
@@ -398,7 +405,7 @@ describe('DownloadService', () => {
     await mkdir(dirname(canonical), { recursive: true });
     await writeFile(join(dirname(canonical), 'S01E02.mp4'), 'x'.repeat(10));
 
-    const n = service.addMissing({ animeId: 'a-1' });
+    const n = await service.addMissing({ animeId: 'a-1' });
 
     expect(n).toBe(1);
     expect(enqueueSpy).toHaveBeenCalledWith('ef-1');
@@ -424,13 +431,13 @@ describe('DownloadService', () => {
     await mkdir(dirname(canonical), { recursive: true });
     await writeFile(join(dirname(canonical), 'S01E01.mp4'), 'x'.repeat(10)); // legacy senza tag
 
-    const n = service.addMissing({ animeId: 'a-1' });
+    const n = await service.addMissing({ animeId: 'a-1' });
 
     expect(n).toBe(1);
     expect(enqueueSpy).toHaveBeenCalledWith('ef-1');
   });
 
-  it('addMissing self-heal: NON azzera se la root non e raggiungibile (disco offline)', () => {
+  it('addMissing self-heal: NON azzera se la root non e raggiungibile (disco offline)', async () => {
     const { service, config } = makeService();
     const goneRoot = join(tmpdir(), 'au-gone-root-xyz-123');
     config.set('seriesPathSub', goneRoot); // root configurata inesistente = NAS staccato
@@ -442,14 +449,14 @@ describe('DownloadService', () => {
       .where(eq(schema.episodeFile.id, 'ef-1'))
       .run();
 
-    const n = service.addMissing({ animeId: 'a-1' });
+    const n = await service.addMissing({ animeId: 'a-1' });
     expect(n).toBe(0);
     expect(enqueueSpy).not.toHaveBeenCalled();
     const ef = db.select().from(schema.episodeFile).where(eq(schema.episodeFile.id, 'ef-1')).get();
     expect(ef?.downloadStatus).toBe('downloaded'); // invariato
   });
 
-  it('addMissing con filtro lingua', () => {
+  it('addMissing con filtro lingua', async () => {
     const { service } = makeService();
     insertAnime(db, 'a-1');
     insertEpisode(db, 'e-1', 'a-1', 1);
@@ -457,7 +464,7 @@ describe('DownloadService', () => {
     insertFile(db, 'ef-1', 'e-1', 'SUB_ITA', 'not_downloaded');
     insertFile(db, 'ef-2', 'e-2', 'DUB_ITA', 'not_downloaded');
 
-    const n = service.addMissing({ animeId: 'a-1', language: 'SUB_ITA' });
+    const n = await service.addMissing({ animeId: 'a-1', language: 'SUB_ITA' });
     expect(n).toBe(1);
     expect(enqueueSpy).toHaveBeenCalledWith('ef-1');
   });
@@ -488,9 +495,9 @@ describe('DownloadService', () => {
     });
   });
 
-  it('cancel delega al worker e ritorna il risultato', () => {
+  it('cancel delega al worker e ritorna il risultato', async () => {
     const { service } = makeService();
-    expect(service.cancel('q-nonexistent')).toBe(false);
+    expect(await service.cancel('q-nonexistent')).toBe(false);
   });
 
   it('clearCompleted rimuove solo gli status terminali', () => {
@@ -869,7 +876,7 @@ describe('DownloadService', () => {
     expect(retrySpy).toHaveBeenCalledWith('q-1');
   });
 
-  it('addMissing manuale ritenta subito un fallito (nessun cooldown)', () => {
+  it('addMissing manuale ritenta subito un fallito (nessun cooldown)', async () => {
     const nowDate = new Date('2026-06-27T12:00:00.000Z');
     const { service, retrySpy } = makeServiceWithRetrySpy(nowDate);
     insertAnime(db, 'a-1', 'ONGOING');
@@ -883,7 +890,7 @@ describe('DownloadService', () => {
       new Date(nowDate.getTime() - 60 * 60 * 1000).toISOString(),
     );
 
-    const n = service.addMissing({ animeId: 'a-1' });
+    const n = await service.addMissing({ animeId: 'a-1' });
     expect(n).toBe(1);
     expect(retrySpy).toHaveBeenCalledWith('q-1');
   });
@@ -897,7 +904,7 @@ describe('DownloadService', () => {
     expect(service.isQueuePaused()).toBe(false);
   });
 
-  it('cancelAll annulla solo i job in coda', () => {
+  it('cancelAll annulla solo i job in coda', async () => {
     const { service } = makeService();
     insertAnime(db, 'a-1');
     insertEpisode(db, 'e-1', 'a-1', 1);
@@ -912,7 +919,7 @@ describe('DownloadService', () => {
       .values({ id: 'q-2', episodeFileId: 'ef-2', status: 'queued', priority: 50, createdAt: ts })
       .run();
 
-    const n = service.cancelAll();
+    const n = await service.cancelAll();
     expect(n).toBe(2);
   });
 
@@ -1079,7 +1086,7 @@ describe('DownloadService', () => {
     expect(active.items[0]?.status).toBe('queued');
   });
 
-  it('cancelGroup annulla solo i job del gruppo richiesto', () => {
+  it('cancelGroup annulla solo i job del gruppo richiesto', async () => {
     const { service } = makeService();
     insertAnime(db, 'a-1');
     insertAnime(db, 'a-2');
@@ -1093,7 +1100,7 @@ describe('DownloadService', () => {
     insertQueue(db, 'q-2', 'ef-2', 'queued');
     insertQueue(db, 'q-3', 'ef-3', 'queued');
 
-    const n = service.cancelGroup('a-1');
+    const n = await service.cancelGroup('a-1');
     expect(n).toBe(2);
     const rows = db.select().from(schema.downloadQueue).all();
     expect(rows.find((r) => r.id === 'q-3')?.status).toBe('queued');
@@ -1144,7 +1151,7 @@ describe('DownloadService', () => {
 
   // --- Step 6: Hardening P1 ---
 
-  it('addMissing (P1b): controlla più file in coda con batch inArray', () => {
+  it('addMissing (P1b): controlla più file in coda con batch inArray', async () => {
     // Verifica che la logica inArray funzioni correttamente con N file,
     // alcuni già in coda (queued/completed) e altri da accodare.
     const { service } = makeService();
@@ -1161,12 +1168,58 @@ describe('DownloadService', () => {
     // ef-3: cancelled → non riaccodato automaticamente da addMissing
     insertQueue(db, 'q-3', 'ef-3', 'cancelled');
     // ef-4, ef-5, ef-6: nessuna riga in coda → devono essere accodati
-    const n = service.addMissing({ animeId: 'a-1' });
+    const n = await service.addMissing({ animeId: 'a-1' });
     expect(n).toBe(3);
     expect(enqueueSpy).toHaveBeenCalledWith('ef-4');
     expect(enqueueSpy).toHaveBeenCalledWith('ef-5');
     expect(enqueueSpy).toHaveBeenCalledWith('ef-6');
     expect(enqueueSpy).not.toHaveBeenCalledWith('ef-1');
+  });
+
+  it('self-heal rivalida sotto lock e non sovrascrive un link external concorrente', async () => {
+    const { service, coordinator } = makeService();
+    insertAnime(db, 'a-race');
+    insertEpisode(db, 'e-race', 'a-race', 1);
+    insertFile(db, 'ef-race', 'e-race', 'SUB_ITA');
+    const externalPath = join(animePath, 'external-race.mkv');
+    await writeFile(externalPath, 'external');
+
+    let enter = () => {};
+    let release = () => {};
+    const entered = new Promise<void>((resolve) => {
+      enter = resolve;
+    });
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const blocker = coordinator.runExclusive(async () => {
+      enter();
+      await released;
+    });
+    await entered;
+
+    // Questa transizione è in coda prima di addMissing: il servizio deve leggere il nuovo stato
+    // solo dopo aver acquisito lo stesso coordinatore, non usare lo snapshot precedente.
+    const linkExternal = coordinator.runExclusive(async () => {
+      db.update(schema.episodeFile)
+        .set({ downloadStatus: 'external', localPath: externalPath })
+        .where(eq(schema.episodeFile.id, 'ef-race'))
+        .run();
+    });
+    const addMissing = service.addMissing({ animeId: 'a-race' });
+    release();
+
+    await blocker;
+    await linkExternal;
+    expect(await addMissing).toBe(0);
+    expect(enqueueSpy).not.toHaveBeenCalledWith('ef-race');
+    const row = db
+      .select()
+      .from(schema.episodeFile)
+      .where(eq(schema.episodeFile.id, 'ef-race'))
+      .get();
+    expect(row?.downloadStatus).toBe('external');
+    expect(row?.localPath).toBe(externalPath);
   });
 
   it('enqueueForAutoFollows (P1a): processa >5 follow in batch paralleli', async () => {

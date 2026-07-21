@@ -17,8 +17,16 @@ import { atomicMove, deleteFileAndPrune, ensureDir } from '../lib/download-fs';
 import { listEpisodeFilesInDir } from '../lib/episode-file-match';
 import { NotFoundError, PreconditionError } from '../lib/errors';
 import type { Logger } from '../lib/logger';
-import { TRASH_DIR, TRASH_ID, moveToTrash, readTrashInfo } from '../lib/trash';
+import { canonicalPath, canonicalRootFor, pathIsInside } from '../lib/path-containment';
+import {
+  TRASH_ID,
+  canonicalTrashEntry,
+  canonicalTrashRoot,
+  moveToTrash,
+  readTrashInfo,
+} from '../lib/trash';
 import type { ConfigService } from './config-service';
+import type { FileMutationCoordinator } from './file-mutation-coordinator';
 import type { RenamerService } from './renamer-service';
 
 const VIDEO_EXTENSIONS = new Set(['.mp4', '.mkv', '.avi', '.mov', '.webm']);
@@ -195,10 +203,11 @@ export interface FileManagerDeps {
   config: ConfigService;
   renamer: RenamerService;
   logger: Logger;
+  coordinator: FileMutationCoordinator;
 }
 
 export function createFileManagerService(deps: FileManagerDeps): FileManagerService {
-  const { db, config, renamer, logger } = deps;
+  const { db, config, renamer, logger, coordinator } = deps;
 
   function roots(): string[] {
     return config
@@ -357,31 +366,64 @@ export function createFileManagerService(deps: FileManagerDeps): FileManagerServ
     if (isRoot(target)) {
       throw new PreconditionError('Non puoi eliminare una cartella radice.');
     }
-    // Salvaguardia anti-perdita-dati: mai cancellare file collegati come esterni (di proprietà
-    // dell'utente, scaricati fuori app). Vanno prima scollegati ("Scollega esterno").
-    const externalUnder = db
-      .select({ localPath: schema.episodeFile.localPath })
-      .from(schema.episodeFile)
-      .where(and(eq(schema.episodeFile.downloadStatus, 'external'), trackedUnder(target)))
-      .all()
-      .filter((r) => {
-        if (!r.localPath) {
-          return false;
-        }
-        const lp = resolve(r.localPath);
-        return lp === target || lp.startsWith(target + sep);
-      });
-    if (externalUnder.length > 0) {
+    const root = await canonicalRootFor(target, roots());
+    if (!root) {
       throw new PreconditionError(
-        `La cartella contiene ${externalUnder.length} file collegati come esterni: scollegali (Scollega esterno) prima di eliminarla.`,
+        'Percorso fuori dalle cartelle configurate o containment fisico non verificabile.',
       );
     }
-    const root = rootOf(target);
     let isDir = false;
     try {
       isDir = (await stat(target)).isDirectory();
     } catch {
       isDir = false;
+    }
+
+    // Protegge sia i riferimenti collocati logicamente nel target (external) sia gli alias esterni
+    // che raggiungono lo stesso file/sottoalbero fisico. I downloaded logicamente sotto il target
+    // sono invece parte intenzionale dell'operazione e verranno sincronizzati da syncDeletedPaths.
+    const canonicalTarget = await canonicalPath(target);
+    if (!canonicalTarget) {
+      throw new PreconditionError('Containment fisico del percorso non verificabile.');
+    }
+    let protectedExternal = 0;
+    let protectedAliases = 0;
+    const activeRows = db
+      .select({
+        status: schema.episodeFile.downloadStatus,
+        localPath: schema.episodeFile.localPath,
+      })
+      .from(schema.episodeFile)
+      .where(inArray(schema.episodeFile.downloadStatus, ['downloaded', 'external']))
+      .all();
+    for (const row of activeRows) {
+      if (!row.localPath) {
+        continue;
+      }
+      const logicalPath = resolve(row.localPath);
+      const logicallyTargeted = isDir ? pathIsInside(target, logicalPath) : logicalPath === target;
+      const physicalPath = await canonicalPath(logicalPath);
+      const physicallyTargeted =
+        physicalPath !== null &&
+        (isDir ? pathIsInside(canonicalTarget, physicalPath) : physicalPath === canonicalTarget);
+      if (!logicallyTargeted && !physicallyTargeted) {
+        continue;
+      }
+      if (row.status === 'external') {
+        protectedExternal += 1;
+      } else if (physicallyTargeted && !logicallyTargeted) {
+        protectedAliases += 1;
+      }
+    }
+    if (protectedExternal > 0) {
+      throw new PreconditionError(
+        `Il percorso coinvolge ${protectedExternal} file collegati come esterni: scollegali prima di eliminarlo.`,
+      );
+    }
+    if (protectedAliases > 0) {
+      throw new PreconditionError(
+        `Il percorso è condiviso con ${protectedAliases} file gestiti fuori dallo scope selezionato.`,
+      );
     }
     // Cestino (soft-delete): sposta in `.trash` invece di cancellare subito, così è recuperabile.
     if (config.get('trashEnabled') && root) {
@@ -399,7 +441,25 @@ export function createFileManagerService(deps: FileManagerDeps): FileManagerServ
     return { ok: true };
   }
 
-  return {
+  /**
+   * Il payload può essere un elemento normale nella voce oppure un symlink interno alla root
+   * configurata. Un link diretto fuori root è sempre rifiutato prima di list/restore.
+   */
+  async function trashPayloadIsConfined(
+    entryDir: string,
+    name: string,
+    configuredRoot: string,
+  ): Promise<boolean> {
+    const payload = await canonicalPath(join(entryDir, name));
+    const canonicalConfiguredRoot = await canonicalPath(configuredRoot);
+    return (
+      payload !== null &&
+      (pathIsInside(entryDir, payload) ||
+        (canonicalConfiguredRoot !== null && pathIsInside(canonicalConfiguredRoot, payload)))
+    );
+  }
+
+  const unlocked: FileManagerService = {
     async list(path) {
       if (!path || path.trim() === '' || !rootOf(path)) {
         return listRoots();
@@ -840,15 +900,21 @@ export function createFileManagerService(deps: FileManagerDeps): FileManagerServ
     async trashList(): Promise<TrashList> {
       const entries: TrashEntry[] = [];
       for (const root of roots()) {
-        const trashRoot = join(root, TRASH_DIR);
+        const trashRoot = await canonicalTrashRoot(root);
+        if (!trashRoot) {
+          continue;
+        }
         const dirents = await readdir(trashRoot, { withFileTypes: true }).catch(() => []);
         for (const d of dirents) {
           if (!d.isDirectory() || !TRASH_ID.test(d.name)) {
             continue;
           }
-          const entryDir = join(trashRoot, d.name);
+          const entryDir = await canonicalTrashEntry(trashRoot, d.name);
+          if (!entryDir) {
+            continue;
+          }
           const info = await readTrashInfo(entryDir);
-          if (!info) {
+          if (!info || !(await trashPayloadIsConfined(entryDir, info.name, root))) {
             continue;
           }
           let size: number | null = null;
@@ -876,14 +942,27 @@ export function createFileManagerService(deps: FileManagerDeps): FileManagerServ
         throw new PreconditionError('Id voce cestino non valido.');
       }
       for (const root of roots()) {
-        const entryDir = join(root, TRASH_DIR, id);
+        const trashRoot = await canonicalTrashRoot(root);
+        if (!trashRoot) {
+          continue;
+        }
+        const entryDir = await canonicalTrashEntry(trashRoot, id);
+        if (!entryDir) {
+          continue;
+        }
         const info = await readTrashInfo(entryDir);
-        if (!info) {
+        if (!info || !(await trashPayloadIsConfined(entryDir, info.name, root))) {
           continue;
         }
         const moved = join(entryDir, info.name);
-        // Il percorso originale deve essere ancora dentro una root configurata.
-        const dest = assertInside(info.originalPath);
+        const dest = resolve(info.originalPath);
+        // Il parent deve esistere ed essere confinato sia logicamente sia fisicamente nella stessa
+        // root. atomicMove non può quindi creare directory attraverso un junction esterno.
+        if (!(await canonicalRootFor(dirname(dest), [root]))) {
+          throw new PreconditionError(
+            'Percorso originale fuori root o containment del parent non verificabile.',
+          );
+        }
         if (await pathExists(dest)) {
           throw new PreconditionError(
             'Esiste già un elemento al percorso originale: rinominalo o spostalo prima di ripristinare.',
@@ -899,13 +978,20 @@ export function createFileManagerService(deps: FileManagerDeps): FileManagerServ
     async trashEmpty(): Promise<FileOpResult> {
       let count = 0;
       for (const root of roots()) {
-        const trashRoot = join(root, TRASH_DIR);
+        const trashRoot = await canonicalTrashRoot(root);
+        if (!trashRoot) {
+          continue;
+        }
         const dirents = await readdir(trashRoot, { withFileTypes: true }).catch(() => []);
         for (const d of dirents) {
-          if (!d.isDirectory()) {
+          if (!d.isDirectory() || !TRASH_ID.test(d.name)) {
             continue;
           }
-          await rm(join(trashRoot, d.name), { recursive: true, force: true }).catch(() => {});
+          const entryDir = await canonicalTrashEntry(trashRoot, d.name);
+          if (!entryDir) {
+            continue;
+          }
+          await rm(entryDir, { recursive: true, force: true }).catch(() => {});
           count += 1;
         }
       }
@@ -916,16 +1002,23 @@ export function createFileManagerService(deps: FileManagerDeps): FileManagerServ
       const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
       let removed = 0;
       for (const root of roots()) {
-        const trashRoot = join(root, TRASH_DIR);
+        const trashRoot = await canonicalTrashRoot(root);
+        if (!trashRoot) {
+          continue;
+        }
         const dirents = await readdir(trashRoot, { withFileTypes: true }).catch(() => []);
         for (const d of dirents) {
-          if (!d.isDirectory()) {
+          if (!d.isDirectory() || !TRASH_ID.test(d.name)) {
             continue;
           }
-          const entryDir = join(trashRoot, d.name);
+          const entryDir = await canonicalTrashEntry(trashRoot, d.name);
+          if (!entryDir) {
+            continue;
+          }
           const info = await readTrashInfo(entryDir);
           const deletedAtMs = info ? new Date(info.deletedAt).getTime() : 0;
-          // Senza metadati validi o oltre la retention: elimina definitivamente.
+          // Senza metadati validi o oltre la retention: elimina definitivamente, ma solo una voce
+          // fisicamente confinata nel namespace `.trash` già validato.
           if (!info || Number.isNaN(deletedAtMs) || deletedAtMs < cutoff) {
             await rm(entryDir, { recursive: true, force: true }).catch(() => {});
             removed += 1;
@@ -934,5 +1027,26 @@ export function createFileManagerService(deps: FileManagerDeps): FileManagerServ
       }
       return removed;
     },
+  };
+
+  return {
+    list: (path) => coordinator.runExclusive(() => unlocked.list(path)),
+    rename: (path, newName) => coordinator.runExclusive(() => unlocked.rename(path, newName)),
+    move: (path, destDir) => coordinator.runExclusive(() => unlocked.move(path, destDir)),
+    remove: (path) => coordinator.runExclusive(() => unlocked.remove(path)),
+    findDuplicates: () => coordinator.runExclusive(() => unlocked.findDuplicates()),
+    dedupeMove: (paths) => coordinator.runExclusive(() => unlocked.dedupeMove(paths)),
+    mkdir: (parent, name) => coordinator.runExclusive(() => unlocked.mkdir(parent, name)),
+    relink: (path, episodeFileId) =>
+      coordinator.runExclusive(() => unlocked.relink(path, episodeFileId)),
+    linkExternalFolder: (path, animeId, language) =>
+      coordinator.runExclusive(() => unlocked.linkExternalFolder(path, animeId, language)),
+    renameToScheme: (path) => coordinator.runExclusive(() => unlocked.renameToScheme(path)),
+    pruneEmpty: (path) => coordinator.runExclusive(() => unlocked.pruneEmpty(path)),
+    trashList: () => coordinator.runExclusive(() => unlocked.trashList()),
+    trashRestore: (id) => coordinator.runExclusive(() => unlocked.trashRestore(id)),
+    trashEmpty: () => coordinator.runExclusive(() => unlocked.trashEmpty()),
+    pruneTrash: (retentionDays) =>
+      coordinator.runExclusive(() => unlocked.pruneTrash(retentionDays)),
   };
 }

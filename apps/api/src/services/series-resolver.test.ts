@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { schema } from '../db';
 import { createTestDb } from '../test/helpers';
 import { createSeriesResolver } from './series-resolver';
@@ -176,5 +176,68 @@ describe('SeriesResolver', () => {
       seasonNumber: 3,
       seriesSlug: 'my-series',
     });
+  });
+
+  it('membersOf usa la stessa identità per dati API, relazioni, slug e override', () => {
+    insertAnime(db, {
+      id: 'api-1',
+      slug: 'api-one',
+      title: 'API One',
+      seriesId: 'api-series',
+      seasonNumber: 1,
+    });
+    insertAnime(db, {
+      id: 'api-2',
+      slug: 'api-two',
+      title: 'API Two',
+      seriesId: 'api-series',
+      seasonNumber: 2,
+    });
+
+    insertAnime(db, { id: 'rel-1', slug: 'relation-one', title: 'Relation One' });
+    insertAnime(db, { id: 'rel-2', slug: 'relation-two', title: 'Relation Two' });
+    insertRelation(db, 'rel-2', 'rel-1', 'PREQUEL');
+    insertRelation(db, 'rel-1', 'rel-2', 'SEQUEL');
+
+    insertAnime(db, { id: 'slug-1', slug: 'slug-series', title: 'Slug One' });
+    insertAnime(db, { id: 'slug-2', slug: 'slug-series-2nd-season', title: 'Slug Two' });
+
+    insertAnime(db, { id: 'override-root', slug: 'override-root', title: 'Override Root' });
+    insertAnime(db, { id: 'override-member', slug: 'separate-title', title: 'Override Member' });
+    db.insert(schema.seriesOverride)
+      .values({
+        animeId: 'override-member',
+        seriesAnimeId: 'override-root',
+        seasonNumber: 2,
+        updatedAt: new Date().toISOString(),
+      })
+      .run();
+
+    insertAnime(db, { id: 'unrelated', slug: 'unrelated', title: 'Unrelated' });
+
+    const resolver = createSeriesResolver({ db });
+    expect(resolver.membersOf('api-2')).toEqual(['api-1', 'api-2']);
+    expect(resolver.membersOf('rel-2')).toEqual(['rel-1', 'rel-2']);
+    expect(resolver.membersOf('slug-2')).toEqual(['slug-1', 'slug-2']);
+    expect(resolver.membersOf('override-member')).toEqual(['override-member', 'override-root']);
+    expect(resolver.membersOf('unrelated')).toEqual(['unrelated']);
+    expect(resolver.membersOf('missing')).toEqual(['missing']);
+  });
+
+  it('membersOf usa un numero costante di query indipendente dalla dimensione del catalogo', () => {
+    for (let index = 1; index <= 25; index += 1) {
+      insertAnime(db, {
+        id: `bulk-${index}`,
+        slug: `bulk-${index}`,
+        title: `Bulk ${index}`,
+        seriesId: 'bulk-series',
+        seasonNumber: index,
+      });
+    }
+    const resolver = createSeriesResolver({ db });
+    const selectSpy = vi.spyOn(db, 'select');
+
+    expect(resolver.membersOf('bulk-20')).toHaveLength(25);
+    expect(selectSpy).toHaveBeenCalledTimes(3);
   });
 });

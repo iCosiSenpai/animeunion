@@ -1,13 +1,16 @@
 import { existsSync } from 'node:fs';
-import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { Language } from '@animeunion/shared';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { schema } from '../db';
+import type { moveToTrash } from '../lib/trash';
 import { createTestDb, testLogger } from '../test/helpers';
 import { createConfigService } from './config-service';
+import { createFileManagerService } from './file-manager-service';
+import { createFileMutationCoordinator } from './file-mutation-coordinator';
 import { createLibraryService } from './library-service';
 import { createRenamerService } from './renamer-service';
 import { createSeriesResolver } from './series-resolver';
@@ -84,13 +87,33 @@ function insertFile(
     .run();
 }
 
-function makeService(db: ReturnType<typeof createTestDb>, basePath: string) {
+function makeService(
+  db: ReturnType<typeof createTestDb>,
+  basePath: string,
+  moveToTrashImpl?: typeof moveToTrash,
+) {
   const config = createConfigService({ db });
   config.set('seriesPathSub', basePath);
   const renamer = createRenamerService({ db, config });
   const resolver = createSeriesResolver({ db });
-  const service = createLibraryService({ db, config, renamer, resolver, logger: testLogger });
-  return { service, renamer, config };
+  const coordinator = createFileMutationCoordinator();
+  const service = createLibraryService({
+    db,
+    config,
+    renamer,
+    resolver,
+    logger: testLogger,
+    coordinator,
+    ...(moveToTrashImpl ? { moveToTrashImpl } : {}),
+  });
+  const files = createFileManagerService({
+    db,
+    config,
+    renamer,
+    logger: testLogger,
+    coordinator,
+  });
+  return { service, files, renamer, config, coordinator };
 }
 
 /** Crea il file dell'episodio nel path che il renamer si aspetta (10 byte). */
@@ -261,7 +284,7 @@ describe('LibraryService', () => {
     insertFile(db, 'file-u-1', 'ep-u-1', 'SUB_ITA', 'external', userFile);
     const { service } = makeService(db, tmpDir);
 
-    const res = service.unlinkExternal({ episodeFileId: 'file-u-1' });
+    const res = await service.unlinkExternal({ episodeFileId: 'file-u-1' });
     expect(res).toEqual({ ok: true, unlinked: 1 });
 
     const row = db
@@ -277,14 +300,14 @@ describe('LibraryService', () => {
     expect(service.list()).toHaveLength(0);
   });
 
-  it('unlinkExternal non tocca i file downloaded (no-op di sicurezza)', () => {
+  it('unlinkExternal non tocca i file downloaded (no-op di sicurezza)', async () => {
     const db = createTestDb();
     insertAnime(db, 'show-d');
     insertEpisode(db, 'ep-d-1', 'show-d', 1);
     insertFile(db, 'file-d-1', 'ep-d-1', 'SUB_ITA', 'downloaded', '/somewhere/x.mp4');
     const { service } = makeService(db, tmpDir);
 
-    const res = service.unlinkExternal({ episodeFileId: 'file-d-1' });
+    const res = await service.unlinkExternal({ episodeFileId: 'file-d-1' });
     expect(res).toEqual({ ok: true, unlinked: 0 });
     const row = db
       .select()
@@ -295,7 +318,7 @@ describe('LibraryService', () => {
     expect(row?.localPath).toBe('/somewhere/x.mp4');
   });
 
-  it('unlinkExternal per-entry scollega gli external della lingua, lascia i downloaded', () => {
+  it('unlinkExternal per-entry scollega gli external della lingua, lascia i downloaded', async () => {
     const db = createTestDb();
     insertAnime(db, 'show-m');
     insertEpisode(db, 'ep-m-1', 'show-m', 1);
@@ -310,7 +333,7 @@ describe('LibraryService', () => {
         ?.downloadStatus;
 
     // Solo SUB_ITA: scollega l'unico external SUB, non tocca il downloaded né il DUB external.
-    expect(service.unlinkExternal({ animeId: 'show-m', language: 'SUB_ITA' })).toEqual({
+    expect(await service.unlinkExternal({ animeId: 'show-m', language: 'SUB_ITA' })).toEqual({
       ok: true,
       unlinked: 1,
     });
@@ -319,8 +342,52 @@ describe('LibraryService', () => {
     expect(statusOf('file-m-3')).toBe('external');
 
     // Senza language: scollega tutti gli external rimasti (il DUB).
-    expect(service.unlinkExternal({ animeId: 'show-m' })).toEqual({ ok: true, unlinked: 1 });
+    expect(await service.unlinkExternal({ animeId: 'show-m' })).toEqual({ ok: true, unlinked: 1 });
     expect(statusOf('file-m-3')).toBe('not_downloaded');
+  });
+
+  it('serializza unlinkExternal dopo linkExternalFolder già accodato', async () => {
+    const db = createTestDb();
+    insertAnime(db, 'show-unlink-race');
+    insertEpisode(db, 'ep-unlink-race', 'show-unlink-race', 1);
+    const season = join(tmpDir, 'External', 'Season 01');
+    const external = join(season, 'Show - S01E01.mkv');
+    await mkdir(season, { recursive: true });
+    await writeFile(external, 'external-video');
+    insertFile(db, 'file-unlink-race', 'ep-unlink-race', 'SUB_ITA', 'external', external);
+    const { service, files, coordinator } = makeService(db, tmpDir);
+
+    let enter = () => {};
+    let release = () => {};
+    const entered = new Promise<void>((resolve) => {
+      enter = resolve;
+    });
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const blocker = coordinator.runExclusive(async () => {
+      enter();
+      await released;
+    });
+    await entered;
+
+    // L'ordine autorevole è link -> unlink. Senza coordinamento di unlink, quest'ultimo correrebbe
+    // subito durante il blocker e il link successivo lascerebbe erroneamente lo stato external.
+    const link = files.linkExternalFolder(season, 'show-unlink-race', 'SUB_ITA');
+    const unlink = service.unlinkExternal({ episodeFileId: 'file-unlink-race' });
+    release();
+    await blocker;
+    expect(await link).toMatchObject({ linked: 1 });
+    expect(await unlink).toEqual({ ok: true, unlinked: 1 });
+
+    const row = db
+      .select()
+      .from(schema.episodeFile)
+      .where(eq(schema.episodeFile.id, 'file-unlink-race'))
+      .get();
+    expect(row?.downloadStatus).toBe('not_downloaded');
+    expect(row?.localPath).toBeNull();
+    expect(existsSync(external)).toBe(true);
   });
 
   it('segna come mancante un file che era stato cancellato', async () => {
@@ -373,6 +440,133 @@ describe('LibraryService', () => {
     const { service } = makeService(db, tmpDir);
     expect(service.list()).toEqual([]);
     expect(service.stats()).toEqual({ totalEpisodes: 0, totalSizeBytes: 0, totalSeries: 0 });
+  });
+
+  it('deleteEpisodeFile e deleteOrphans non cancellano mai un file external', async () => {
+    const db = createTestDb();
+    insertAnime(db, 'show-protected-direct');
+    insertEpisode(db, 'ep-protected-direct', 'show-protected-direct', 1);
+    const userFile = join(tmpDir, 'User files', 'external.mkv');
+    await mkdir(dirname(userFile), { recursive: true });
+    await writeFile(userFile, 'external-bytes');
+    insertFile(db, 'file-protected-direct', 'ep-protected-direct', 'SUB_ITA', 'external', userFile);
+    const { service } = makeService(db, tmpDir);
+
+    expect(await service.deleteEpisodeFile('file-protected-direct')).toEqual({
+      deletedFiles: 0,
+      freedBytes: 0,
+      failedFiles: 0,
+      protectedExternalFiles: 1,
+    });
+    expect(await service.deleteOrphans([userFile])).toEqual({
+      deletedFiles: 0,
+      freedBytes: 0,
+      failedFiles: 0,
+      protectedExternalFiles: 1,
+    });
+    expect(existsSync(userFile)).toBe(true);
+    const row = db
+      .select()
+      .from(schema.episodeFile)
+      .where(eq(schema.episodeFile.id, 'file-protected-direct'))
+      .get();
+    expect(row?.downloadStatus).toBe('external');
+    expect(row?.localPath).toBe(userFile);
+  });
+
+  it('deleteEntry con deleteFolder preserva la cartella che contiene un external', async () => {
+    const db = createTestDb();
+    insertAnime(db, 'show-protected-folder');
+    insertEpisode(db, 'ep-protected-downloaded', 'show-protected-folder', 1);
+    insertEpisode(db, 'ep-protected-external', 'show-protected-folder', 2);
+    const { service, renamer, config } = makeService(db, tmpDir);
+    config.set('trashEnabled', false);
+    const downloaded = await placeEpisode(renamer, 'show-protected-folder', 1, 'SUB_ITA');
+    const external = join(dirname(downloaded), 'user-external.mkv');
+    await writeFile(external, 'external-bytes');
+    insertFile(
+      db,
+      'file-protected-downloaded',
+      'ep-protected-downloaded',
+      'SUB_ITA',
+      'downloaded',
+      downloaded,
+    );
+    insertFile(
+      db,
+      'file-protected-external',
+      'ep-protected-external',
+      'SUB_ITA',
+      'external',
+      external,
+    );
+
+    const result = await service.deleteEntry({
+      animeId: 'show-protected-folder',
+      language: 'SUB_ITA',
+      deleteFolder: true,
+    });
+
+    expect(result.deletedFiles).toBe(1);
+    expect(result.failedFiles).toBe(0);
+    expect(result.protectedExternalFiles).toBe(1);
+    expect(existsSync(downloaded)).toBe(false);
+    expect(existsSync(external)).toBe(true);
+    expect(existsSync(dirname(external))).toBe(true);
+    const externalRow = db
+      .select()
+      .from(schema.episodeFile)
+      .where(eq(schema.episodeFile.id, 'file-protected-external'))
+      .get();
+    expect(externalRow?.downloadStatus).toBe('external');
+    expect(externalRow?.localPath).toBe(external);
+  });
+
+  it('deleteSeries con cestino sposta solo i download se la cartella contiene un external', async () => {
+    const db = createTestDb();
+    insertAnime(db, 'show-protected-trash');
+    insertEpisode(db, 'ep-protected-trash-downloaded', 'show-protected-trash', 1);
+    insertEpisode(db, 'ep-protected-trash-external', 'show-protected-trash', 2);
+    const { service, renamer, config } = makeService(db, tmpDir);
+    config.set('trashEnabled', true);
+    const downloaded = await placeEpisode(renamer, 'show-protected-trash', 1, 'SUB_ITA');
+    const external = join(dirname(downloaded), 'user-external.mkv');
+    await writeFile(external, 'external-bytes');
+    insertFile(
+      db,
+      'file-protected-trash-downloaded',
+      'ep-protected-trash-downloaded',
+      'SUB_ITA',
+      'downloaded',
+      downloaded,
+    );
+    insertFile(
+      db,
+      'file-protected-trash-external',
+      'ep-protected-trash-external',
+      'SUB_ITA',
+      'external',
+      external,
+    );
+
+    const result = await service.deleteSeries({
+      animeId: 'show-protected-trash',
+      deleteFolder: true,
+    });
+
+    expect(result.deletedFiles).toBe(1);
+    expect(result.failedFiles).toBe(0);
+    expect(result.protectedExternalFiles).toBe(1);
+    expect(existsSync(downloaded)).toBe(false);
+    expect(existsSync(external)).toBe(true);
+    expect((await readdir(join(tmpDir, '.trash'))).length).toBe(1);
+    const externalRow = db
+      .select()
+      .from(schema.episodeFile)
+      .where(eq(schema.episodeFile.id, 'file-protected-trash-external'))
+      .get();
+    expect(externalRow?.downloadStatus).toBe('external');
+    expect(externalRow?.localPath).toBe(external);
   });
 
   it('deleteEpisodeFile cancella il file, azzera la riga, pulisce coda e cartelle', async () => {
@@ -559,6 +753,62 @@ describe('LibraryService', () => {
     expect(existsSync(orphan)).toBe(false);
   });
 
+  it('deleteOrphans rifiuta una directory anche se contiene file active/external', async () => {
+    const db = createTestDb();
+    insertAnime(db, 'orphan-dir-show');
+    insertEpisode(db, 'orphan-dir-episode', 'orphan-dir-show', 1);
+    const directory = join(tmpDir, 'Dangerous directory');
+    const external = join(directory, 'external.mkv');
+    await mkdir(directory, { recursive: true });
+    await writeFile(external, 'user-video');
+    insertFile(db, 'orphan-dir-file', 'orphan-dir-episode', 'SUB_ITA', 'external', external);
+    const { service, config } = makeService(db, tmpDir);
+    config.set('trashEnabled', true);
+
+    const res = await service.deleteOrphans([directory]);
+    expect(res).toMatchObject({ deletedFiles: 0, failedFiles: 1 });
+    expect(existsSync(directory)).toBe(true);
+    expect(existsSync(external)).toBe(true);
+    const row = db
+      .select()
+      .from(schema.episodeFile)
+      .where(eq(schema.episodeFile.id, 'orphan-dir-file'))
+      .get();
+    expect(row?.downloadStatus).toBe('external');
+  });
+
+  it('deleteOrphans rifiuta junction e symlink invece di spostarli nel cestino', async () => {
+    const db = createTestDb();
+    const { service, config } = makeService(db, tmpDir);
+    config.set('trashEnabled', true);
+
+    const physicalDirectory = join(tmpDir, 'Physical');
+    const physicalFile = join(physicalDirectory, 'episode.mkv');
+    const junction = join(tmpDir, 'Junction');
+    await mkdir(physicalDirectory, { recursive: true });
+    await writeFile(physicalFile, 'physical-video');
+    await symlink(physicalDirectory, junction, 'junction');
+    const aliases = [junction];
+
+    const fileAlias = join(tmpDir, 'episode-alias.mkv');
+    try {
+      await symlink(physicalFile, fileAlias, 'file');
+      aliases.push(fileAlias);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EPERM') {
+        throw error;
+      }
+    }
+
+    const res = await service.deleteOrphans(aliases);
+    expect(res).toMatchObject({ deletedFiles: 0, failedFiles: aliases.length });
+    expect(existsSync(junction)).toBe(true);
+    expect(existsSync(physicalFile)).toBe(true);
+    if (aliases.includes(fileAlias)) {
+      expect(existsSync(fileAlias)).toBe(true);
+    }
+  });
+
   it('deleteSeries cancella tutte le lingue della serie', async () => {
     const db = createTestDb();
     insertAnime(db, 'show-s');
@@ -642,6 +892,154 @@ describe('LibraryService', () => {
     expect(groups.find((g) => g.category === 'tv')?.anime.id).toBe('tv-y');
   });
 
+  it.each([false, true])(
+    'deleteEntry con deleteFolder preserva il DUB attivo nella stessa cartella (trash=%s)',
+    async (trashEnabled) => {
+      const db = createTestDb();
+      insertAnime(db, 'show-shared-folder');
+      insertEpisode(db, 'ep-shared-folder', 'show-shared-folder', 1);
+      insertFile(db, 'file-shared-sub', 'ep-shared-folder', 'SUB_ITA');
+      insertFile(db, 'file-shared-dub', 'ep-shared-folder', 'DUB_ITA');
+      const { service, renamer, config } = makeService(db, tmpDir);
+      config.set('trashEnabled', trashEnabled);
+      const sub = await placeEpisode(renamer, 'show-shared-folder', 1, 'SUB_ITA');
+      const dub = await placeEpisode(renamer, 'show-shared-folder', 1, 'DUB_ITA');
+      expect(dirname(sub)).toBe(dirname(dub));
+      await service.scan();
+
+      const result = await service.deleteEntry({
+        animeId: 'show-shared-folder',
+        language: 'SUB_ITA',
+        deleteFolder: true,
+      });
+
+      expect(result).toMatchObject({
+        deletedFiles: 1,
+        failedFiles: 0,
+        protectedNonTargetFiles: 1,
+      });
+      expect(existsSync(sub)).toBe(false);
+      expect(existsSync(dub)).toBe(true);
+      expect(existsSync(dirname(dub))).toBe(true);
+      const dubRow = db
+        .select()
+        .from(schema.episodeFile)
+        .where(eq(schema.episodeFile.id, 'file-shared-dub'))
+        .get();
+      expect(dubRow?.downloadStatus).toBe('downloaded');
+      expect(dubRow?.localPath).toBe(dub);
+    },
+  );
+
+  it('deleteSeries usa i membri risolti dalle relazioni e rimuove entrambe le stagioni', async () => {
+    const db = createTestDb();
+    insertAnime(db, 'chain-s1', { seriesId: null, seasonNumber: null });
+    insertAnime(db, 'chain-s2', { seriesId: null, seasonNumber: null });
+    db.insert(schema.animeRelation)
+      .values({ animeId: 'chain-s2', relatedAnimeId: 'chain-s1', relationType: 'PREQUEL' })
+      .run();
+    db.insert(schema.animeRelation)
+      .values({ animeId: 'chain-s1', relatedAnimeId: 'chain-s2', relationType: 'SEQUEL' })
+      .run();
+    insertEpisode(db, 'ep-chain-s1', 'chain-s1', 1);
+    insertEpisode(db, 'ep-chain-s2', 'chain-s2', 1);
+    insertFile(db, 'file-chain-s1', 'ep-chain-s1', 'SUB_ITA');
+    insertFile(db, 'file-chain-s2', 'ep-chain-s2', 'SUB_ITA');
+    const { service, renamer, config } = makeService(db, tmpDir);
+    config.set('trashEnabled', false);
+    const s1 = await placeEpisode(renamer, 'chain-s1', 1, 'SUB_ITA');
+    const s2 = await placeEpisode(renamer, 'chain-s2', 1, 'SUB_ITA');
+    await service.scan();
+
+    const result = await service.deleteSeries({ animeId: 'chain-s2' });
+
+    expect(result).toEqual({ deletedFiles: 2, freedBytes: 20, failedFiles: 0 });
+    expect(existsSync(s1)).toBe(false);
+    expect(existsSync(s2)).toBe(false);
+  });
+
+  it('serializza linkExternalFolder prima di deleteEntry e rivalida external sotto lock', async () => {
+    const db = createTestDb();
+    insertAnime(db, 'show-concurrent');
+    insertEpisode(db, 'ep-concurrent-sub', 'show-concurrent', 1);
+    insertEpisode(db, 'ep-concurrent-external', 'show-concurrent', 2);
+    const { service, files, renamer, config, coordinator } = makeService(db, tmpDir);
+    config.set('trashEnabled', false);
+    const downloaded = await placeEpisode(renamer, 'show-concurrent', 1, 'SUB_ITA');
+    const external = join(dirname(downloaded), 'Show Concurrent - 02.mkv');
+    await writeFile(external, 'external-bytes');
+    insertFile(db, 'file-concurrent-sub', 'ep-concurrent-sub', 'SUB_ITA', 'downloaded', downloaded);
+    insertFile(db, 'file-concurrent-dub', 'ep-concurrent-external', 'DUB_ITA');
+
+    let enterLock = () => {};
+    let releaseLock = () => {};
+    const entered = new Promise<void>((resolve) => {
+      enterLock = resolve;
+    });
+    const released = new Promise<void>((resolve) => {
+      releaseLock = resolve;
+    });
+    const blocker = coordinator.runExclusive(async () => {
+      enterLock();
+      await released;
+    });
+    await entered;
+
+    const linkPromise = files.linkExternalFolder(dirname(downloaded), 'show-concurrent', 'DUB_ITA');
+    const deletePromise = service.deleteEntry({
+      animeId: 'show-concurrent',
+      language: 'SUB_ITA',
+      deleteFolder: true,
+    });
+    releaseLock();
+
+    const [linkResult, deleteResult] = await Promise.all([linkPromise, deletePromise]);
+    await blocker;
+    expect(linkResult.linked).toBe(1);
+    expect(deleteResult).toMatchObject({
+      deletedFiles: 1,
+      failedFiles: 0,
+      protectedExternalFiles: 1,
+    });
+    expect(existsSync(downloaded)).toBe(false);
+    expect(existsSync(external)).toBe(true);
+    const externalRow = db
+      .select()
+      .from(schema.episodeFile)
+      .where(eq(schema.episodeFile.id, 'file-concurrent-dub'))
+      .get();
+    expect(externalRow?.downloadStatus).toBe('external');
+    expect(externalRow?.localPath).toBe(external);
+  });
+
+  it('con cestino attivo non fa hard-delete se il file è fuori dalle root configurate', async () => {
+    const db = createTestDb();
+    insertAnime(db, 'show-outside-root');
+    insertEpisode(db, 'ep-outside-root', 'show-outside-root', 1);
+    const outsideRoot = await mkdtemp(join(tmpdir(), 'au-library-outside-'));
+    const outsideFile = join(outsideRoot, 'outside.mkv');
+    try {
+      await writeFile(outsideFile, 'outside-video');
+      insertFile(db, 'file-outside-root', 'ep-outside-root', 'SUB_ITA', 'downloaded', outsideFile);
+      const { service, config } = makeService(db, tmpDir);
+      config.set('trashEnabled', true);
+
+      const result = await service.deleteEpisodeFile('file-outside-root');
+
+      expect(result).toEqual({ deletedFiles: 0, freedBytes: 0, failedFiles: 1 });
+      expect(existsSync(outsideFile)).toBe(true);
+      const row = db
+        .select()
+        .from(schema.episodeFile)
+        .where(eq(schema.episodeFile.id, 'file-outside-root'))
+        .get();
+      expect(row?.downloadStatus).toBe('downloaded');
+      expect(row?.localPath).toBe(outsideFile);
+    } finally {
+      await rm(outsideRoot, { recursive: true, force: true });
+    }
+  });
+
   // --- Step 7: Hardening P2 ---
 
   it('scan() trova file video in sottocartelle annidate (walk ricorsivo)', async () => {
@@ -658,5 +1056,169 @@ describe('LibraryService', () => {
     const result = await service.scan();
     // Il file viene trovato da walk() e classificato come orfano (non tracciato nel DB).
     expect(result.orphans).toBe(1);
+  });
+});
+
+describe('LibraryService hardening path fisici', () => {
+  let root: string;
+
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), 'au-library-physical-'));
+  });
+
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true });
+  });
+
+  it.each(['external', 'downloaded'] as const)(
+    'preserva il target condiviso tramite junction con una riga %s fuori scope',
+    async (referenceStatus) => {
+      const db = createTestDb();
+      insertAnime(db, 'target-anime');
+      insertAnime(db, 'reference-anime');
+      insertEpisode(db, 'target-episode', 'target-anime', 1);
+      insertEpisode(db, 'reference-episode', 'reference-anime', 1);
+
+      const physicalDir = join(root, 'Physical', 'Season 01');
+      const targetPath = join(physicalDir, 'episode.mkv');
+      const aliasDir = join(root, 'Alias');
+      await mkdir(physicalDir, { recursive: true });
+      await writeFile(targetPath, 'shared-video');
+      await symlink(physicalDir, aliasDir, 'junction');
+      const aliasPath = join(aliasDir, 'episode.mkv');
+
+      insertFile(db, 'target-file', 'target-episode', 'SUB_ITA', 'downloaded', targetPath);
+      insertFile(db, 'reference-file', 'reference-episode', 'SUB_ITA', referenceStatus, aliasPath);
+      const { service, config } = makeService(db, root);
+      config.set('trashEnabled', false);
+
+      const result = await service.deleteEpisodeFile('target-file');
+
+      expect(result).toMatchObject({ deletedFiles: 0, failedFiles: 0 });
+      if (referenceStatus === 'external') {
+        expect(result.protectedExternalFiles).toBe(1);
+      } else {
+        expect(result.protectedNonTargetFiles).toBe(1);
+      }
+      expect(existsSync(targetPath)).toBe(true);
+      const targetRow = db
+        .select()
+        .from(schema.episodeFile)
+        .where(eq(schema.episodeFile.id, 'target-file'))
+        .get();
+      expect(targetRow?.downloadStatus).toBe('downloaded');
+      expect(targetRow?.localPath).toBe(targetPath);
+    },
+  );
+
+  it('rifiuta un target logico sotto root che tramite junction punta fuori root', async () => {
+    const db = createTestDb();
+    const outside = await mkdtemp(join(tmpdir(), 'au-library-outside-link-'));
+    try {
+      insertAnime(db, 'escape-anime');
+      insertEpisode(db, 'escape-episode', 'escape-anime', 1);
+      const outsideFile = join(outside, 'outside.mkv');
+      await writeFile(outsideFile, 'outside-video');
+      const escapeDir = join(root, 'Escape');
+      await symlink(outside, escapeDir, 'junction');
+      const linkedPath = join(escapeDir, 'outside.mkv');
+      insertFile(db, 'escape-file', 'escape-episode', 'SUB_ITA', 'downloaded', linkedPath);
+      const { service, config } = makeService(db, root);
+      config.set('trashEnabled', true);
+
+      const result = await service.deleteEpisodeFile('escape-file');
+
+      expect(result).toEqual({ deletedFiles: 0, freedBytes: 0, failedFiles: 1 });
+      expect(existsSync(linkedPath)).toBe(true);
+      expect(existsSync(outsideFile)).toBe(true);
+      const row = db
+        .select()
+        .from(schema.episodeFile)
+        .where(eq(schema.episodeFile.id, 'escape-file'))
+        .get();
+      expect(row?.downloadStatus).toBe('downloaded');
+      expect(row?.localPath).toBe(linkedPath);
+    } finally {
+      await rm(outside, { recursive: true, force: true });
+    }
+  });
+
+  it('deleteFolder con cestino rifiuta fail-closed una cartella symlink/junction', async () => {
+    const db = createTestDb();
+    insertAnime(db, 'linked-anime');
+    insertEpisode(db, 'linked-episode', 'linked-anime', 1);
+    const physicalFolder = join(root, 'Physical Series');
+    const physicalSeason = join(physicalFolder, 'Season 01');
+    const physicalFile = join(physicalSeason, 'episode.mkv');
+    const logicalFolder = join(root, 'Logical Series');
+    await mkdir(physicalSeason, { recursive: true });
+    await writeFile(physicalFile, 'physical-video');
+    await symlink(
+      process.platform === 'win32' ? physicalFolder : 'Physical Series',
+      logicalFolder,
+      process.platform === 'win32' ? 'junction' : 'dir',
+    );
+    const logicalFile = join(logicalFolder, 'Season 01', 'episode.mkv');
+    insertFile(db, 'linked-file', 'linked-episode', 'SUB_ITA', 'downloaded', logicalFile);
+    const { service, config } = makeService(db, root);
+    config.set('trashEnabled', true);
+
+    const result = await service.deleteEntry({
+      animeId: 'linked-anime',
+      language: 'SUB_ITA',
+      deleteFolder: true,
+    });
+
+    expect(result).toEqual({
+      deletedFiles: 0,
+      freedBytes: 0,
+      failedFiles: 0,
+      failedFolders: 1,
+    });
+    expect(existsSync(logicalFolder)).toBe(true);
+    expect(existsSync(physicalFolder)).toBe(true);
+    expect(existsSync(physicalFile)).toBe(true);
+    expect(existsSync(join(root, '.trash'))).toBe(false);
+    const row = db
+      .select()
+      .from(schema.episodeFile)
+      .where(eq(schema.episodeFile.id, 'linked-file'))
+      .get();
+    expect(row?.downloadStatus).toBe('downloaded');
+    expect(row?.localPath).toBe(logicalFile);
+  });
+
+  it('un errore sul move della cartella incrementa failedFolders e lascia file e DB intatti', async () => {
+    const db = createTestDb();
+    insertAnime(db, 'folder-failure');
+    insertEpisode(db, 'folder-failure-episode', 'folder-failure', 1);
+    const failingMove: typeof moveToTrash = async () => {
+      throw new Error('move cartella fallito');
+    };
+    const { service, renamer, config } = makeService(db, root, failingMove);
+    config.set('trashEnabled', true);
+    const file = await placeEpisode(renamer, 'folder-failure', 1, 'SUB_ITA');
+    insertFile(db, 'folder-failure-file', 'folder-failure-episode', 'SUB_ITA', 'downloaded', file);
+
+    const result = await service.deleteEntry({
+      animeId: 'folder-failure',
+      language: 'SUB_ITA',
+      deleteFolder: true,
+    });
+
+    expect(result).toEqual({
+      deletedFiles: 0,
+      freedBytes: 0,
+      failedFiles: 0,
+      failedFolders: 1,
+    });
+    expect(existsSync(file)).toBe(true);
+    const row = db
+      .select()
+      .from(schema.episodeFile)
+      .where(eq(schema.episodeFile.id, 'folder-failure-file'))
+      .get();
+    expect(row?.downloadStatus).toBe('downloaded');
+    expect(row?.localPath).toBe(file);
   });
 });

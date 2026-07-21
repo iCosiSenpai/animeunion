@@ -6,6 +6,7 @@ import { RATE_LIMIT_MAX, integrationRoutes } from './integration-routes';
 import { createCatalogService } from './services/catalog-service';
 import { createConfigService } from './services/config-service';
 import { createDownloadService } from './services/download-service';
+import { createFileMutationCoordinator } from './services/file-mutation-coordinator';
 import { createFollowService } from './services/follow-service';
 import { createRenamerService } from './services/renamer-service';
 import { createRequestAuthService } from './services/request-auth-service';
@@ -40,6 +41,7 @@ function buildCtx(opts: { downloadConfigured?: boolean } = {}) {
     config,
     renamer,
     logger: testLogger,
+    coordinator: createFileMutationCoordinator(),
   });
   const requestAuth = createRequestAuthService({ db });
   const requests = createRequestService({ db, catalog, resolver, follow, download, config });

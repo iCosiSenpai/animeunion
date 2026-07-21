@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
-import { readdir, realpath, rm, stat } from 'node:fs/promises';
-import { dirname, join, relative, resolve, sep } from 'node:path';
+import { lstat, readdir, rm, stat } from 'node:fs/promises';
+import { join, relative, resolve, sep } from 'node:path';
 import type {
   Language,
   LibraryDeleteResult,
@@ -14,9 +14,12 @@ import { and, eq, inArray } from 'drizzle-orm';
 import type { Db } from '../db';
 import { schema } from '../db';
 import { deleteFileAndPrune } from '../lib/download-fs';
+import { PreconditionError } from '../lib/errors';
 import type { Logger } from '../lib/logger';
+import { canonicalPath, canonicalRootFor, pathIsInside } from '../lib/path-containment';
 import { moveToTrash } from '../lib/trash';
 import type { ConfigService } from './config-service';
+import type { FileMutationCoordinator } from './file-mutation-coordinator';
 import { loadGenresByAnimeIds, toAnimeSummary } from './mappers';
 import type { RenamerService } from './renamer-service';
 import type { SeriesResolver } from './series-resolver';
@@ -59,7 +62,7 @@ export interface LibraryService {
     episodeFileId?: string;
     animeId?: string;
     language?: Language;
-  }): LibraryUnlinkExternalResult;
+  }): Promise<LibraryUnlinkExternalResult>;
 }
 
 export interface LibraryServiceDeps {
@@ -68,6 +71,8 @@ export interface LibraryServiceDeps {
   renamer: RenamerService;
   resolver: SeriesResolver;
   logger: Logger;
+  coordinator: FileMutationCoordinator;
+  moveToTrashImpl?: typeof moveToTrash;
 }
 
 const VIDEO_EXTENSIONS = new Set(['.mp4', '.mkv', '.avi', '.mov', '.webm']);
@@ -128,7 +133,8 @@ interface ExpectedEntry {
 }
 
 export function createLibraryService(deps: LibraryServiceDeps): LibraryService {
-  const { db, config, renamer, resolver, logger } = deps;
+  const { db, config, renamer, resolver, logger, coordinator } = deps;
+  const moveToTrashFile = deps.moveToTrashImpl ?? moveToTrash;
 
   function buildExpectedEntries(): ExpectedEntry[] {
     const rows = db
@@ -176,30 +182,10 @@ export function createLibraryService(deps: LibraryServiceDeps): LibraryService {
     });
   }
 
-  /** Root da usare per il pruning delle cartelle vuote: quella che contiene il file. */
-  function pruneRootFor(filePath: string): string {
-    const abs = resolve(filePath);
-    for (const root of config.distinctDownloadRoots()) {
-      const absRoot = resolve(root);
-      if (abs === absRoot || abs.startsWith(absRoot + sep)) {
-        return root;
-      }
-    }
-    return dirname(abs); // fallback: nessun pruning oltre la cartella diretta
-  }
-
-  /** Root configurata che contiene `filePath`, o null se il path è fuori da tutte le root.
-   *  A differenza di `pruneRootFor` NON ha fallback su dirname: serve al cestino, che deve
-   *  spostare dentro `<root>/.trash` solo se il file vive davvero sotto una root. */
-  function rootForTrash(filePath: string): string | null {
-    const abs = resolve(filePath);
-    for (const root of config.distinctDownloadRoots()) {
-      const absRoot = resolve(root);
-      if (abs === absRoot || abs.startsWith(absRoot + sep)) {
-        return absRoot;
-      }
-    }
-    return null;
+  /** Root configurata che contiene fisicamente `filePath`; fallisce chiuso su path mancanti o
+   *  symlink/junction che escono dalle root configurate. */
+  async function rootForDelete(filePath: string): Promise<string | null> {
+    return canonicalRootFor(filePath, config.distinctDownloadRoots());
   }
 
   /** True se il cestino (soft-delete) è attivo. Le eliminazioni della libreria, come quelle del
@@ -208,16 +194,19 @@ export function createLibraryService(deps: LibraryServiceDeps): LibraryService {
     return config.get('trashEnabled');
   }
 
-  /** Elimina un file: se il cestino è attivo e il file è sotto una root lo sposta in `.trash`
-   *  (recuperabile), altrimenti hard-delete + prune delle cartelle vuote. Ritorna true se il file
-   *  non è più al percorso originale (spostato o cancellato). */
+  /** Elimina un file solo dopo averne dimostrato il containment fisico in una root configurata. */
   async function deleteOrTrashFile(filePath: string): Promise<boolean> {
-    const trashRoot = rootForTrash(filePath);
-    if (trashOn() && trashRoot) {
-      await moveToTrash(filePath, trashRoot, false, logger);
+    const root = await rootForDelete(filePath);
+    if (!root) {
+      throw new PreconditionError(
+        'File fuori dalle cartelle di download configurate o containment non verificabile.',
+      );
+    }
+    if (trashOn()) {
+      await moveToTrashFile(filePath, root, false, logger);
       return true;
     }
-    await deleteFileAndPrune(filePath, pruneRootFor(filePath), logger);
+    await deleteFileAndPrune(filePath, root, logger);
     const stillThere = await stat(filePath)
       .then(() => true)
       .catch(() => false);
@@ -245,24 +234,124 @@ export function createLibraryService(deps: LibraryServiceDeps): LibraryService {
     });
   }
 
+  interface DeleteWorkResult {
+    deletedFiles: number;
+    freedBytes: number;
+    failedFiles: number;
+    failedFolders: number;
+    protectedExternalIds: Set<string>;
+    protectedNonTargetIds: Set<string>;
+  }
+
+  function emptyDeleteWorkResult(): DeleteWorkResult {
+    return {
+      deletedFiles: 0,
+      freedBytes: 0,
+      failedFiles: 0,
+      failedFolders: 0,
+      protectedExternalIds: new Set(),
+      protectedNonTargetIds: new Set(),
+    };
+  }
+
+  function mergeDeleteWorkResult(target: DeleteWorkResult, source: DeleteWorkResult): void {
+    target.deletedFiles += source.deletedFiles;
+    target.freedBytes += source.freedBytes;
+    target.failedFiles += source.failedFiles;
+    target.failedFolders += source.failedFolders;
+    for (const id of source.protectedExternalIds) {
+      target.protectedExternalIds.add(id);
+    }
+    for (const id of source.protectedNonTargetIds) {
+      target.protectedNonTargetIds.add(id);
+    }
+  }
+
+  function publicDeleteResult(result: DeleteWorkResult): LibraryDeleteResult {
+    return {
+      deletedFiles: result.deletedFiles,
+      freedBytes: result.freedBytes,
+      failedFiles: result.failedFiles,
+      ...(result.failedFolders > 0 ? { failedFolders: result.failedFolders } : {}),
+      ...(result.protectedExternalIds.size > 0
+        ? { protectedExternalFiles: result.protectedExternalIds.size }
+        : {}),
+      ...(result.protectedNonTargetIds.size > 0
+        ? { protectedNonTargetFiles: result.protectedNonTargetIds.size }
+        : {}),
+    };
+  }
+
+  /** Righe attive fuori scope che referenziano lo stesso file fisico, anche tramite symlink. */
+  async function activeReferencesForPath(
+    rawPath: string,
+    targetIds: Set<string>,
+  ): Promise<Pick<DeleteWorkResult, 'protectedExternalIds' | 'protectedNonTargetIds'>> {
+    const protectedExternalIds = new Set<string>();
+    const protectedNonTargetIds = new Set<string>();
+    const targetPath = await canonicalPath(rawPath);
+    if (!targetPath) {
+      return { protectedExternalIds, protectedNonTargetIds };
+    }
+
+    const activeRows = db
+      .select()
+      .from(schema.episodeFile)
+      .where(inArray(schema.episodeFile.downloadStatus, ['downloaded', 'external']))
+      .all();
+    for (const row of activeRows) {
+      if (targetIds.has(row.id)) {
+        continue;
+      }
+      const otherPath = pathFor(row);
+      if (!otherPath || (await canonicalPath(otherPath)) !== targetPath) {
+        continue;
+      }
+      if (row.downloadStatus === 'external') {
+        protectedExternalIds.add(row.id);
+      } else {
+        protectedNonTargetIds.add(row.id);
+      }
+    }
+    return { protectedExternalIds, protectedNonTargetIds };
+  }
+
   /**
    * Cancella i file degli episode_file indicati, azzera lo stato e pulisce la coda. Se la
    * cancellazione del file fallisce (o il file resta su disco) l'episode_file NON viene marcato
    * come rimosso (resta tracciato/riprovabile) e si incrementa `failedFiles`.
    */
-  async function removeFiles(episodeFileIds: string[]): Promise<LibraryDeleteResult> {
-    let deletedFiles = 0;
-    let freedBytes = 0;
-    let failedFiles = 0;
+  async function removeFiles(
+    episodeFileIds: string[],
+    operationTargetIds: ReadonlySet<string> = new Set(episodeFileIds),
+  ): Promise<DeleteWorkResult> {
+    const result = emptyDeleteWorkResult();
+    const targetIds = new Set(operationTargetIds);
     for (const id of episodeFileIds) {
       const file = db.select().from(schema.episodeFile).where(eq(schema.episodeFile.id, id)).get();
       if (!file) {
+        continue;
+      }
+      // Difesa server-side: un id external non deve mai diventare una cancellazione distruttiva,
+      // neppure se la mutation viene invocata direttamente fuori dalla UI.
+      if (file.downloadStatus === 'external') {
+        result.protectedExternalIds.add(id);
         continue;
       }
       const wasDownloaded = file.downloadStatus === 'downloaded' || file.localPath != null;
       const path = pathFor(file);
       let failed = false;
       if (path) {
+        const shared = await activeReferencesForPath(path, targetIds);
+        for (const protectedId of shared.protectedExternalIds) {
+          result.protectedExternalIds.add(protectedId);
+        }
+        for (const protectedId of shared.protectedNonTargetIds) {
+          result.protectedNonTargetIds.add(protectedId);
+        }
+        if (shared.protectedExternalIds.size > 0 || shared.protectedNonTargetIds.size > 0) {
+          continue;
+        }
         try {
           // Cestino (soft-delete) se attivo: sposta in `.trash` invece di cancellare, così è
           // recuperabile. `deleteOrTrashFile` conferma che il file non sia più al percorso originale
@@ -275,7 +364,7 @@ export function createLibraryService(deps: LibraryServiceDeps): LibraryService {
         }
       }
       if (failed) {
-        failedFiles += 1;
+        result.failedFiles += 1;
         continue; // non marcare come rimosso: il file e' ancora su disco
       }
       const now = new Date().toISOString();
@@ -291,68 +380,173 @@ export function createLibraryService(deps: LibraryServiceDeps): LibraryService {
         .run();
       db.delete(schema.downloadQueue).where(eq(schema.downloadQueue.episodeFileId, id)).run();
       if (wasDownloaded) {
-        deletedFiles += 1;
-        freedBytes += file.fileSize ?? 0;
+        result.deletedFiles += 1;
+        result.freedBytes += file.fileSize ?? 0;
       }
     }
-    return { deletedFiles, freedBytes, failedFiles };
+    return result;
   }
 
-  /** Cartelle "serie" (root + primo segmento) dei localPath dati, confinate sotto una root.
-   *  Usa realpath() per risolvere i symlink prima del confronto di confinamento, così un link
-   *  che punta fuori dalla root non supera il check. Se realpath fallisce (path inesistente)
-   *  si ricade su resolve() (compatibilità con path già rimossi). */
+  /**
+   * Cartelle "serie" derivate esclusivamente dal percorso logico sotto una root configurata. Ogni
+   * path deve anche essere canonicalizzabile dentro la stessa root fisica: se un solo target della
+   * cartella esce via symlink/junction, la cartella viene esclusa e i file degradano alla rimozione
+   * individuale fail-closed.
+   */
   async function seriesFoldersOf(paths: string[]): Promise<string[]> {
-    const rawRoots = config.distinctDownloadRoots().map((r) => resolve(r));
-    const roots = await Promise.all(rawRoots.map((r) => realpath(r).catch(() => r)));
-    const folders = new Set<string>();
-    for (const p of paths) {
-      const abs = await realpath(p).catch(() => resolve(p));
-      for (const root of roots) {
-        if (abs === root || !abs.startsWith(root + sep)) {
-          continue;
+    const rootEntries = await Promise.all(
+      config
+        .distinctDownloadRoots()
+        .map((root) => resolve(root))
+        .map(async (root) => ({ root, canonical: await canonicalPath(root) })),
+    );
+    const safeByFolder = new Map<string, boolean>();
+
+    for (const rawPath of paths) {
+      const logicalPath = resolve(rawPath);
+      const rootEntry = rootEntries.find(
+        ({ root }) => logicalPath !== root && pathIsInside(root, logicalPath),
+      );
+      if (!rootEntry) {
+        continue;
+      }
+      const first = relative(rootEntry.root, logicalPath).split(sep)[0];
+      if (!first || first === '..' || first === '.') {
+        continue;
+      }
+      const folder = join(rootEntry.root, first);
+      const canonicalTarget = await canonicalPath(logicalPath);
+      const safe =
+        rootEntry.canonical !== null &&
+        canonicalTarget !== null &&
+        pathIsInside(rootEntry.canonical, canonicalTarget);
+      safeByFolder.set(folder, (safeByFolder.get(folder) ?? true) && safe);
+    }
+
+    return [...safeByFolder.entries()].filter(([, safe]) => safe).map(([folder]) => folder);
+  }
+
+  interface FolderProtection {
+    folders: Set<string>;
+    protectedExternalIds: Set<string>;
+    protectedNonTargetIds: Set<string>;
+  }
+
+  /**
+   * Individua le cartelle che contengono righe ancora attive. Nel percorso che sposta la cartella
+   * intera, i download target sono esclusi perché verranno rimossi insieme alla cartella; external
+   * e download fuori scope la proteggono sempre. Nel percorso hard-delete, anche un target rimasto
+   * attivo dopo un errore protegge la cartella, mentre `failedFiles` ne descrive già il motivo.
+   */
+  async function folderProtectionForFolders(
+    folders: string[],
+    targetIds: Set<string>,
+    allowTargetRemoval: boolean,
+  ): Promise<FolderProtection> {
+    const protectedFolders = new Set<string>();
+    const protectedExternalIds = new Set<string>();
+    const protectedNonTargetIds = new Set<string>();
+    const physicalFolders = await Promise.all(
+      folders.map(async (folder) => ({ folder, canonical: await canonicalPath(folder) })),
+    );
+    const activeRows = db
+      .select()
+      .from(schema.episodeFile)
+      .where(inArray(schema.episodeFile.downloadStatus, ['downloaded', 'external']))
+      .all();
+
+    for (const row of activeRows) {
+      const external = row.downloadStatus === 'external';
+      if (!external && allowTargetRemoval && targetIds.has(row.id)) {
+        continue;
+      }
+      const rawPath = pathFor(row);
+      if (!rawPath) {
+        continue;
+      }
+
+      // Il match logico protegge i link collocati nella cartella (spostare la cartella spezzerebbe
+      // il localPath); il match fisico protegge gli alias esterni che puntano a contenuti rimossi.
+      const logicalPath = resolve(rawPath);
+      const matchingFolders = new Set(
+        folders.filter((folder) => pathIsInside(folder, logicalPath)),
+      );
+      const activePath = await canonicalPath(rawPath);
+      if (activePath) {
+        for (const { folder, canonical } of physicalFolders) {
+          if (canonical && pathIsInside(canonical, activePath)) {
+            matchingFolders.add(folder);
+          }
         }
-        const first = relative(root, abs).split(sep)[0];
-        if (first && first !== '..' && first !== '.') {
-          folders.add(join(root, first));
-        }
-        break;
+      }
+      if (matchingFolders.size === 0) {
+        continue;
+      }
+
+      for (const folder of matchingFolders) {
+        protectedFolders.add(folder);
+      }
+      if (external) {
+        protectedExternalIds.add(row.id);
+      } else if (!targetIds.has(row.id)) {
+        protectedNonTargetIds.add(row.id);
       }
     }
-    return [...folders];
+
+    return {
+      folders: protectedFolders,
+      protectedExternalIds,
+      protectedNonTargetIds,
+    };
   }
 
   /** Rimuove ricorsivamente le cartelle serie derivate dai path dati (file non tracciati/extra
-   *  rimasti). Da chiamare DOPO removeFiles: trova solo i leftover. Guardata dal confinamento di
-   *  `seriesFoldersOf`. Ritorna i file rimossi e i byte liberati. */
+   *  rimasti). Le cartelle che contengono righe attive dopo la rimozione target vengono preservate. */
   async function removeSeriesFolders(
-    paths: string[],
-  ): Promise<{ deletedFiles: number; freedBytes: number }> {
-    let deletedFiles = 0;
-    let freedBytes = 0;
-    for (const folder of await seriesFoldersOf(paths)) {
+    folders: string[],
+    targetIds: string[],
+  ): Promise<DeleteWorkResult> {
+    const protection = await folderProtectionForFolders(folders, new Set(targetIds), false);
+    const result = emptyDeleteWorkResult();
+    for (const id of protection.protectedExternalIds) {
+      result.protectedExternalIds.add(id);
+    }
+    for (const id of protection.protectedNonTargetIds) {
+      result.protectedNonTargetIds.add(id);
+    }
+
+    for (const folder of folders) {
+      if (protection.folders.has(folder)) {
+        continue;
+      }
       try {
         const files = await walk(folder, logger);
-        for (const f of files) {
-          const info = await stat(f).catch(() => null);
-          if (info) {
-            freedBytes += Number(info.size);
-            deletedFiles += 1;
-          }
+        let folderBytes = 0;
+        for (const file of files) {
+          const info = await stat(file).catch(() => null);
+          folderBytes += info ? Number(info.size) : 0;
         }
         // Cestino (soft-delete) se attivo: sposta l'intera cartella serie in `<root>/.trash`
         // (recuperabile), altrimenti rimozione ricorsiva definitiva.
-        const trashRoot = rootForTrash(folder);
-        if (trashOn() && trashRoot) {
-          await moveToTrash(folder, trashRoot, true, logger);
+        const trashRoot = await rootForDelete(folder);
+        if (trashOn()) {
+          if (!trashRoot) {
+            throw new PreconditionError(
+              'Cestino attivo, ma la cartella è fuori dalle root configurate.',
+            );
+          }
+          await moveToTrashFile(folder, trashRoot, true, logger);
         } else {
           await rm(folder, { recursive: true, force: true });
         }
+        result.deletedFiles += files.length;
+        result.freedBytes += folderBytes;
       } catch (error) {
         logger.error({ err: error, folder }, 'Rimozione cartella serie fallita');
+        result.failedFolders += 1;
       }
     }
-    return { deletedFiles, freedBytes };
+    return result;
   }
 
   /** Azzera lo stato dei tracciati indicati e pulisce la coda (i file non sono più al percorso
@@ -375,59 +569,72 @@ export function createLibraryService(deps: LibraryServiceDeps): LibraryService {
   }
 
   /** Percorso "deleteFolder" col cestino attivo: sposta ogni cartella serie in `.trash` come UNICA
-   *  voce (tracciati + extra insieme), evitando le N+1 voci frammentate del flusso hard-delete.
-   *  I rari file tracciati che vivono FUORI dalle cartelle confinate vengono spostati singolarmente
-   *  (parità col flusso hard-delete, che cancella ogni file per path). Azzera poi il DB. */
-  async function trashSeriesFolders(ids: string[], paths: string[]): Promise<LibraryDeleteResult> {
+   *  voce. Le cartelle con righe attive fuori scope vengono preservate e i soli download target
+   *  sono spostati singolarmente; il DB viene azzerato soltanto dopo una rimozione riuscita. */
+  async function trashSeriesFolders(ids: string[], paths: string[]): Promise<DeleteWorkResult> {
     const folders = await seriesFoldersOf(paths);
-    let deletedFiles = 0;
-    let freedBytes = 0;
-    let failedFiles = 0;
-
-    // 1) Tracciati fuori dalle cartelle serie confinate: spostali singolarmente (via removeFiles,
-    //    che gestisce cestino/hard-delete e azzera il DB per quegli id).
-    const insideFolder = (p: string): boolean => {
-      const abs = resolve(p);
-      return folders.some((f) => abs === f || abs.startsWith(f + sep));
-    };
-    const outsideIds = ids.filter((id) => {
-      const file = db.select().from(schema.episodeFile).where(eq(schema.episodeFile.id, id)).get();
-      const p = file ? pathFor(file) : null;
-      return p != null && !insideFolder(p);
-    });
-    if (outsideIds.length > 0) {
-      const r = await removeFiles(outsideIds);
-      deletedFiles += r.deletedFiles;
-      freedBytes += r.freedBytes;
-      failedFiles += r.failedFiles;
+    const targetIds = new Set(ids);
+    const protection = await folderProtectionForFolders(folders, targetIds, true);
+    const result = emptyDeleteWorkResult();
+    for (const id of protection.protectedExternalIds) {
+      result.protectedExternalIds.add(id);
+    }
+    for (const id of protection.protectedNonTargetIds) {
+      result.protectedNonTargetIds.add(id);
     }
 
-    // 2) Sposta ogni cartella serie nel cestino in un colpo solo (una voce per cartella).
+    const idsByFolder = new Map<string, string[]>();
+    const individualIds: string[] = [];
+    for (const id of ids) {
+      const file = db.select().from(schema.episodeFile).where(eq(schema.episodeFile.id, id)).get();
+      const path = file ? pathFor(file) : null;
+      const logicalPath = path ? resolve(path) : null;
+      const folder = logicalPath
+        ? folders.find((candidate) => pathIsInside(candidate, logicalPath))
+        : undefined;
+      if (!folder || protection.folders.has(folder)) {
+        individualIds.push(id);
+        continue;
+      }
+      const folderIds = idsByFolder.get(folder) ?? [];
+      folderIds.push(id);
+      idsByFolder.set(folder, folderIds);
+    }
+
+    // Fuori dalle cartelle confinate, oppure dentro una cartella protetta da external: elimina i
+    // soli download gestiti, senza mai spostare ricorsivamente la cartella.
+    if (individualIds.length > 0) {
+      mergeDeleteWorkResult(result, await removeFiles(individualIds, targetIds));
+    }
+
     for (const folder of folders) {
+      if (protection.folders.has(folder)) {
+        continue;
+      }
       try {
         const files = await walk(folder, logger);
-        for (const f of files) {
-          const info = await stat(f).catch(() => null);
-          if (info) {
-            freedBytes += Number(info.size);
-            deletedFiles += 1;
-          }
+        let folderBytes = 0;
+        for (const file of files) {
+          const info = await stat(file).catch(() => null);
+          folderBytes += info ? Number(info.size) : 0;
         }
-        const trashRoot = rootForTrash(folder);
-        if (trashRoot) {
-          await moveToTrash(folder, trashRoot, true, logger);
-        } else {
-          await rm(folder, { recursive: true, force: true });
+        const trashRoot = await rootForDelete(folder);
+        if (!trashRoot) {
+          throw new PreconditionError(
+            'Cestino attivo, ma la cartella è fuori dalle root configurate.',
+          );
         }
+        await moveToTrashFile(folder, trashRoot, true, logger);
+        result.deletedFiles += files.length;
+        result.freedBytes += folderBytes;
+        resetTracked(idsByFolder.get(folder) ?? []);
       } catch (error) {
         logger.error({ err: error, folder }, 'Spostamento cartella serie nel cestino fallito');
-        failedFiles += 1;
+        result.failedFolders += 1;
       }
     }
 
-    // 3) Azzera i tracciati rimasti (quelli dentro le cartelle spostate).
-    resetTracked(ids.filter((id) => !outsideIds.includes(id)));
-    return { deletedFiles, freedBytes, failedFiles };
+    return result;
   }
 
   /** Risolve i percorsi reali (localPath o ricalcolo) degli episode_file indicati. */
@@ -446,7 +653,7 @@ export function createLibraryService(deps: LibraryServiceDeps): LibraryService {
     return out;
   }
 
-  return {
+  const unlocked: LibraryService = {
     async scan() {
       const expected = buildExpectedEntries();
       const expectedByPath = new Map<string, ExpectedEntry>();
@@ -862,7 +1069,7 @@ export function createLibraryService(deps: LibraryServiceDeps): LibraryService {
     },
 
     async deleteEpisodeFile(episodeFileId) {
-      return removeFiles([episodeFileId]);
+      return publicDeleteResult(await removeFiles([episodeFileId]));
     },
 
     async deleteEntry({ animeId, language, deleteFolder }) {
@@ -882,35 +1089,26 @@ export function createLibraryService(deps: LibraryServiceDeps): LibraryService {
       // Col cestino attivo + deleteFolder: sposta la cartella serie in `.trash` come voce unica
       // (niente N file + cartella frammentati). Altrimenti hard-delete file + rimozione cartella.
       if (deleteFolder && trashOn()) {
-        return trashSeriesFolders(ids, collectPaths(ids));
+        return publicDeleteResult(await trashSeriesFolders(ids, collectPaths(ids)));
       }
       const paths = deleteFolder ? collectPaths(ids) : [];
+      const folders = deleteFolder ? await seriesFoldersOf(paths) : [];
       const result = await removeFiles(ids);
       if (deleteFolder) {
-        const folder = await removeSeriesFolders(paths);
-        result.deletedFiles += folder.deletedFiles;
-        result.freedBytes += folder.freedBytes;
+        mergeDeleteWorkResult(result, await removeSeriesFolders(folders, ids));
       }
-      return result;
+      return publicDeleteResult(result);
     },
 
     async deleteSeries({ animeId, deleteFolder }) {
-      const series = resolver.resolve(animeId);
-      const animeIds = new Set<string>([animeId]);
-      for (const row of db
-        .select({ id: schema.anime.id })
-        .from(schema.anime)
-        .where(eq(schema.anime.seriesId, series.seriesId))
-        .all()) {
-        animeIds.add(row.id);
-      }
+      const animeIds = resolver.membersOf(animeId);
       const ids = db
         .select({ id: schema.episodeFile.id })
         .from(schema.episodeFile)
         .innerJoin(schema.episode, eq(schema.episode.id, schema.episodeFile.episodeId))
         .where(
           and(
-            inArray(schema.episode.animeId, [...animeIds]),
+            inArray(schema.episode.animeId, animeIds),
             eq(schema.episodeFile.downloadStatus, 'downloaded'),
           ),
         )
@@ -918,19 +1116,18 @@ export function createLibraryService(deps: LibraryServiceDeps): LibraryService {
         .map((row) => row.id);
       // Col cestino attivo + deleteFolder: cartella serie → `.trash` come voce unica (vedi deleteEntry).
       if (deleteFolder && trashOn()) {
-        return trashSeriesFolders(ids, collectPaths(ids));
+        return publicDeleteResult(await trashSeriesFolders(ids, collectPaths(ids)));
       }
       const paths = deleteFolder ? collectPaths(ids) : [];
+      const folders = deleteFolder ? await seriesFoldersOf(paths) : [];
       const result = await removeFiles(ids);
       if (deleteFolder) {
-        const folder = await removeSeriesFolders(paths);
-        result.deletedFiles += folder.deletedFiles;
-        result.freedBytes += folder.freedBytes;
+        mergeDeleteWorkResult(result, await removeSeriesFolders(folders, ids));
       }
-      return result;
+      return publicDeleteResult(result);
     },
 
-    unlinkExternal({ episodeFileId, animeId, language }) {
+    async unlinkExternal({ episodeFileId, animeId, language }) {
       // Risolvi solo le righe davvero `external`: la guardia sullo stato impedisce di toccare i
       // file scaricati dall'app (mai cancellati comunque: qui si azzera solo il collegamento).
       let ids: string[] = [];
@@ -980,24 +1177,69 @@ export function createLibraryService(deps: LibraryServiceDeps): LibraryService {
     },
 
     async deleteOrphans(paths) {
-      let deletedFiles = 0;
-      let freedBytes = 0;
-      let failedFiles = 0;
+      const result = emptyDeleteWorkResult();
       for (const path of paths) {
+        // L'endpoint accetta soltanto i file regolari prodotti dallo scan. `lstat` non segue
+        // symlink/junction: directory e alias vengono rifiutati prima di containment o referenze,
+        // così moveToTrash non può trasformare una richiesta "orfano" in una move ricorsiva.
+        const initialInfo = await lstat(path).catch(() => null);
+        if (!initialInfo) {
+          continue;
+        }
+        if (!initialInfo.isFile()) {
+          logger.warn({ path }, 'Eliminazione orfano rifiutata: il path non è un file regolare');
+          result.failedFiles += 1;
+          continue;
+        }
+
+        const activeReferences = await activeReferencesForPath(path, new Set());
+        for (const id of activeReferences.protectedExternalIds) {
+          result.protectedExternalIds.add(id);
+        }
+        for (const id of activeReferences.protectedNonTargetIds) {
+          result.protectedNonTargetIds.add(id);
+        }
+        if (
+          activeReferences.protectedExternalIds.size > 0 ||
+          activeReferences.protectedNonTargetIds.size > 0
+        ) {
+          continue;
+        }
         try {
-          const info = await stat(path).catch(() => null);
+          // Rivalida il tipo dopo le verifiche asincrone: un alias o una directory sostituiti nel
+          // frattempo devono fallire chiuso prima di qualunque rename/rm.
+          const info = await lstat(path).catch(() => null);
+          if (!info) {
+            continue;
+          }
+          if (!info.isFile()) {
+            throw new PreconditionError('Il path orfano non è più un file regolare.');
+          }
           // Cestino (soft-delete) se attivo: sposta in `.trash` invece di cancellare.
           const removed = await deleteOrTrashFile(path);
           if (removed) {
-            deletedFiles += 1;
-            freedBytes += info ? Number(info.size) : 0;
+            result.deletedFiles += 1;
+            result.freedBytes += Number(info.size);
           }
         } catch (error) {
           logger.error({ err: error, path }, 'Eliminazione orfano fallita');
-          failedFiles += 1;
+          result.failedFiles += 1;
         }
       }
-      return { deletedFiles, freedBytes, failedFiles };
+      return publicDeleteResult(result);
     },
+  };
+
+  return {
+    scan: () => coordinator.runExclusive(() => unlocked.scan()),
+    checkVanished: () => coordinator.runExclusive(() => unlocked.checkVanished()),
+    list: () => unlocked.list(),
+    stats: () => unlocked.stats(),
+    deleteEpisodeFile: (episodeFileId) =>
+      coordinator.runExclusive(() => unlocked.deleteEpisodeFile(episodeFileId)),
+    deleteEntry: (input) => coordinator.runExclusive(() => unlocked.deleteEntry(input)),
+    deleteSeries: (input) => coordinator.runExclusive(() => unlocked.deleteSeries(input)),
+    deleteOrphans: (paths) => coordinator.runExclusive(() => unlocked.deleteOrphans(paths)),
+    unlinkExternal: (input) => coordinator.runExclusive(() => unlocked.unlinkExternal(input)),
   };
 }

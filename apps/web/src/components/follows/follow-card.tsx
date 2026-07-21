@@ -23,6 +23,10 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { FOLLOW_STATUSES } from '@/lib/follow';
 import { trpc } from '@/lib/trpc';
+import {
+  type LibraryOptimisticTransaction,
+  useLibraryOptimisticCache,
+} from '@/lib/use-library-optimistic-cache';
 import { formatBytes } from '@/lib/utils';
 import type { FollowStatus, FollowWithAnime } from '@animeunion/shared';
 import { Download, MoreVertical, Trash2 } from 'lucide-react';
@@ -32,6 +36,7 @@ import { toast } from 'sonner';
 
 export function FollowCard({ follow }: { follow: FollowWithAnime }) {
   const utils = trpc.useUtils();
+  const optimistic = useLibraryOptimisticCache();
   const [confirmDeleteFiles, setConfirmDeleteFiles] = useState(false);
   const [deleteFolder, setDeleteFolder] = useState(false);
   const [askDownload, setAskDownload] = useState(false);
@@ -75,12 +80,43 @@ export function FollowCard({ follow }: { follow: FollowWithAnime }) {
   });
   // Riusa la stessa delete della libreria: rimuove tutti i file scaricati della serie
   // (tutte le stagioni/lingue collegate), opzionalmente anche la cartella.
+  const onDeleteError = (
+    error: { message?: string },
+    snapshot: LibraryOptimisticTransaction | undefined,
+  ) => {
+    optimistic.restore(snapshot);
+    toast.error(error.message || 'Eliminazione fallita');
+  };
   const deleteFiles = trpc.library.deleteSeries.useMutation({
+    onMutate: () =>
+      optimistic.remove({
+        scope: 'series',
+        animeId: follow.anime.id,
+      }),
     onSuccess: (res) => {
-      if (res.failedFiles > 0) {
-        toast.warning(
-          `${res.deletedFiles} file eliminati, ${res.failedFiles} non eliminati (controlla i permessi o usa il Gestore file).`,
-        );
+      const protectedExternalFiles = res.protectedExternalFiles ?? 0;
+      const protectedNonTargetFiles = res.protectedNonTargetFiles ?? 0;
+      const failedFolders = res.failedFolders ?? 0;
+      if (
+        res.failedFiles > 0 ||
+        failedFolders > 0 ||
+        protectedExternalFiles > 0 ||
+        protectedNonTargetFiles > 0
+      ) {
+        const action = trashEnabled ? 'spostati nel cestino' : 'eliminati';
+        const issues = [
+          res.failedFiles > 0 ? `${res.failedFiles} non rimossi: controlla i permessi.` : '',
+          failedFolders > 0
+            ? `${failedFolders} cartelle non rimosse: i file contenuti restano sul disco.`
+            : '',
+          protectedExternalFiles > 0
+            ? `${protectedExternalFiles} file esterni protetti: la cartella è rimasta sul disco.`
+            : '',
+          protectedNonTargetFiles > 0
+            ? `${protectedNonTargetFiles} download fuori dalla selezione protetti: la cartella è rimasta sul disco.`
+            : '',
+        ].filter(Boolean);
+        toast.warning(`${res.deletedFiles} file ${action}. ${issues.join(' ')}`);
       } else if (res.deletedFiles === 0) {
         toast.info('Nessun file scaricato da eliminare per questa serie.');
       } else if (trashEnabled) {
@@ -92,16 +128,11 @@ export function FollowCard({ follow }: { follow: FollowWithAnime }) {
           `Eliminati ${res.deletedFiles} file · ${formatBytes(res.freedBytes)} liberati`,
         );
       }
-      void utils.library.list.invalidate();
-      void utils.library.stats.invalidate();
-      void utils.download.invalidate();
-      // Aggiorna i tag "Scaricato" ovunque (il delete tocca piu' stagioni/sequel, slug diversi).
-      void utils.catalog.invalidate();
-      void utils.follow.list.invalidate();
       setConfirmDeleteFiles(false);
       setDeleteFolder(false);
     },
-    onError: (error) => toast.error(error.message || 'Eliminazione fallita'),
+    onError: (error, _input, snapshot) => onDeleteError(error, snapshot),
+    onSettled: (_data, _error, _input, transaction) => optimistic.settle(transaction),
   });
 
   const anime = follow.anime;
@@ -260,8 +291,8 @@ export function FollowCard({ follow }: { follow: FollowWithAnime }) {
           <DialogHeader>
             <DialogTitle className="text-destructive">Eliminare i file scaricati?</DialogTitle>
             <DialogDescription>
-              Verranno cancellati tutti i file scaricati di &laquo;{title}&raquo; (tutte le stagioni
-              e le lingue collegate).{' '}
+              Verranno rimossi dalla Libreria tutti i file scaricati di &laquo;{title}&raquo; (tutte
+              le stagioni e le lingue collegate).{' '}
               {trashEnabled ? (
                 <>
                   I file verranno spostati nel <strong>cestino</strong> e restano recuperabili dal
@@ -272,7 +303,8 @@ export function FollowCard({ follow }: { follow: FollowWithAnime }) {
                   L&apos;operazione &egrave; <strong>irreversibile</strong>.
                 </>
               )}{' '}
-              L&apos;anime resta tra i seguiti.
+              L&apos;anime resta tra i seguiti. I file <strong>esterni</strong> collegati non
+              vengono mai eliminati.
             </DialogDescription>
           </DialogHeader>
           <label className="flex cursor-pointer items-start gap-2 rounded-md border p-3 text-sm">
@@ -284,7 +316,9 @@ export function FollowCard({ follow }: { follow: FollowWithAnime }) {
             />
             <span>
               Elimina anche la cartella della serie sul disco, compresi i{' '}
-              <strong>file non tracciati / extra</strong> (sigle, sottotitoli, ecc.).
+              <strong>file non tracciati / extra</strong> (sigle, sottotitoli, ecc.). Se contiene
+              file esterni collegati o download attivi fuori dalla selezione, la cartella viene
+              preservata e sono rimossi solo i file inclusi nell&apos;operazione.
             </span>
           </label>
           <DialogFooter>

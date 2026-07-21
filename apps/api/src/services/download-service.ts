@@ -19,6 +19,7 @@ import { NotFoundError, PreconditionError } from '../lib/errors';
 import type { Logger } from '../lib/logger';
 import type { CatalogService } from './catalog-service';
 import type { ConfigService } from './config-service';
+import type { FileMutationCoordinator } from './file-mutation-coordinator';
 import type { RenamerService } from './renamer-service';
 
 export interface DownloadQueueItem {
@@ -49,20 +50,20 @@ export interface DownloadQueueItem {
 
 export interface DownloadService {
   /** Accende il worker event-driven (chiamato dallo scheduler all'avvio). */
-  start(): void;
+  start(): Promise<void>;
   /** Ferma il worker: interrompe i job in volo e cancella i tick (chiamato dallo scheduler in shutdown). */
   stop(): void;
   /** Accoda un singolo episode file. Ritorna l'id del job in coda. */
-  addEpisode(input: { episodeFileId: string; priority?: number }): string;
+  addEpisode(input: { episodeFileId: string; priority?: number }): Promise<string>;
   /**
    * Accoda un episodio identificato da (slug, numero, lingua): garantisce prima che l'anime
    * e i suoi episodi siano in cache, poi risolve l'episode_file e accoda. Usato dalla home.
    */
   addEpisodeByRef(input: DownloadAddByRefInput): Promise<string>;
   /** Accoda tutti gli episode file non ancora scaricati di un anime (una sola stagione, Regola #13). */
-  addMissing(input: { animeId: string; language?: Language }): number;
+  addMissing(input: { animeId: string; language?: Language }): Promise<number>;
   /** Sinonimo esplicito di addMissing, per la UI ("Scarica tutti gli episodi mancanti"). */
-  addAll(input: { animeId: string; language?: Language }): number;
+  addAll(input: { animeId: string; language?: Language }): Promise<number>;
   /** Come addMissing ma identifica l'anime via slug (mette prima gli episodi in cache). */
   addAllBySlug(input: { slug: string; language?: Language }): Promise<number>;
   /** Lista la coda joinata con episode/anime per la UI. */
@@ -75,12 +76,12 @@ export interface DownloadService {
   getQueueSummary(): DownloadQueueSummary;
   /** Pagina di righe coda per un singolo anime (espansione card on-demand). */
   getQueueGroupItems(input: DownloadGroupItemsInput): DownloadQueuePage;
-  /** Cancella un job (queued: immediato; downloading: abort). */
-  cancel(queueId: string): boolean;
-  /** Annulla tutti i job in coda. */
-  cancelAll(): number;
+  /** Cancella un job e attende la decisione serializzata con la finalizzazione. */
+  cancel(queueId: string): Promise<boolean>;
+  /** Annulla tutti i job in coda o attivi. */
+  cancelAll(): Promise<number>;
   /** Annulla tutti i job non terminali di un singolo anime (azione di gruppo, una chiamata). */
-  cancelGroup(animeId: string): number;
+  cancelGroup(animeId: string): Promise<number>;
   /** Rimette in coda un job in failed. */
   retry(queueId: string): boolean;
   /** Rimette in coda tutti i job falliti. */
@@ -121,6 +122,7 @@ export interface DownloadServiceDeps {
   config: ConfigService;
   renamer: RenamerService;
   logger: Logger;
+  coordinator: FileMutationCoordinator;
   now?: () => Date;
   /** Callback opzionale: nuovi episodi accodati automaticamente per un anime (per notifiche). */
   onAutoEnqueued?: (animeId: string, count: number) => void;
@@ -231,7 +233,7 @@ function statusesForFilter(filter: DownloadFilter): readonly string[] | null {
 }
 
 export function createDownloadService(deps: DownloadServiceDeps): DownloadService {
-  const { db, worker, catalog, config, renamer, logger } = deps;
+  const { db, worker, catalog, config, renamer, logger, coordinator } = deps;
   const now = deps.now ?? (() => new Date());
 
   function alreadyInQueue(episodeFileId: string): string | null {
@@ -269,6 +271,8 @@ export function createDownloadService(deps: DownloadServiceDeps): DownloadServic
     });
   }
 
+  // Questi helper vengono chiamati soltanto mentre `coordinator` è detenuto: select, verifica disco
+  // e update DB osservano quindi lo stesso stato serializzato delle cancellazioni/link esterni.
   // Self-healing: un episode_file marcato downloaded/external ma non piu' presente su disco
   // (cancellato fuori app) viene azzerato — e l'eventuale riga di coda terminale rimossa — cosi' puo'
   // essere riaccodato invece di restare "gia' scaricato" per sempre. Solo se la root e' raggiungibile.
@@ -317,7 +321,7 @@ export function createDownloadService(deps: DownloadServiceDeps): DownloadServic
       return false;
     }
     // Cerca l'episodio su disco per (stagione, numero) — non solo al nome canonico — cosi' una
-    // libreria pre-esistente con naming legacy viene riconosciuta invece che ri-scaricata (duplicata).
+    // libreria pre-esistente con naming legacy viene riconosciuta invece che ri-scaricata.
     const path = findExistingEpisodeFile(canonicalPath);
     if (!path) {
       return false;
@@ -326,7 +330,7 @@ export function createDownloadService(deps: DownloadServiceDeps): DownloadServic
     try {
       size = statSync(path).size;
     } catch {
-      size = 0;
+      return false;
     }
     const ts = now().toISOString();
     db.update(schema.episodeFile)
@@ -350,128 +354,139 @@ export function createDownloadService(deps: DownloadServiceDeps): DownloadServic
   // sui falliti per non ritentare gli errori permanenti a ogni ciclo. Conta solo ciò che accoda o
   // ritenta davvero (un fallito ritentato via worker.retry, un nuovo via worker.enqueue), così il
   // contatore — e la notifica "Nuovi episodi" che ne dipende — non viene gonfiato da no-op.
-  function addMissingImpl(
+  async function addMissingImpl(
     animeId: string,
     language: Language | undefined,
     auto: boolean,
     minEpisodeNumber?: number,
-  ): number {
+  ): Promise<number> {
     if (!config.isConfigured()) {
       throw new PreconditionError(NOT_CONFIGURED_MSG);
     }
-    const files = db
-      .select({
-        id: schema.episodeFile.id,
-        language: schema.episodeFile.language,
-        status: schema.episodeFile.downloadStatus,
-        localPath: schema.episodeFile.localPath,
-        number: schema.episode.number,
-      })
-      .from(schema.episodeFile)
-      .innerJoin(schema.episode, eq(schema.episodeFile.episodeId, schema.episode.id))
-      .where(eq(schema.episode.animeId, animeId))
-      .all()
-      .filter((f) => (language ? f.language === language : true));
-    const nowMs = now().getTime();
+    return coordinator.runExclusive(async () => {
+      const files = db
+        .select({
+          id: schema.episodeFile.id,
+          language: schema.episodeFile.language,
+          status: schema.episodeFile.downloadStatus,
+          localPath: schema.episodeFile.localPath,
+          number: schema.episode.number,
+        })
+        .from(schema.episodeFile)
+        .innerJoin(schema.episode, eq(schema.episodeFile.episodeId, schema.episode.id))
+        .where(eq(schema.episode.animeId, animeId))
+        .all()
+        .filter((f) => (language ? f.language === language : true));
+      const nowMs = now().getTime();
 
-    // Filtra prima i file candidati (forward-only + self-healing + external).
-    const candidates = files.filter((file) => {
-      if (minEpisodeNumber != null && file.number <= minEpisodeNumber) return false;
-      const healed = healMissing(file);
-      if (!healed && (file.status === 'downloaded' || file.status === 'external')) return false;
-      // Se il DB dice not_downloaded ma il file esiste gia' al path atteso, riconcilialo e non
-      // ri-scaricarlo (idempotenza rispetto al disco).
-      if (file.status === 'not_downloaded' && healPresent(file, animeId)) return false;
-      return true;
-    });
-
-    // Una sola query per recuperare tutti i job esistenti in coda per i file candidati,
-    // invece di N query .get() separate. Map per lookup O(1) nel loop seguente.
-    const queueRows =
-      candidates.length > 0
-        ? db
-            .select({
-              episodeFileId: schema.downloadQueue.episodeFileId,
-              id: schema.downloadQueue.id,
-              status: schema.downloadQueue.status,
-              completedAt: schema.downloadQueue.completedAt,
-            })
-            .from(schema.downloadQueue)
-            .where(
-              inArray(
-                schema.downloadQueue.episodeFileId,
-                candidates.map((f) => f.id),
-              ),
-            )
-            .all()
-        : [];
-    const queueByFileId = new Map(queueRows.map((r) => [r.episodeFileId, r]));
-
-    let count = 0;
-    for (const file of candidates) {
-      const existing = queueByFileId.get(file.id);
-      if (!existing) {
-        worker.enqueue(file.id);
-        count += 1;
-        continue;
-      }
-      if (!isTerminal(existing.status)) {
-        continue; // gia' in coda o in corso
-      }
-      if (existing.status === 'failed') {
-        // Auto: salta i falliti ancora nel cooldown (niente ri-accodo/notifica su errori permanenti).
-        if (
-          auto &&
-          existing.completedAt &&
-          nowMs - Date.parse(existing.completedAt) < AUTO_RETRY_COOLDOWN_MS
-        ) {
+      // Filtra prima i file candidati (forward-only + self-healing + external).
+      const candidates: typeof files = [];
+      for (const file of files) {
+        if (minEpisodeNumber != null && file.number <= minEpisodeNumber) {
           continue;
         }
-        // Retry reale: worker.enqueue è un no-op sulle righe esistenti, worker.retry resetta a queued.
-        if (worker.retry(existing.id)) {
-          count += 1;
+        const healedMissing = healMissing(file);
+        if (!healedMissing && (file.status === 'downloaded' || file.status === 'external')) {
+          continue;
         }
-        // Restano `completed` (di fatto già scaricato, escluso sopra) e `cancelled` (annullato
-        // dall'utente): non si ri-accodano automaticamente né manualmente da qui.
+        // Se il DB dice not_downloaded (anche dopo healMissing) ma il file esiste gia' al path
+        // atteso, riconcilialo nello stesso lock e non ri-scaricarlo.
+        if ((file.status === 'not_downloaded' || healedMissing) && healPresent(file, animeId)) {
+          continue;
+        }
+        candidates.push(file);
       }
-    }
-    return count;
+
+      // Una sola query per recuperare tutti i job esistenti in coda per i file candidati,
+      // invece di N query .get() separate. Map per lookup O(1) nel loop seguente.
+      const queueRows =
+        candidates.length > 0
+          ? db
+              .select({
+                episodeFileId: schema.downloadQueue.episodeFileId,
+                id: schema.downloadQueue.id,
+                status: schema.downloadQueue.status,
+                completedAt: schema.downloadQueue.completedAt,
+              })
+              .from(schema.downloadQueue)
+              .where(
+                inArray(
+                  schema.downloadQueue.episodeFileId,
+                  candidates.map((f) => f.id),
+                ),
+              )
+              .all()
+          : [];
+      const queueByFileId = new Map(queueRows.map((r) => [r.episodeFileId, r]));
+
+      let count = 0;
+      for (const file of candidates) {
+        const existing = queueByFileId.get(file.id);
+        if (!existing) {
+          worker.enqueue(file.id);
+          count += 1;
+          continue;
+        }
+        if (!isTerminal(existing.status)) {
+          continue; // gia' in coda o in corso
+        }
+        if (existing.status === 'failed') {
+          // Auto: salta i falliti ancora nel cooldown (niente ri-accodo/notifica su errori permanenti).
+          if (
+            auto &&
+            existing.completedAt &&
+            nowMs - Date.parse(existing.completedAt) < AUTO_RETRY_COOLDOWN_MS
+          ) {
+            continue;
+          }
+          // Retry reale: worker.enqueue è un no-op sulle righe esistenti, worker.retry resetta a queued.
+          if (worker.retry(existing.id)) {
+            count += 1;
+          }
+          // Restano `completed` (di fatto già scaricato, escluso sopra) e `cancelled` (annullato
+          // dall'utente): non si ri-accodano automaticamente né manualmente da qui.
+        }
+      }
+      return count;
+    });
   }
 
   return {
-    start(): void {
-      worker.start();
+    start(): Promise<void> {
+      return worker.start();
     },
 
     stop(): void {
       worker.stop();
     },
 
-    addEpisode({ episodeFileId, priority }) {
+    async addEpisode({ episodeFileId, priority }) {
       if (!config.isConfigured()) {
         throw new PreconditionError(NOT_CONFIGURED_MSG);
       }
-      // Self-healing: se e' marcato scaricato/esterno ma il file e' sparito dal disco, azzera lo
-      // stato (e rimuove la riga di coda terminale) cosi' worker.enqueue ne crea una nuova.
-      const file = db
-        .select({
-          id: schema.episodeFile.id,
-          status: schema.episodeFile.downloadStatus,
-          localPath: schema.episodeFile.localPath,
-        })
-        .from(schema.episodeFile)
-        .where(eq(schema.episodeFile.id, episodeFileId))
-        .get();
-      if (file) {
-        healMissing(file);
-      }
-      const existing = alreadyInQueue(episodeFileId);
-      if (existing) {
-        return existing;
-      }
-      const queueId = worker.enqueue(episodeFileId, priority);
-      logger.info({ queueId, episodeFileId }, 'Download accodato');
-      return queueId;
+      return coordinator.runExclusive(async () => {
+        // Self-healing: rilettura, verifica disco, eventuale reset e accodamento condividono il
+        // lock delle altre mutation filesystem; nessuna transizione concorrente resta invisibile.
+        const file = db
+          .select({
+            id: schema.episodeFile.id,
+            status: schema.episodeFile.downloadStatus,
+            localPath: schema.episodeFile.localPath,
+          })
+          .from(schema.episodeFile)
+          .where(eq(schema.episodeFile.id, episodeFileId))
+          .get();
+        if (file) {
+          healMissing(file);
+        }
+        const existing = alreadyInQueue(episodeFileId);
+        if (existing) {
+          return existing;
+        }
+        const queueId = worker.enqueue(episodeFileId, priority);
+        logger.info({ queueId, episodeFileId }, 'Download accodato');
+        return queueId;
+      });
     },
 
     async addEpisodeByRef({ slug, episodeNumber, language, priority }) {
@@ -646,8 +661,8 @@ export function createDownloadService(deps: DownloadServiceDeps): DownloadServic
       return { items: rows.map(mapRow), total: totalRow?.n ?? 0 };
     },
 
-    cancel(queueId) {
-      const ok = worker.cancel(queueId);
+    async cancel(queueId) {
+      const ok = await worker.cancel(queueId);
       if (ok) {
         logger.info({ queueId }, 'Download cancellato');
       }
@@ -662,7 +677,7 @@ export function createDownloadService(deps: DownloadServiceDeps): DownloadServic
       return ok;
     },
 
-    cancelAll() {
+    async cancelAll() {
       // Annulla sia i job in coda sia quelli attivi/orfani (downloading/processing):
       // "Annulla tutti" deve fermare davvero ogni download non terminato.
       const rows = db
@@ -672,7 +687,7 @@ export function createDownloadService(deps: DownloadServiceDeps): DownloadServic
         .all();
       let count = 0;
       for (const row of rows) {
-        if (worker.cancel(row.id)) {
+        if (await worker.cancel(row.id)) {
           count += 1;
         }
       }
@@ -682,7 +697,7 @@ export function createDownloadService(deps: DownloadServiceDeps): DownloadServic
       return count;
     },
 
-    cancelGroup(animeId) {
+    async cancelGroup(animeId) {
       const rows = db
         .select({ id: schema.downloadQueue.id })
         .from(schema.downloadQueue)
@@ -700,7 +715,7 @@ export function createDownloadService(deps: DownloadServiceDeps): DownloadServic
         .all();
       let count = 0;
       for (const row of rows) {
-        if (worker.cancel(row.id)) {
+        if (await worker.cancel(row.id)) {
           count += 1;
         }
       }
@@ -874,7 +889,12 @@ export function createDownloadService(deps: DownloadServiceDeps): DownloadServic
                 );
               }
               // Forward-only: solo gli episodi oltre la soglia all'attivazione dell'auto-download.
-              return addMissingImpl(f.animeId, undefined, true, f.autoDownloadFromEp ?? undefined);
+              return await addMissingImpl(
+                f.animeId,
+                undefined,
+                true,
+                f.autoDownloadFromEp ?? undefined,
+              );
             }),
           );
           results.forEach((r, j) => {

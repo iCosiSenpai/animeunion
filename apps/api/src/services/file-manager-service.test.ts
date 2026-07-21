@@ -1,13 +1,15 @@
 import { existsSync } from 'node:fs';
-import { mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { schema } from '../db';
+import { TRASH_DIR, TRASH_INFO } from '../lib/trash';
 import { createTestDb, testLogger } from '../test/helpers';
 import { createConfigService } from './config-service';
 import { createFileManagerService, parseEpisodeNumber } from './file-manager-service';
+import { createFileMutationCoordinator } from './file-mutation-coordinator';
 import { createRenamerService } from './renamer-service';
 
 /** Seed di un anime con N episodi + episode_file in una lingua (per i test linkExternalFolder). */
@@ -91,7 +93,13 @@ describe('FileManagerService', () => {
     const config = createConfigService({ db });
     config.set('seriesPathSub', root);
     const renamer = createRenamerService({ db, config });
-    service = createFileManagerService({ db, config, renamer, logger: testLogger });
+    service = createFileManagerService({
+      db,
+      config,
+      renamer,
+      logger: testLogger,
+      coordinator: createFileMutationCoordinator(),
+    });
   });
   afterEach(async () => {
     await rm(root, { recursive: true, force: true });
@@ -261,6 +269,7 @@ describe('FileManagerService', () => {
       config,
       renamer: createRenamerService({ db, config }),
       logger: testLogger,
+      coordinator: createFileMutationCoordinator(),
     });
     await writeFile(join(root, 'c.mp4'), 'x');
     await svc.remove(join(root, 'c.mp4'));
@@ -575,5 +584,126 @@ describe('parseEpisodeNumber', () => {
     ['random-name.mkv', null],
   ])('%s -> %s', (name, expected) => {
     expect(parseEpisodeNumber(name)).toBe(expected);
+  });
+});
+
+describe('FileManagerService hardening path e cestino', () => {
+  let db: ReturnType<typeof createTestDb>;
+  let root: string;
+  let service: ReturnType<typeof createFileManagerService>;
+
+  beforeEach(async () => {
+    db = createTestDb();
+    root = await mkdtemp(join(tmpdir(), 'au-fm-hardening-'));
+    const config = createConfigService({ db });
+    config.set('seriesPathSub', root);
+    const renamer = createRenamerService({ db, config });
+    service = createFileManagerService({
+      db,
+      config,
+      renamer,
+      logger: testLogger,
+      coordinator: createFileMutationCoordinator(),
+    });
+  });
+
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true });
+  });
+
+  it.each(['external', 'downloaded'] as const)(
+    'remove blocca un alias fisico %s fuori dal path selezionato',
+    async (referenceStatus) => {
+      seedSeries(db, [1, 2]);
+      const physicalDir = join(root, 'Physical');
+      const target = join(physicalDir, 'episode.mkv');
+      const aliasDir = join(root, 'Alias');
+      await mkdir(physicalDir, { recursive: true });
+      await writeFile(target, 'shared');
+      await symlink(physicalDir, aliasDir, 'junction');
+      const alias = join(aliasDir, 'episode.mkv');
+      db.update(schema.episodeFile)
+        .set({ downloadStatus: 'downloaded', localPath: target })
+        .where(eq(schema.episodeFile.id, 'ef-1'))
+        .run();
+      db.update(schema.episodeFile)
+        .set({ downloadStatus: referenceStatus, localPath: alias })
+        .where(eq(schema.episodeFile.id, 'ef-2'))
+        .run();
+
+      await expect(service.remove(target)).rejects.toThrow(
+        referenceStatus === 'external' ? /esterni/i : /condiviso/i,
+      );
+      expect(existsSync(target)).toBe(true);
+      expect(existsSync(alias)).toBe(true);
+    },
+  );
+
+  it('rifiuta un namespace .trash che è una junction verso fuori root', async () => {
+    const outside = await mkdtemp(join(tmpdir(), 'au-fm-trash-outside-'));
+    try {
+      const sentinel = join(outside, 'sentinel.txt');
+      await writeFile(sentinel, 'keep');
+      await symlink(outside, join(root, TRASH_DIR), 'junction');
+      const target = join(root, 'episode.mkv');
+      await writeFile(target, 'video');
+
+      await expect(service.remove(target)).rejects.toThrow(/cestino|namespace|confinato/i);
+      expect(existsSync(target)).toBe(true);
+      expect(existsSync(sentinel)).toBe(true);
+      expect(await service.trashList()).toEqual({ entries: [] });
+      expect(await service.trashEmpty()).toEqual({ ok: true, count: 0 });
+      expect(await service.pruneTrash(0)).toBe(0);
+      expect(existsSync(sentinel)).toBe(true);
+    } finally {
+      await rm(outside, { recursive: true, force: true });
+    }
+  });
+
+  it('trashRestore rifiuta un parent sostituito da junction verso fuori root', async () => {
+    const parent = join(root, 'Series');
+    const target = join(parent, 'episode.mkv');
+    await mkdir(parent, { recursive: true });
+    await writeFile(target, 'video');
+    await service.remove(target);
+    const entry = (await service.trashList()).entries[0];
+    expect(entry).toBeDefined();
+
+    const outside = await mkdtemp(join(tmpdir(), 'au-fm-restore-outside-'));
+    try {
+      const sentinel = join(outside, 'sentinel.txt');
+      await writeFile(sentinel, 'keep');
+      await rm(parent, { recursive: true, force: true });
+      await symlink(outside, parent, 'junction');
+
+      await expect(service.trashRestore(entry?.id ?? '')).rejects.toThrow(/parent|root/i);
+      expect(existsSync(join(outside, 'episode.mkv'))).toBe(false);
+      expect(existsSync(sentinel)).toBe(true);
+      expect((await service.trashList()).entries).toHaveLength(1);
+    } finally {
+      await rm(outside, { recursive: true, force: true });
+    }
+  });
+
+  it('ignora metadata cestino con name traversal e non li usa nel restore', async () => {
+    const target = join(root, 'episode.mkv');
+    await writeFile(target, 'video');
+    await service.remove(target);
+    const entry = (await service.trashList()).entries[0];
+    expect(entry).toBeDefined();
+    const infoPath = join(root, TRASH_DIR, entry?.id ?? '', TRASH_INFO);
+    await writeFile(
+      infoPath,
+      JSON.stringify({
+        originalPath: target,
+        name: '../outside.mkv',
+        deletedAt: new Date().toISOString(),
+        type: 'file',
+      }),
+    );
+
+    expect(await service.trashList()).toEqual({ entries: [] });
+    await expect(service.trashRestore(entry?.id ?? '')).rejects.toThrow(/non trovata/i);
+    expect(existsSync(join(root, TRASH_DIR, entry?.id ?? ''))).toBe(true);
   });
 });

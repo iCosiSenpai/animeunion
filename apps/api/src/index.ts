@@ -6,7 +6,7 @@ import { createAppContext } from './context';
 import { integrationRoutes } from './integration-routes';
 import { logger } from './lib/logger';
 import { type AppRouter, appRouter } from './routers';
-import { createScheduler } from './scheduler';
+import { createScheduler, startSchedulerThenListen } from './scheduler';
 
 // Interpreta TRUST_PROXY: 'true'/'false' → booleano, un intero → numero di hop, altrimenti la
 // stringa (lista di IP/CIDR passata a Fastify così com'è). Default: false.
@@ -75,8 +75,9 @@ async function main(): Promise<void> {
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
 
-  await app.listen({ port: env.API_PORT, host: '0.0.0.0' });
-  scheduler.start();
+  await startSchedulerThenListen(scheduler, () =>
+    app.listen({ port: env.API_PORT, host: '0.0.0.0' }),
+  );
 }
 
 // Handler globali: cattura promise rejection e eccezioni non gestite per evitare

@@ -5,6 +5,7 @@ import { createTestDb, testLogger } from '../test/helpers';
 import { createCatalogService } from './catalog-service';
 import { createConfigService } from './config-service';
 import { createDownloadService } from './download-service';
+import { createFileMutationCoordinator } from './file-mutation-coordinator';
 import { createFollowService } from './follow-service';
 import { createRenamerService } from './renamer-service';
 import { createRequestService } from './request-service';
@@ -31,6 +32,7 @@ function setup() {
     config,
     renamer,
     logger: testLogger,
+    coordinator: createFileMutationCoordinator(),
   });
   const requests = createRequestService({ db, catalog, resolver, follow, download, config });
   return { requests, catalog };

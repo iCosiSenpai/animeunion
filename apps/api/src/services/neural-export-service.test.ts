@@ -1,13 +1,17 @@
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { UserProfile } from '@animeunion/shared';
+import type { AnimeSource, UserProfile } from '@animeunion/shared';
 import { and, eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { schema } from '../db';
-import { createConfigService } from '../services/config-service';
 import { createMockSource } from '../sources/mock-source';
 import { createTestDb, testLogger } from '../test/helpers';
+import { createConfigService } from './config-service';
+import {
+  type FileMutationCoordinator,
+  createFileMutationCoordinator,
+} from './file-mutation-coordinator';
 import {
   type NeuralFetch,
   type NeuralFetchResponse,
@@ -125,12 +129,14 @@ describe('neural-export-service', () => {
 
   function makeService(opts?: {
     profile?: ProfileService;
+    source?: AnimeSource;
     fetchImpl?: NeuralFetch;
     verifyImpl?: typeof verifyImpl;
+    coordinator?: FileMutationCoordinator;
   }) {
     return createNeuralExportService({
       db,
-      source: createMockSource(),
+      source: opts?.source ?? createMockSource(),
       config,
       profile: opts?.profile ?? entitledProfile,
       renamer: renamerStub,
@@ -138,6 +144,7 @@ describe('neural-export-service', () => {
       fetchImpl: opts?.fetchImpl ?? makeFetch(),
       downloadFileImpl,
       verifyImpl: opts?.verifyImpl ?? verifyImpl,
+      coordinator: opts?.coordinator ?? createFileMutationCoordinator(),
       pollIntervalMs: 1,
       pollTimeoutMs: 60_000,
     });
@@ -181,6 +188,379 @@ describe('neural-export-service', () => {
     const sd = db.select().from(schema.episodeFile).where(eq(schema.episodeFile.id, 'ef-sd')).get();
     expect(sd?.localPath).toBe(srcPath);
     expect(sd?.quality).toBe('SD');
+  });
+
+  it('cancel Neural durante il caricamento recipe non resuscita il job queued', async () => {
+    const delayedSource = createMockSource();
+    const loadRecipe = delayedSource.getNeuralExportProfile.bind(delayedSource);
+    let releaseRecipe = () => {};
+    const recipeGate = new Promise<void>((resolve) => {
+      releaseRecipe = resolve;
+    });
+    delayedSource.getNeuralExportProfile = async () => {
+      await recipeGate;
+      return loadRecipe();
+    };
+    const fetchImpl = makeFetch();
+    const svc = makeService({ source: delayedSource, fetchImpl });
+
+    const { jobId } = await svc.exportEpisode({ episodeFileId: 'ef-sd', quality: 'XQ' });
+    expect(await svc.cancel(jobId)).toBe(true);
+    releaseRecipe();
+    await svc.waitForIdle();
+
+    const job = svc.listJobs().find((candidate) => candidate.id === jobId);
+    expect(job?.state).toBe('cancelled');
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('cancel Neural durante il POST elimina il worker remoto appena ne riceve l ID', async () => {
+    let enterDispatch = () => {};
+    let releaseDispatch = () => {};
+    const dispatchEntered = new Promise<void>((resolve) => {
+      enterDispatch = resolve;
+    });
+    const dispatchGate = new Promise<void>((resolve) => {
+      releaseDispatch = resolve;
+    });
+    const fetchImpl: NeuralFetch = vi.fn(async (url, init) => {
+      if (url.endsWith('/jobs') && init?.method === 'POST') {
+        enterDispatch();
+        await dispatchGate;
+        return json({ jobId: 'wjob-late' });
+      }
+      if (url.endsWith('/jobs/wjob-late') && init?.method === 'DELETE') {
+        return json({ ok: true });
+      }
+      return json({}, false, 404);
+    });
+    const svc = makeService({ fetchImpl });
+
+    const { jobId } = await svc.exportEpisode({ episodeFileId: 'ef-sd', quality: 'XQ' });
+    await dispatchEntered;
+    expect(await svc.cancel(jobId)).toBe(true);
+    releaseDispatch();
+    await svc.waitForIdle();
+
+    const job = svc.listJobs().find((candidate) => candidate.id === jobId);
+    expect(job?.state).toBe('cancelled');
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://worker.local:8787/jobs/wjob-late',
+      expect.objectContaining({ method: 'DELETE' }),
+    );
+  });
+
+  it('finalizzazione Neural attende il coordinatore prima di move e upsert DB', async () => {
+    const coordinator = createFileMutationCoordinator();
+    let enter = () => {};
+    let release = () => {};
+    const entered = new Promise<void>((resolve) => {
+      enter = resolve;
+    });
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const blocker = coordinator.runExclusive(async () => {
+      enter();
+      await released;
+    });
+    await entered;
+
+    const svc = makeService({ coordinator });
+    await svc.exportEpisode({ episodeFileId: 'ef-sd', quality: 'XQ' });
+    await vi.waitFor(() => expect(verifyImpl).toHaveBeenCalled());
+    const beforeRelease = db
+      .select()
+      .from(schema.episodeFile)
+      .where(and(eq(schema.episodeFile.episodeId, 'e1'), eq(schema.episodeFile.quality, 'XQ')))
+      .get();
+    expect(beforeRelease).toBeUndefined();
+
+    release();
+    await blocker;
+    await svc.waitForIdle();
+    const afterRelease = db
+      .select()
+      .from(schema.episodeFile)
+      .where(and(eq(schema.episodeFile.episodeId, 'e1'), eq(schema.episodeFile.quality, 'XQ')))
+      .get();
+    expect(afterRelease?.downloadStatus).toBe('downloaded');
+  });
+
+  it('finalizzazione Neural non sovrascrive una qualità diventata external mentre renderizza', async () => {
+    const coordinator = createFileMutationCoordinator();
+    let enter = () => {};
+    let release = () => {};
+    const entered = new Promise<void>((resolve) => {
+      enter = resolve;
+    });
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const blocker = coordinator.runExclusive(async () => {
+      enter();
+      await released;
+    });
+    await entered;
+
+    const externalPath = join(outDir, 'external-xq.mp4');
+    await writeFile(externalPath, 'EXTERNAL-XQ');
+    const linkExternal = coordinator.runExclusive(async () => {
+      const ts = new Date().toISOString();
+      db.insert(schema.episodeFile)
+        .values({
+          id: 'ef-external-xq',
+          episodeId: 'e1',
+          language: 'SUB_ITA',
+          quality: 'XQ',
+          downloadStatus: 'external',
+          localPath: externalPath,
+          createdAt: ts,
+          updatedAt: ts,
+        })
+        .run();
+    });
+    const svc = makeService({ coordinator });
+    const { jobId } = await svc.exportEpisode({ episodeFileId: 'ef-sd', quality: 'XQ' });
+    await vi.waitFor(() => expect(verifyImpl).toHaveBeenCalled());
+
+    release();
+    await blocker;
+    await linkExternal;
+    await svc.waitForIdle();
+
+    const job = svc.listJobs().find((candidate) => candidate.id === jobId);
+    expect(job?.state).toBe('error');
+    const xq = db
+      .select()
+      .from(schema.episodeFile)
+      .where(eq(schema.episodeFile.id, 'ef-external-xq'))
+      .get();
+    expect(xq?.downloadStatus).toBe('external');
+    expect(xq?.localPath).toBe(externalPath);
+    expect(await readFile(externalPath, 'utf8')).toBe('EXTERNAL-XQ');
+  });
+
+  it('finalizzazione Neural non sovrascrive una qualità diventata downloaded mentre renderizza', async () => {
+    const coordinator = createFileMutationCoordinator();
+    const ts = new Date().toISOString();
+    db.insert(schema.episodeFile)
+      .values({
+        id: 'ef-xq-placeholder',
+        episodeId: 'e1',
+        language: 'SUB_ITA',
+        quality: 'XQ',
+        downloadStatus: 'not_downloaded',
+        createdAt: ts,
+        updatedAt: ts,
+      })
+      .run();
+
+    let enter = () => {};
+    let release = () => {};
+    const entered = new Promise<void>((resolve) => {
+      enter = resolve;
+    });
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const blocker = coordinator.runExclusive(async () => {
+      enter();
+      await released;
+    });
+    await entered;
+
+    const linkedPath = join(outDir, 'linked-xq.mp4');
+    await writeFile(linkedPath, 'LINKED-XQ');
+    const relink = coordinator.runExclusive(async () => {
+      db.update(schema.episodeFile)
+        .set({
+          downloadStatus: 'downloaded',
+          localPath: linkedPath,
+          fileSize: 9,
+          downloadedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        })
+        .where(eq(schema.episodeFile.id, 'ef-xq-placeholder'))
+        .run();
+    });
+    const svc = makeService({ coordinator });
+    const { jobId } = await svc.exportEpisode({ episodeFileId: 'ef-sd', quality: 'XQ' });
+    await vi.waitFor(() => expect(verifyImpl).toHaveBeenCalled());
+
+    release();
+    await blocker;
+    await relink;
+    await svc.waitForIdle();
+
+    const job = svc.listJobs().find((candidate) => candidate.id === jobId);
+    expect(job?.state).toBe('error');
+    expect(job?.error).toMatch(/downloaded/i);
+    const xq = db
+      .select()
+      .from(schema.episodeFile)
+      .where(eq(schema.episodeFile.id, 'ef-xq-placeholder'))
+      .get();
+    expect(xq?.downloadStatus).toBe('downloaded');
+    expect(xq?.localPath).toBe(linkedPath);
+    expect(await readFile(linkedPath, 'utf8')).toBe('LINKED-XQ');
+  });
+
+  it('finalizzazione Neural rispetta un annullamento accodato prima del proprio lock', async () => {
+    const coordinator = createFileMutationCoordinator();
+    let enter = () => {};
+    let release = () => {};
+    const entered = new Promise<void>((resolve) => {
+      enter = resolve;
+    });
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const blocker = coordinator.runExclusive(async () => {
+      enter();
+      await released;
+    });
+    await entered;
+
+    const svc = makeService({ coordinator });
+    const { jobId } = await svc.exportEpisode({ episodeFileId: 'ef-sd', quality: 'XQ' });
+    // cancel acquisisce la posizione in coda prima che download/verifica arrivino a finalize.
+    const cancelled = svc.cancel(jobId);
+    await vi.waitFor(() => expect(verifyImpl).toHaveBeenCalled());
+
+    release();
+    await blocker;
+    expect(await cancelled).toBe(true);
+    await svc.waitForIdle();
+
+    const job = svc.listJobs().find((candidate) => candidate.id === jobId);
+    expect(job?.state).toBe('cancelled');
+    const xq = db
+      .select()
+      .from(schema.episodeFile)
+      .where(and(eq(schema.episodeFile.episodeId, 'e1'), eq(schema.episodeFile.quality, 'XQ')))
+      .get();
+    expect(xq).toBeUndefined();
+  });
+
+  it('finalizzazione Neural non ricrea output se la sorgente viene eliminata durante il render', async () => {
+    const coordinator = createFileMutationCoordinator();
+    let enter = () => {};
+    let release = () => {};
+    const entered = new Promise<void>((resolve) => {
+      enter = resolve;
+    });
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const blocker = coordinator.runExclusive(async () => {
+      enter();
+      await released;
+    });
+    await entered;
+
+    // La cancellazione è già in coda quando finalize proverà ad acquisire il coordinatore, ma il
+    // render può ancora leggere la sorgente finché il blocker resta attivo.
+    const deleteSource = coordinator.runExclusive(async () => {
+      await rm(srcPath, { force: true });
+      db.update(schema.episodeFile)
+        .set({
+          downloadStatus: 'not_downloaded',
+          localPath: null,
+          fileSize: null,
+          downloadedAt: null,
+          updatedAt: new Date().toISOString(),
+        })
+        .where(eq(schema.episodeFile.id, 'ef-sd'))
+        .run();
+    });
+    const svc = makeService({ coordinator });
+    const { jobId } = await svc.exportEpisode({ episodeFileId: 'ef-sd', quality: 'XQ' });
+    await vi.waitFor(() => expect(verifyImpl).toHaveBeenCalled());
+
+    release();
+    await blocker;
+    await deleteSource;
+    await svc.waitForIdle();
+
+    const job = svc.listJobs().find((candidate) => candidate.id === jobId);
+    expect(job?.state).toBe('error');
+    expect(job?.error).toMatch(/sorgente|modificat/i);
+    const xq = db
+      .select()
+      .from(schema.episodeFile)
+      .where(and(eq(schema.episodeFile.episodeId, 'e1'), eq(schema.episodeFile.quality, 'XQ')))
+      .get();
+    expect(xq).toBeUndefined();
+    const finalPath = renamerStub.computeEpisodePath({
+      animeId: 'a1',
+      episodeNumber: 3,
+      language: 'SUB_ITA',
+      quality: 'XQ',
+    });
+    await expect(readFile(finalPath)).rejects.toBeTruthy();
+    await expect(readFile(srcPath)).rejects.toBeTruthy();
+  });
+
+  it('finalizzazione Neural rifiuta un ABA della sorgente allo stesso path', async () => {
+    const coordinator = createFileMutationCoordinator();
+    let enter = () => {};
+    let release = () => {};
+    const entered = new Promise<void>((resolve) => {
+      enter = resolve;
+    });
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const blocker = coordinator.runExclusive(async () => {
+      enter();
+      await released;
+    });
+    await entered;
+
+    // Ripristina intenzionalmente gli stessi marker DB e la stessa lunghezza: la protezione deve
+    // riconoscere l'oggetto filesystem nuovo, non soltanto path/status/timestamp applicativo.
+    const replacement = 'REAL-SD-MP4';
+    const replaceSource = coordinator.runExclusive(async () => {
+      await rm(srcPath, { force: true });
+      await writeFile(srcPath, replacement);
+      db.update(schema.episodeFile)
+        .set({
+          downloadStatus: 'downloaded',
+          localPath: srcPath,
+          fileSize: null,
+          downloadedAt: null,
+          updatedAt: '2026-07-08T00:00:00.000Z',
+        })
+        .where(eq(schema.episodeFile.id, 'ef-sd'))
+        .run();
+    });
+    const svc = makeService({ coordinator });
+    const { jobId } = await svc.exportEpisode({ episodeFileId: 'ef-sd', quality: 'XQ' });
+    await vi.waitFor(() => expect(verifyImpl).toHaveBeenCalled());
+
+    release();
+    await blocker;
+    await replaceSource;
+    await svc.waitForIdle();
+
+    const job = svc.listJobs().find((candidate) => candidate.id === jobId);
+    expect(job?.state).toBe('error');
+    expect(job?.error).toMatch(/generazione|sorgente|modificat/i);
+    const xq = db
+      .select()
+      .from(schema.episodeFile)
+      .where(and(eq(schema.episodeFile.episodeId, 'e1'), eq(schema.episodeFile.quality, 'XQ')))
+      .get();
+    expect(xq).toBeUndefined();
+    expect(await readFile(srcPath, 'utf8')).toBe(replacement);
+    const finalPath = renamerStub.computeEpisodePath({
+      animeId: 'a1',
+      episodeNumber: 3,
+      language: 'SUB_ITA',
+      quality: 'XQ',
+    });
+    await expect(readFile(finalPath)).rejects.toBeTruthy();
   });
 
   it('exportEpisode: senza entitlement -> PreconditionError, nessun job', async () => {

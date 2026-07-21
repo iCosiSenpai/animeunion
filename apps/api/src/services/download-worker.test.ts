@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import type { AddressInfo, Socket } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -13,6 +13,7 @@ import { createDownloadWorker } from '../lib/download-worker';
 import { testLogger } from '../test/helpers';
 import type { CatalogService } from './catalog-service';
 import { createConfigService } from './config-service';
+import { createFileMutationCoordinator } from './file-mutation-coordinator';
 import { createRenamerService } from './renamer-service';
 
 function buildStubCatalog(urlByFileId: Map<string, string | null>): CatalogService {
@@ -61,6 +62,7 @@ function makeWorker(
     config,
     logger: testLogger,
     renamer,
+    coordinator: createFileMutationCoordinator(),
     resolveMaxConcurrent,
   });
 }
@@ -318,7 +320,7 @@ describe('DownloadWorker (FSM)', () => {
     expect(a).toBe(b);
   });
 
-  it('cancel su queued è immediato, su completed rifiuta', () => {
+  it('cancel su queued è immediato, su completed rifiuta', async () => {
     const config = createConfigService({ db });
     config.set('seriesPathSub', animePath);
     const worker = makeWorker(db, buildStubCatalog(new Map()), config);
@@ -393,7 +395,7 @@ describe('DownloadWorker (FSM)', () => {
       })
       .run();
 
-    expect(worker.cancel('q-queued')).toBe(true);
+    expect(await worker.cancel('q-queued')).toBe(true);
     const queued = db
       .select()
       .from(schema.downloadQueue)
@@ -401,7 +403,7 @@ describe('DownloadWorker (FSM)', () => {
       .find((r) => r.id === 'q-queued');
     expect(queued?.status).toBe('cancelled');
 
-    expect(worker.cancel('q-done')).toBe(false);
+    expect(await worker.cancel('q-done')).toBe(false);
   });
 
   it('retry su failed rimette in coda e resetta retry_count', () => {
@@ -607,6 +609,269 @@ describe('DownloadWorker (FSM)', () => {
     worker.stop();
   });
 
+  it('finalizzazione download attende il coordinatore prima di move e commit DB', async () => {
+    const body = mp4('coordinated-finalize');
+    const server = createServer((_req, res) => {
+      res.writeHead(200, {
+        'content-type': 'video/mp4',
+        'content-length': String(body.length),
+      });
+      res.end(body);
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const { port } = server.address() as AddressInfo;
+    const url = `http://127.0.0.1:${port}/episode.mp4`;
+    const config = createConfigService({ db });
+    config.set('seriesPathSub', animePath);
+    seedEpisodeFiles(db, ['ef-coordinated']);
+    const coordinator = createFileMutationCoordinator();
+    const renamer = createRenamerService({ db, config });
+    const worker = createDownloadWorker({
+      db,
+      catalog: buildStubCatalog(new Map([['ef-coordinated', url]])),
+      config,
+      logger: testLogger,
+      renamer,
+      coordinator,
+    });
+    const finalPath = renamer.computeEpisodePath({
+      animeId: 'a-1',
+      episodeNumber: 1,
+      language: 'SUB_ITA',
+    });
+
+    try {
+      await worker.start();
+      let enter = () => {};
+      let release = () => {};
+      const entered = new Promise<void>((resolve) => {
+        enter = resolve;
+      });
+      const released = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const blocker = coordinator.runExclusive(async () => {
+        enter();
+        await released;
+      });
+      await entered;
+
+      const id = worker.enqueue('ef-coordinated');
+      await worker.tryStartNext();
+      const deadline = Date.now() + 4000;
+      let queue = db
+        .select()
+        .from(schema.downloadQueue)
+        .where(eq(schema.downloadQueue.id, id))
+        .get();
+      while (queue?.status !== 'processing') {
+        if (Date.now() > deadline) {
+          throw new Error(`timeout: finalizzazione ferma su '${queue?.status}'`);
+        }
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        queue = db.select().from(schema.downloadQueue).where(eq(schema.downloadQueue.id, id)).get();
+      }
+      await expect(readFile(finalPath)).rejects.toBeTruthy();
+      const beforeRelease = db
+        .select()
+        .from(schema.episodeFile)
+        .where(eq(schema.episodeFile.id, 'ef-coordinated'))
+        .get();
+      expect(beforeRelease?.downloadStatus).toBe('not_downloaded');
+
+      release();
+      await blocker;
+      while (queue?.status !== 'completed') {
+        if (Date.now() > deadline) {
+          throw new Error(`timeout: commit finale fermo su '${queue?.status}'`);
+        }
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        queue = db.select().from(schema.downloadQueue).where(eq(schema.downloadQueue.id, id)).get();
+      }
+      expect(await readFile(finalPath)).toEqual(body);
+      const afterRelease = db
+        .select()
+        .from(schema.episodeFile)
+        .where(eq(schema.episodeFile.id, 'ef-coordinated'))
+        .get();
+      expect(afterRelease?.downloadStatus).toBe('downloaded');
+      expect(afterRelease?.localPath).toBe(finalPath);
+    } finally {
+      worker.stop();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+
+  it('cancel durante atomicMove attende finalize e restituisce false', async () => {
+    const body = mp4('cancel-during-atomic-move');
+    const server = createServer((_req, res) => {
+      res.writeHead(200, {
+        'content-type': 'video/mp4',
+        'content-length': String(body.length),
+      });
+      res.end(body);
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const { port } = server.address() as AddressInfo;
+    const url = `http://127.0.0.1:${port}/episode.mp4`;
+    const config = createConfigService({ db });
+    config.set('seriesPathSub', animePath);
+    seedEpisodeFiles(db, ['ef-cancel-finalizing']);
+    const coordinator = createFileMutationCoordinator();
+    const renamer = createRenamerService({ db, config });
+    let enterMove = () => {};
+    let releaseMove = () => {};
+    const moveEntered = new Promise<void>((resolve) => {
+      enterMove = resolve;
+    });
+    const moveReleased = new Promise<void>((resolve) => {
+      releaseMove = resolve;
+    });
+    const worker = createDownloadWorker({
+      db,
+      catalog: buildStubCatalog(new Map([['ef-cancel-finalizing', url]])),
+      config,
+      logger: testLogger,
+      renamer,
+      coordinator,
+      atomicMoveImpl: async (from, to) => {
+        enterMove();
+        await moveReleased;
+        await rename(from, to);
+      },
+    });
+    const finalPath = renamer.computeEpisodePath({
+      animeId: 'a-1',
+      episodeNumber: 1,
+      language: 'SUB_ITA',
+    });
+
+    try {
+      await worker.start();
+      const id = worker.enqueue('ef-cancel-finalizing');
+      await worker.tryStartNext();
+      await moveEntered;
+
+      const cancellation = worker.cancel(id);
+      let cancellationSettled = false;
+      void cancellation.finally(() => {
+        cancellationSettled = true;
+      });
+      await Promise.resolve();
+      expect(cancellationSettled).toBe(false);
+      const whileMoving = db
+        .select()
+        .from(schema.downloadQueue)
+        .where(eq(schema.downloadQueue.id, id))
+        .get();
+      expect(whileMoving?.status).toBe('processing');
+
+      releaseMove();
+      expect(await cancellation).toBe(false);
+      const completed = db
+        .select()
+        .from(schema.downloadQueue)
+        .where(eq(schema.downloadQueue.id, id))
+        .get();
+      expect(completed?.status).toBe('completed');
+      const file = db
+        .select()
+        .from(schema.episodeFile)
+        .where(eq(schema.episodeFile.id, 'ef-cancel-finalizing'))
+        .get();
+      expect(file?.downloadStatus).toBe('downloaded');
+      expect(await readFile(finalPath)).toEqual(body);
+    } finally {
+      releaseMove();
+      worker.stop();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+
+  it('cancel durante la verifica non può essere riscritto come processing', async () => {
+    const body = mp4('cancel-during-verification');
+    const server = createServer((_req, res) => {
+      res.writeHead(200, {
+        'content-type': 'video/mp4',
+        'content-length': String(body.length),
+      });
+      res.end(body);
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const { port } = server.address() as AddressInfo;
+    const url = `http://127.0.0.1:${port}/episode.mp4`;
+    const config = createConfigService({ db });
+    config.set('seriesPathSub', animePath);
+    config.set('verifyDownloads', true);
+    seedEpisodeFiles(db, ['ef-cancel-verifying']);
+    const renamer = createRenamerService({ db, config });
+    let enterVerify = () => {};
+    let releaseVerify = () => {};
+    const verifyEntered = new Promise<void>((resolve) => {
+      enterVerify = resolve;
+    });
+    const verifyReleased = new Promise<void>((resolve) => {
+      releaseVerify = resolve;
+    });
+    const worker = createDownloadWorker({
+      db,
+      catalog: buildStubCatalog(new Map([['ef-cancel-verifying', url]])),
+      config,
+      logger: testLogger,
+      renamer,
+      coordinator: createFileMutationCoordinator(),
+      verifyVideoFileImpl: async () => {
+        enterVerify();
+        await verifyReleased;
+        return { ok: true };
+      },
+    });
+    const finalPath = renamer.computeEpisodePath({
+      animeId: 'a-1',
+      episodeNumber: 1,
+      language: 'SUB_ITA',
+    });
+
+    try {
+      await worker.start();
+      const id = worker.enqueue('ef-cancel-verifying');
+      await worker.tryStartNext();
+      await verifyEntered;
+      const cancelledEvent = new Promise<void>((resolve) => {
+        const listener = ({ queueId }: { queueId: string }) => {
+          if (queueId === id) {
+            worker.off('cancelled', listener);
+            resolve();
+          }
+        };
+        worker.on('cancelled', listener);
+      });
+
+      expect(await worker.cancel(id)).toBe(true);
+      releaseVerify();
+      await cancelledEvent;
+
+      const queue = db
+        .select()
+        .from(schema.downloadQueue)
+        .where(eq(schema.downloadQueue.id, id))
+        .get();
+      expect(queue?.status).toBe('cancelled');
+      const file = db
+        .select()
+        .from(schema.episodeFile)
+        .where(eq(schema.episodeFile.id, 'ef-cancel-verifying'))
+        .get();
+      expect(file?.downloadStatus).toBe('not_downloaded');
+      await expect(readFile(finalPath)).rejects.toBeTruthy();
+      await expect(readFile(tempPath(finalPath, id))).rejects.toBeTruthy();
+    } finally {
+      releaseVerify();
+      worker.stop();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+
   it('enqueue + tryStartNext scarica davvero e completa (regressione path normale)', async () => {
     const body = mp4('fake-mp4-bytes-0123456789');
     const server = createServer((_req, res) => {
@@ -702,7 +967,7 @@ describe('DownloadWorker (FSM)', () => {
     }
   });
 
-  it('cancel su downloading orfano (nessun controller in volo) lo segna cancelled', () => {
+  it('cancel su downloading orfano (nessun controller in volo) lo segna cancelled', async () => {
     const config = createConfigService({ db });
     config.set('seriesPathSub', animePath);
     const worker = makeWorker(db, buildStubCatalog(new Map()), config);
@@ -721,7 +986,7 @@ describe('DownloadWorker (FSM)', () => {
       .run();
 
     // Il worker non ha avviato questo job: nessun AbortController in volo -> orfano.
-    expect(worker.cancel('q-orph')).toBe(true);
+    expect(await worker.cancel('q-orph')).toBe(true);
     const row = db
       .select()
       .from(schema.downloadQueue)
@@ -901,10 +1166,18 @@ describe('DownloadWorker (FSM)', () => {
     expect(worker.retryEnvFailed()).toBe(0);
   });
 
-  it('start reimposta i download orfani (downloading/processing) a failed', () => {
+  it('start reimposta i download orfani (downloading/processing) a failed', async () => {
     const config = createConfigService({ db });
     config.set('seriesPathSub', animePath);
-    const worker = makeWorker(db, buildStubCatalog(new Map()), config);
+    const coordinator = createFileMutationCoordinator();
+    const worker = createDownloadWorker({
+      db,
+      catalog: buildStubCatalog(new Map()),
+      config,
+      logger: testLogger,
+      renamer: createRenamerService({ db, config }),
+      coordinator,
+    });
 
     const t = new Date().toISOString();
     seedEpisodeFiles(db, ['ef-a', 'ef-b']);
@@ -929,7 +1202,30 @@ describe('DownloadWorker (FSM)', () => {
       })
       .run();
 
-    worker.start();
+    let enter = () => {};
+    let release = () => {};
+    const entered = new Promise<void>((resolve) => {
+      enter = resolve;
+    });
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const blocker = coordinator.runExclusive(async () => {
+      enter();
+      await released;
+    });
+    await entered;
+
+    const startup = worker.start();
+    const beforeRelease = db
+      .select()
+      .from(schema.downloadQueue)
+      .where(eq(schema.downloadQueue.id, 'q-dl'))
+      .get();
+    expect(beforeRelease?.status).toBe('downloading');
+    release();
+    await blocker;
+    await startup;
     try {
       const dl = db
         .select()
@@ -948,6 +1244,187 @@ describe('DownloadWorker (FSM)', () => {
     }
   });
 
+  it('non avvia queued finché reconcile e sweep non rendono il worker ready', async () => {
+    const config = createConfigService({ db });
+    config.set('seriesPathSub', animePath);
+    const coordinator = createFileMutationCoordinator();
+    const worker = createDownloadWorker({
+      db,
+      catalog: buildStubCatalog(new Map()),
+      config,
+      logger: testLogger,
+      renamer: createRenamerService({ db, config }),
+      coordinator,
+      resolveMaxConcurrent: async () => 2,
+    });
+    const t = new Date().toISOString();
+    seedEpisodeFiles(db, ['ef-startup-orphan', 'ef-startup-queued']);
+    db.insert(schema.downloadQueue)
+      .values({
+        id: 'q-startup-orphan',
+        episodeFileId: 'ef-startup-orphan',
+        status: 'processing',
+        priority: 50,
+        createdAt: t,
+      })
+      .run();
+    db.insert(schema.downloadQueue)
+      .values({
+        id: 'q-startup-queued',
+        episodeFileId: 'ef-startup-queued',
+        status: 'queued',
+        priority: 50,
+        createdAt: t,
+      })
+      .run();
+
+    let enter = () => {};
+    let release = () => {};
+    const entered = new Promise<void>((resolve) => {
+      enter = resolve;
+    });
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const blocker = coordinator.runExclusive(async () => {
+      enter();
+      await released;
+    });
+    await entered;
+
+    const startup = worker.start();
+    try {
+      // Con concorrenza 2 l'orfano occupa un solo slot: senza il gate ready questa chiamata (e il
+      // safety tick equivalente) prenoterebbe subito il secondo job mentre reconcile è sospeso.
+      await worker.tryStartNext();
+      const queuedDuringStartup = db
+        .select()
+        .from(schema.downloadQueue)
+        .where(eq(schema.downloadQueue.id, 'q-startup-queued'))
+        .get();
+      expect(queuedDuringStartup?.status).toBe('queued');
+
+      worker.pause();
+      release();
+      await blocker;
+      await startup;
+      const queuedAfterStartup = db
+        .select()
+        .from(schema.downloadQueue)
+        .where(eq(schema.downloadQueue.id, 'q-startup-queued'))
+        .get();
+      expect(queuedAfterStartup?.status).toBe('queued');
+    } finally {
+      release();
+      await blocker;
+      worker.stop();
+    }
+  });
+
+  it('invalida un resolver scheduler sospeso attraverso stop e nuovo start', async () => {
+    const config = createConfigService({ db });
+    config.set('seriesPathSub', animePath);
+    const coordinator = createFileMutationCoordinator();
+    let blockResolver = false;
+    let enterResolver = () => {};
+    let releaseResolver = () => {};
+    const resolverEntered = new Promise<void>((resolve) => {
+      enterResolver = resolve;
+    });
+    const resolverReleased = new Promise<void>((resolve) => {
+      releaseResolver = resolve;
+    });
+    const worker = createDownloadWorker({
+      db,
+      catalog: buildStubCatalog(new Map()),
+      config,
+      logger: testLogger,
+      renamer: createRenamerService({ db, config }),
+      coordinator,
+      resolveMaxConcurrent: async () => {
+        if (blockResolver) {
+          enterResolver();
+          await resolverReleased;
+        }
+        return 2;
+      },
+    });
+
+    await worker.start();
+    // Drena anche il tryStartNext fire-and-forget avviato al termine dello startup iniziale.
+    await worker.tryStartNext();
+    const t = new Date().toISOString();
+    seedEpisodeFiles(db, ['ef-stale-scheduler-orphan', 'ef-stale-scheduler-queued']);
+    db.insert(schema.downloadQueue)
+      .values({
+        id: 'q-stale-scheduler-orphan',
+        episodeFileId: 'ef-stale-scheduler-orphan',
+        status: 'processing',
+        priority: 50,
+        createdAt: t,
+      })
+      .run();
+    db.insert(schema.downloadQueue)
+      .values({
+        id: 'q-stale-scheduler-queued',
+        episodeFileId: 'ef-stale-scheduler-queued',
+        status: 'queued',
+        priority: 50,
+        createdAt: t,
+      })
+      .run();
+
+    let releaseCoordinator = () => {};
+    let blocker: Promise<unknown> = Promise.resolve();
+    let restarted: Promise<void> | null = null;
+    try {
+      blockResolver = true;
+      const staleAttempt = worker.tryStartNext();
+      await resolverEntered;
+
+      worker.stop();
+      let enterCoordinator = () => {};
+      const coordinatorEntered = new Promise<void>((resolve) => {
+        enterCoordinator = resolve;
+      });
+      const coordinatorReleased = new Promise<void>((resolve) => {
+        releaseCoordinator = resolve;
+      });
+      blocker = coordinator.runExclusive(async () => {
+        enterCoordinator();
+        await coordinatorReleased;
+      });
+      await coordinatorEntered;
+      restarted = worker.start();
+
+      releaseResolver();
+      await staleAttempt;
+      const queuedDuringRestart = db
+        .select()
+        .from(schema.downloadQueue)
+        .where(eq(schema.downloadQueue.id, 'q-stale-scheduler-queued'))
+        .get();
+      expect(queuedDuringRestart?.status).toBe('queued');
+
+      worker.pause();
+      releaseCoordinator();
+      await blocker;
+      await restarted;
+      const queuedAfterRestart = db
+        .select()
+        .from(schema.downloadQueue)
+        .where(eq(schema.downloadQueue.id, 'q-stale-scheduler-queued'))
+        .get();
+      expect(queuedAfterRestart?.status).toBe('queued');
+    } finally {
+      releaseResolver();
+      releaseCoordinator();
+      await blocker;
+      await restarted?.catch(() => {});
+      worker.stop();
+    }
+  });
+
   it('start: self-healing di un orfano col file già al target (crash dopo il rename)', async () => {
     const config = createConfigService({ db });
     config.set('seriesPathSub', animePath);
@@ -958,6 +1435,7 @@ describe('DownloadWorker (FSM)', () => {
       config,
       logger: testLogger,
       renamer,
+      coordinator: createFileMutationCoordinator(),
     });
 
     const t = new Date().toISOString();
@@ -1017,6 +1495,99 @@ describe('DownloadWorker (FSM)', () => {
     }
   });
 
+  it('reconcile rilegge queue e file dopo una mutation autorevole già accodata', async () => {
+    const config = createConfigService({ db });
+    config.set('seriesPathSub', animePath);
+    const renamer = createRenamerService({ db, config });
+    const coordinator = createFileMutationCoordinator();
+    const worker = createDownloadWorker({
+      db,
+      catalog: buildStubCatalog(new Map()),
+      config,
+      logger: testLogger,
+      renamer,
+      coordinator,
+    });
+
+    const t = new Date().toISOString();
+    seedEpisodeFiles(db, ['ef-stale-reconcile']);
+    const finalPath = renamer.computeEpisodePath({
+      animeId: 'a-1',
+      episodeNumber: 1,
+      language: 'SUB_ITA',
+    });
+    const body = mp4('stale-reconcile-target');
+    await mkdir(dirname(finalPath), { recursive: true });
+    await writeFile(finalPath, body);
+    db.insert(schema.downloadQueue)
+      .values({
+        id: 'q-stale-reconcile',
+        episodeFileId: 'ef-stale-reconcile',
+        status: 'processing',
+        targetPath: finalPath,
+        expectedBytes: body.length,
+        priority: 50,
+        createdAt: t,
+      })
+      .run();
+
+    let enter = () => {};
+    let release = () => {};
+    const entered = new Promise<void>((resolve) => {
+      enter = resolve;
+    });
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const blocker = coordinator.runExclusive(async () => {
+      enter();
+      await released;
+    });
+    await entered;
+
+    const externalPath = join(animePath, 'external-authoritative.mkv');
+    await writeFile(externalPath, 'external-video');
+    // Questa mutation entra in coda prima del reconcile, mentre la select candidati vedrà ancora
+    // lo snapshot processing/not_downloaded. Cambia solo il file: reconcile deve preservarlo e
+    // terminalizzare autonomamente la queue orfana rimasta processing.
+    const authoritative = coordinator.runExclusive(async () => {
+      db.update(schema.episodeFile)
+        .set({
+          downloadStatus: 'external',
+          localPath: externalPath,
+          updatedAt: new Date().toISOString(),
+        })
+        .where(eq(schema.episodeFile.id, 'ef-stale-reconcile'))
+        .run();
+    });
+    const startup = worker.start();
+
+    try {
+      release();
+      await blocker;
+      await authoritative;
+      await startup;
+
+      const queue = db
+        .select()
+        .from(schema.downloadQueue)
+        .where(eq(schema.downloadQueue.id, 'q-stale-reconcile'))
+        .get();
+      expect(queue?.status).toBe('cancelled');
+      expect(queue?.error).toMatch(/stato autorevole external/i);
+      const file = db
+        .select()
+        .from(schema.episodeFile)
+        .where(eq(schema.episodeFile.id, 'ef-stale-reconcile'))
+        .get();
+      expect(file?.downloadStatus).toBe('external');
+      expect(file?.localPath).toBe(externalPath);
+      expect(await readFile(finalPath)).toEqual(body);
+    } finally {
+      worker.stop();
+    }
+  });
+
   it('resume sicuro: URL cambiato → scarta il .part stantio e riscarica corretto', async () => {
     const body = mp4('fresh-and-correct-content');
     // Server che onora il Range (206): se il worker riprendesse il .part stantio otterrebbe un
@@ -1049,6 +1620,7 @@ describe('DownloadWorker (FSM)', () => {
       config,
       logger: testLogger,
       renamer,
+      coordinator: createFileMutationCoordinator(),
     });
 
     const t = new Date().toISOString();

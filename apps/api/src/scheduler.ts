@@ -2,8 +2,17 @@ import { createSeasonWatcher } from './services/season-watcher';
 import type { Context } from './trpc';
 
 export interface Scheduler {
-  start(): void;
+  start(): Promise<void>;
   stop(): void;
+}
+
+/** Garantisce che nessuna porta venga aperta prima della readiness dello scheduler/worker. */
+export async function startSchedulerThenListen(
+  scheduler: Scheduler,
+  listen: () => Promise<unknown>,
+): Promise<void> {
+  await scheduler.start();
+  await listen();
 }
 
 const DOWNLOAD_AUTODOWNLOAD_MINUTES = 30;
@@ -36,9 +45,10 @@ export function createScheduler(ctx: Context): Scheduler {
   }
 
   return {
-    start(): void {
-      // Worker download event-driven (tick interno di sicurezza 60s, unref).
-      services.download.start();
+    async start(): Promise<void> {
+      // La readiness del reconcile/sweep iniziale è bloccante: il bootstrap non espone l'API finché
+      // il worker non ha risolto gli stati lasciati da un eventuale arresto precedente.
+      await services.download.start();
 
       // Import iniziale (fire-and-forget: non blocca l'avvio del server).
       void services.favorites.importFromSite().catch((error) => {

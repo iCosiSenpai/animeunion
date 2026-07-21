@@ -74,7 +74,7 @@ export const libraryDeleteEpisodeInputSchema = z.object({ episodeFileId: z.strin
 export const libraryDeleteEntryInputSchema = z.object({
   animeId: z.string().min(1),
   language: languageSchema,
-  /** Rimuove anche l'intera cartella della serie (compresi file non tracciati/extra). */
+  /** Rimuove anche la cartella serie, salvo righe attive fuori dallo scope o file external. */
   deleteFolder: z.boolean().optional().default(false),
 });
 export const libraryDeleteSeriesInputSchema = z.object({
@@ -87,6 +87,12 @@ export const libraryDeleteResultSchema = z.object({
   freedBytes: z.number().int(),
   /** File che non è stato possibile eliminare (permessi/percorso): NON marcati come rimossi. */
   failedFiles: z.number().int().default(0),
+  /** Cartelle che non è stato possibile rimuovere/spostare; non viene contato come singolo file. */
+  failedFolders: z.number().int().nonnegative().optional(),
+  /** File external protetti: restano sul disco e impediscono la rimozione della cartella contenitore. */
+  protectedExternalFiles: z.number().int().nonnegative().optional(),
+  /** Download attivi fuori dallo scope richiesto che hanno fatto preservare la cartella. */
+  protectedNonTargetFiles: z.number().int().nonnegative().optional(),
 });
 export type LibraryDeleteResult = z.infer<typeof libraryDeleteResultSchema>;
 

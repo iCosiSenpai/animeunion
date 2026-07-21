@@ -70,6 +70,8 @@ export function parseSeasonFromSlug(slug: string): { base: string; season: numbe
 export interface SeriesResolver {
   /** Stagione/serie/tipo correnti (legge l'override salvato). */
   resolve(animeId: string): SeriesInfo;
+  /** Tutti gli anime che il resolver corrente assegna alla stessa serie di `animeId`. */
+  membersOf(animeId: string): string[];
   /** Come resolve ma usa l'override passato (per l'anteprima di scelte non ancora salvate). */
   resolveWith(animeId: string, override: OverrideParams): SeriesInfo;
 }
@@ -315,13 +317,125 @@ export function createSeriesResolver(deps: SeriesResolverDeps): SeriesResolver {
     return { seriesId: animeId, seasonNumber: 1, seriesSlug: animeId, kind: 'tv', partNumber: 1 };
   }
 
+  function resolveSaved(animeId: string): SeriesInfo {
+    const anime = getAnime(animeId);
+    if (!anime) {
+      return missing(animeId);
+    }
+    return applyOverride(anime, autoInfo(anime), savedOverride(animeId));
+  }
+
+  /** Calcola l'identità serie di tutto il catalogo con tre query, senza fanout per anime. */
+  function resolvedSeriesIdsSnapshot(): Map<string, string> {
+    const animeRows = db.select().from(schema.anime).all();
+    const relationRows = db
+      .select()
+      .from(schema.animeRelation)
+      .where(inArray(schema.animeRelation.relationType, CHAIN_RELATIONS))
+      .all();
+    const overrideRows = db.select().from(schema.seriesOverride).all();
+    const animeById = new Map(animeRows.map((row) => [row.id, row]));
+    const animeBySlug = new Map(animeRows.map((row) => [row.slug, row]));
+    const overrideByAnimeId = new Map(overrideRows.map((row) => [row.animeId, row]));
+    const outgoing = new Map<string, typeof relationRows>();
+    const incoming = new Map<string, typeof relationRows>();
+    for (const relation of relationRows) {
+      outgoing.set(relation.animeId, [...(outgoing.get(relation.animeId) ?? []), relation]);
+      incoming.set(relation.relatedAnimeId, [
+        ...(incoming.get(relation.relatedAnimeId) ?? []),
+        relation,
+      ]);
+    }
+
+    function relationSeriesId(animeId: string): string | null {
+      const nodes = new Set<string>();
+      const queue = [animeId];
+      while (queue.length > 0) {
+        const id = queue.shift();
+        if (!id || nodes.has(id)) {
+          continue;
+        }
+        nodes.add(id);
+        for (const relation of outgoing.get(id) ?? []) {
+          queue.push(relation.relatedAnimeId);
+        }
+        for (const relation of incoming.get(id) ?? []) {
+          queue.push(relation.animeId);
+        }
+      }
+      if (nodes.size <= 1) {
+        return null;
+      }
+      const roots = [...nodes].filter(
+        (id) => !(outgoing.get(id) ?? []).some((row) => row.relationType === 'PREQUEL'),
+      );
+      if (roots.length !== 1 || !roots[0]) {
+        return null;
+      }
+      const rootId = roots[0];
+      const reachable = new Set<string>();
+      const forward = [rootId];
+      while (forward.length > 0) {
+        const id = forward.shift();
+        if (!id || reachable.has(id)) {
+          continue;
+        }
+        reachable.add(id);
+        for (const relation of outgoing.get(id) ?? []) {
+          if (relation.relationType === 'SEQUEL' || relation.relationType === 'SPIN_OFF') {
+            forward.push(relation.relatedAnimeId);
+          }
+        }
+      }
+      return reachable.has(animeId) ? rootId : null;
+    }
+
+    function automaticSeriesId(anime: AnimeRow): string {
+      if (anime.seriesId && anime.seasonNumber != null) {
+        return anime.seriesId;
+      }
+      const related = relationSeriesId(anime.id);
+      if (related) {
+        return related;
+      }
+      const parsed = parseSeasonFromSlug(anime.slug);
+      if (parsed) {
+        for (const slug of [parsed.base, `${parsed.base}-1`]) {
+          const root = animeBySlug.get(slug);
+          if (root && root.id !== anime.id) {
+            return root.id;
+          }
+        }
+      }
+      return anime.id;
+    }
+
+    const result = new Map<string, string>();
+    for (const anime of animeRows) {
+      const override = overrideByAnimeId.get(anime.id);
+      const overrideRoot = override?.seriesAnimeId
+        ? animeById.get(override.seriesAnimeId)
+        : undefined;
+      result.set(anime.id, overrideRoot?.id ?? automaticSeriesId(anime));
+    }
+    return result;
+  }
+
   return {
     resolve(animeId) {
-      const anime = getAnime(animeId);
-      if (!anime) {
-        return missing(animeId);
+      return resolveSaved(animeId);
+    },
+
+    membersOf(animeId) {
+      const resolvedSeriesIds = resolvedSeriesIdsSnapshot();
+      const targetSeriesId = resolvedSeriesIds.get(animeId);
+      if (!targetSeriesId) {
+        return [animeId];
       }
-      return applyOverride(anime, autoInfo(anime), savedOverride(animeId));
+      return [...resolvedSeriesIds.entries()]
+        .filter(([, seriesId]) => seriesId === targetSeriesId)
+        .map(([id]) => id)
+        .sort();
     },
 
     resolveWith(animeId, override) {

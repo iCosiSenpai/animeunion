@@ -17,6 +17,7 @@ import { createDoctorService } from './services/doctor-service';
 import { createDownloadService } from './services/download-service';
 import { createFavoritesService } from './services/favorites-service';
 import { createFileManagerService } from './services/file-manager-service';
+import { createFileMutationCoordinator } from './services/file-mutation-coordinator';
 import { createFollowService } from './services/follow-service';
 import { createHomeService } from './services/home-service';
 import { createJellyfinService } from './services/jellyfin-service';
@@ -97,8 +98,9 @@ export function createAppContext(options: { env?: Env; databasePath?: string } =
   });
   const resolver = createSeriesResolver({ db });
   const renamer = createRenamerService({ db, config, seriesResolver: resolver });
-  const library = createLibraryService({ db, config, renamer, resolver, logger });
-  const files = createFileManagerService({ db, config, renamer, logger });
+  const coordinator = createFileMutationCoordinator();
+  const library = createLibraryService({ db, config, renamer, resolver, logger, coordinator });
+  const files = createFileManagerService({ db, config, renamer, logger, coordinator });
   const series = createSeriesService({ db, resolver, catalog, renamer, config });
   const nfo = createNfoService({ db, config, logger });
   const jellyfin = createJellyfinService({ config, logger });
@@ -120,6 +122,7 @@ export function createAppContext(options: { env?: Env; databasePath?: string } =
     config,
     logger,
     renamer,
+    coordinator,
     // Download simultanei = perk Premium: onora config.maxConcurrent solo se l'abbonamento e' attivo
     // (profilo in cache 5 min), altrimenti 1. Ri-valutato ad ogni decisione di scheduling.
     resolveMaxConcurrent: async () => {
@@ -134,6 +137,7 @@ export function createAppContext(options: { env?: Env; databasePath?: string } =
     config,
     renamer,
     logger,
+    coordinator,
     onAutoEnqueued: (animeId, count) => {
       notifications.create({
         type: 'new_episode',
@@ -212,6 +216,7 @@ export function createAppContext(options: { env?: Env; databasePath?: string } =
     profile,
     renamer,
     logger,
+    coordinator,
   });
   // Un riavvio interrompe i render in volo (lo stato worker e' in memoria): marca error i job
   // rimasti appesi cosi' l'utente puo' ri-lanciarli.

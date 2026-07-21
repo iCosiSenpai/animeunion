@@ -27,6 +27,7 @@ import { NotFoundError, PreconditionError } from '../lib/errors';
 import type { Logger } from '../lib/logger';
 import { verifyVideoFile } from '../lib/video-verify';
 import type { ConfigService } from './config-service';
+import type { FileMutationCoordinator } from './file-mutation-coordinator';
 import type { ProfileService } from './profile-service';
 import type { RenamerService } from './renamer-service';
 
@@ -34,6 +35,55 @@ const RECIPE_TTL_MS = 6 * 60 * 60 * 1000;
 const HEALTH_TIMEOUT_MS = 3000;
 const DEFAULT_POLL_INTERVAL_MS = 5000;
 const DEFAULT_POLL_TIMEOUT_MS = 2 * 60 * 60 * 1000; // 2h: un 4K puo' durare a lungo
+
+interface NeuralSourceGeneration {
+  updatedAt: string;
+  downloadedAt: string | null;
+  fileSize: number | null;
+  dev: string;
+  ino: string;
+  size: string;
+  mtimeNs: string;
+  ctimeNs: string;
+  birthtimeNs: string;
+}
+
+async function captureSourceGeneration(source: {
+  localPath: string;
+  updatedAt: string;
+  downloadedAt: string | null;
+  fileSize: number | null;
+}): Promise<NeuralSourceGeneration> {
+  const info = await stat(source.localPath, { bigint: true });
+  return {
+    updatedAt: source.updatedAt,
+    downloadedAt: source.downloadedAt,
+    fileSize: source.fileSize,
+    dev: info.dev.toString(),
+    ino: info.ino.toString(),
+    size: info.size.toString(),
+    mtimeNs: info.mtimeNs.toString(),
+    ctimeNs: info.ctimeNs.toString(),
+    birthtimeNs: info.birthtimeNs.toString(),
+  };
+}
+
+function sameSourceGeneration(
+  expected: NeuralSourceGeneration,
+  current: NeuralSourceGeneration,
+): boolean {
+  return (
+    expected.updatedAt === current.updatedAt &&
+    expected.downloadedAt === current.downloadedAt &&
+    expected.fileSize === current.fileSize &&
+    expected.dev === current.dev &&
+    expected.ino === current.ino &&
+    expected.size === current.size &&
+    expected.mtimeNs === current.mtimeNs &&
+    expected.ctimeNs === current.ctimeNs &&
+    expected.birthtimeNs === current.birthtimeNs
+  );
+}
 
 // Seam HTTP verso il worker (iniettabile nei test): niente accesso di rete nei test unitari.
 export interface NeuralFetchResponse {
@@ -79,6 +129,7 @@ export interface NeuralExportServiceDeps {
   profile: ProfileService;
   renamer: RenamerService;
   logger: Logger;
+  coordinator: FileMutationCoordinator;
   fetchImpl?: NeuralFetch;
   downloadFileImpl?: NeuralDownloadFile;
   verifyImpl?: typeof verifyVideoFile;
@@ -105,7 +156,7 @@ function trimSlash(url: string): string {
 }
 
 export function createNeuralExportService(deps: NeuralExportServiceDeps): NeuralExportService {
-  const { db, source, config, profile, renamer, logger } = deps;
+  const { db, source, config, profile, renamer, logger, coordinator } = deps;
   const fetchImpl = deps.fetchImpl ?? defaultFetch;
   const downloadFile = deps.downloadFileImpl ?? defaultDownloadFile;
   const verify = deps.verifyImpl ?? verifyVideoFile;
@@ -177,6 +228,17 @@ export function createNeuralExportService(deps: NeuralExportServiceDeps): Neural
       .run();
   }
 
+  async function cancelWorkerJob(workerJobId: string, jobId: string): Promise<void> {
+    const workerUrl = config.get('neuralWorkerUrl');
+    const token = config.get('neuralWorkerToken');
+    await fetchImpl(`${trimSlash(workerUrl)}/jobs/${workerJobId}`, {
+      method: 'DELETE',
+      headers: { authorization: `Bearer ${token}` },
+    }).catch((error) => {
+      logger.debug({ err: error, jobId }, 'DELETE job worker fallito (ignorato)');
+    });
+  }
+
   /** Sorgente SD + coordinate episodio per il renamer. */
   function loadSource(episodeFileId: string) {
     return db
@@ -187,6 +249,9 @@ export function createNeuralExportService(deps: NeuralExportServiceDeps): Neural
         quality: schema.episodeFile.quality,
         downloadStatus: schema.episodeFile.downloadStatus,
         localPath: schema.episodeFile.localPath,
+        fileSize: schema.episodeFile.fileSize,
+        downloadedAt: schema.episodeFile.downloadedAt,
+        updatedAt: schema.episodeFile.updatedAt,
         animeId: schema.episode.animeId,
         episodeNumber: schema.episode.number,
       })
@@ -200,7 +265,8 @@ export function createNeuralExportService(deps: NeuralExportServiceDeps): Neural
     jobId: string,
     workerJobId: string,
     quality: Quality,
-    src: NonNullable<ReturnType<typeof loadSource>>,
+    src: NonNullable<ReturnType<typeof loadSource>> & { localPath: string },
+    sourceGeneration: NeuralSourceGeneration,
   ): Promise<string> {
     const workerUrl = config.get('neuralWorkerUrl');
     const token = config.get('neuralWorkerToken');
@@ -227,51 +293,104 @@ export function createNeuralExportService(deps: NeuralExportServiceDeps): Neural
       throw new Error(`Verifica integrita output fallita: ${check.reason ?? 'non riproducibile'}`);
     }
 
-    await atomicMove(temp, finalPath, logger);
-    const info = await stat(finalPath).catch(() => null);
-    const iso = now().toISOString();
+    return coordinator.runExclusive(async () => {
+      const currentSource = loadSource(src.id);
+      const currentJob = jobRow(jobId);
+      if (
+        !currentSource ||
+        currentSource.downloadStatus !== 'downloaded' ||
+        currentSource.localPath !== src.localPath ||
+        currentJob?.state !== 'running' ||
+        currentJob.episodeFileId !== src.id ||
+        currentJob.workerJobId !== workerJobId ||
+        currentJob.quality !== quality
+      ) {
+        await rm(temp, { force: true }).catch(() => {});
+        throw new PreconditionError(
+          'Output Neural non finalizzato: sorgente o job modificati durante il render.',
+        );
+      }
 
-    // Nuova riga episode_file per la qualita' upscalata: NON tocca la sorgente SD (unique su
-    // episode_id+language+quality). onConflict aggiorna un eventuale placeholder rimasto da un
-    // tentativo precedente.
-    db.insert(schema.episodeFile)
-      .values({
-        id: randomUUID(),
-        episodeId: src.episodeId,
-        language,
-        quality,
-        downloadStatus: 'downloaded',
-        localPath: finalPath,
-        fileSize: info?.size ?? null,
-        downloadedAt: iso,
-        createdAt: iso,
-        updatedAt: iso,
-      })
-      .onConflictDoUpdate({
-        target: [
-          schema.episodeFile.episodeId,
-          schema.episodeFile.language,
-          schema.episodeFile.quality,
-        ],
-        set: {
+      // Path e status da soli permettono un ABA (delete + relink di byte diversi allo stesso path).
+      // La generazione combina i marker DB con l'identità fisica ad alta risoluzione del file.
+      const currentGeneration = await captureSourceGeneration({
+        ...currentSource,
+        localPath: currentSource.localPath,
+      }).catch(() => null);
+      if (!currentGeneration || !sameSourceGeneration(sourceGeneration, currentGeneration)) {
+        await rm(temp, { force: true }).catch(() => {});
+        throw new PreconditionError(
+          'Output Neural non finalizzato: la generazione della sorgente è cambiata durante il render.',
+        );
+      }
+
+      const existing = db
+        .select({ status: schema.episodeFile.downloadStatus })
+        .from(schema.episodeFile)
+        .where(
+          and(
+            eq(schema.episodeFile.episodeId, currentSource.episodeId),
+            eq(schema.episodeFile.language, language),
+            eq(schema.episodeFile.quality, quality),
+          ),
+        )
+        .get();
+      if (existing?.status === 'external' || existing?.status === 'downloaded') {
+        await rm(temp, { force: true }).catch(() => {});
+        throw new PreconditionError(
+          `Output Neural non finalizzato: la qualità richiesta è diventata ${existing.status}.`,
+        );
+      }
+
+      await atomicMove(temp, finalPath, logger);
+      const info = await stat(finalPath).catch(() => null);
+      const iso = now().toISOString();
+
+      // Nuova riga episode_file per la qualita' upscalata: NON tocca la sorgente SD (unique su
+      // episode_id+language+quality). onConflict aggiorna un eventuale placeholder rimasto da un
+      // tentativo precedente.
+      db.insert(schema.episodeFile)
+        .values({
+          id: randomUUID(),
+          episodeId: currentSource.episodeId,
+          language,
+          quality,
           downloadStatus: 'downloaded',
           localPath: finalPath,
           fileSize: info?.size ?? null,
           downloadedAt: iso,
+          createdAt: iso,
           updatedAt: iso,
-        },
-      })
-      .run();
-    return finalPath;
+        })
+        .onConflictDoUpdate({
+          target: [
+            schema.episodeFile.episodeId,
+            schema.episodeFile.language,
+            schema.episodeFile.quality,
+          ],
+          set: {
+            downloadStatus: 'downloaded',
+            localPath: finalPath,
+            fileSize: info?.size ?? null,
+            downloadedAt: iso,
+            updatedAt: iso,
+          },
+        })
+        .run();
+      // Il job viene completato nello stesso tratto coordinato della pubblicazione dell'output:
+      // una cancellazione accodata non può inserirsi tra l'upsert e lo stato `done`.
+      updateJob(jobId, { state: 'done', progress: 1, outputPath: finalPath, error: null });
+      return finalPath;
+    });
   }
 
   async function processExport(jobId: string): Promise<void> {
     try {
-      const job = jobRow(jobId);
-      if (!job || job.state !== 'queued') {
+      const queuedJob = jobRow(jobId);
+      if (!queuedJob || queuedJob.state !== 'queued') {
         return;
       }
-      const quality = job.quality as Quality;
+      const quality = queuedJob.quality as Quality;
       const workerUrl = config.get('neuralWorkerUrl');
       const token = config.get('neuralWorkerToken');
       const recipe = await getRecipe();
@@ -283,17 +402,41 @@ export function createNeuralExportService(deps: NeuralExportServiceDeps): Neural
       if (!wantedProfile) {
         throw new Error(`Profilo ${profileId} assente nella ricetta`);
       }
-      const src = loadSource(job.episodeFileId);
-      if (!src?.localPath) {
-        throw new Error('Sorgente SD non trovata su disco');
+
+      // CAS SQLite: recipe/profile possono aver atteso rete mentre l'utente cancellava il job.
+      // Il tratto è sincrono e non trattiene il coordinatore filesystem durante il render.
+      const started = db
+        .update(schema.neuralExportJob)
+        .set({ state: 'running', updatedAt: now().toISOString() })
+        .where(
+          and(eq(schema.neuralExportJob.id, jobId), eq(schema.neuralExportJob.state, 'queued')),
+        )
+        .run();
+      if (started.changes === 0) {
+        return;
       }
+      const currentSource = loadSource(queuedJob.episodeFileId);
+      if (
+        !currentSource?.localPath ||
+        currentSource.downloadStatus !== 'downloaded' ||
+        currentSource.quality !== 'SD'
+      ) {
+        throw new PreconditionError('Sorgente SD non più disponibile per il render');
+      }
+      const src = { ...currentSource, localPath: currentSource.localPath };
 
-      updateJob(jobId, { state: 'running' });
-
-      // Dispatch al worker: MP4 sorgente (streaming da disco via Blob) + payload JSON.
+      // La generazione viene fissata prima del dispatch: finalize richiede sia gli stessi marker DB
+      // sia lo stesso oggetto filesystem, così un delete/relink allo stesso path non è un falso match.
+      const sourceGeneration = await captureSourceGeneration(src);
+      // Dispatch al worker: MP4 sorgente (streaming da disco via Blob) + payload JSON. Il blob viene
+      // preparato fuori lock; se nel frattempo il cancel ha vinto, non inviamo nemmeno il POST.
+      const sourceBlob = await openAsBlob(src.localPath);
+      if (jobRow(jobId)?.state !== 'running') {
+        return;
+      }
       const form = new FormData();
       form.append('payload', JSON.stringify({ profile: wantedProfile, shaders: recipe.shaders }));
-      form.append('source', await openAsBlob(src.localPath), 'source.mp4');
+      form.append('source', sourceBlob, 'source.mp4');
       const dispatch = await fetchImpl(`${trimSlash(workerUrl)}/jobs`, {
         method: 'POST',
         headers: { authorization: `Bearer ${token}` },
@@ -303,7 +446,19 @@ export function createNeuralExportService(deps: NeuralExportServiceDeps): Neural
         throw new Error(`Invio al worker fallito (HTTP ${dispatch.status})`);
       }
       const { jobId: workerJobId } = z.object({ jobId: z.string() }).parse(await dispatch.json());
-      updateJob(jobId, { workerJobId });
+      const registered = db
+        .update(schema.neuralExportJob)
+        .set({ workerJobId, updatedAt: now().toISOString() })
+        .where(
+          and(eq(schema.neuralExportJob.id, jobId), eq(schema.neuralExportJob.state, 'running')),
+        )
+        .run();
+      if (registered.changes === 0) {
+        // Il cancel può vincere mentre il POST è in volo, prima che il worker ID sia noto al DB.
+        // Appena riceviamo l'ID compensiamo sul worker remoto e non avviamo il polling.
+        await cancelWorkerJob(workerJobId, jobId);
+        return;
+      }
 
       // Polling dello stato del worker.
       const deadline = now().getTime() + pollTimeoutMs;
@@ -336,8 +491,7 @@ export function createNeuralExportService(deps: NeuralExportServiceDeps): Neural
       if (jobRow(jobId)?.state === 'cancelled') {
         return;
       }
-      const outputPath = await finalize(jobId, workerJobId, quality, src);
-      updateJob(jobId, { state: 'done', progress: 1, outputPath, error: null });
+      const outputPath = await finalize(jobId, workerJobId, quality, src, sourceGeneration);
       logger.info({ jobId, quality, outputPath }, 'Export neurale completato');
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -515,23 +669,20 @@ export function createNeuralExportService(deps: NeuralExportServiceDeps): Neural
     },
 
     async cancel(jobId): Promise<boolean> {
-      const job = jobRow(jobId);
+      // Serializza solo la decisione DB con finalize; la DELETE di rete resta volutamente fuori lock.
+      const job = await coordinator.runExclusive(async () => {
+        const current = jobRow(jobId);
+        if (!current || current.state === 'done' || current.state === 'error') {
+          return null;
+        }
+        updateJob(jobId, { state: 'cancelled' });
+        return current;
+      });
       if (!job) {
         return false;
       }
-      if (job.state === 'done' || job.state === 'error') {
-        return false;
-      }
-      updateJob(jobId, { state: 'cancelled' });
       if (job.workerJobId) {
-        const workerUrl = config.get('neuralWorkerUrl');
-        const token = config.get('neuralWorkerToken');
-        await fetchImpl(`${trimSlash(workerUrl)}/jobs/${job.workerJobId}`, {
-          method: 'DELETE',
-          headers: { authorization: `Bearer ${token}` },
-        }).catch((error) => {
-          logger.debug({ err: error, jobId }, 'DELETE job worker fallito (ignorato)');
-        });
+        await cancelWorkerJob(job.workerJobId, jobId);
       }
       return true;
     },

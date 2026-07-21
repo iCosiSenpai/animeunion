@@ -7,8 +7,13 @@ e il progetto aderisce al [Semantic Versioning](https://semver.org/lang/it/).
 
 ## [Unreleased]
 
+### Fixed
+- **Setup wizard completabile:** il salvataggio e la verifica delle cartelle non fanno più uscire
+  prematuramente dall'onboarding; Aspetto, Jellyfin e riepilogo restano raggiungibili fino al CTA
+  finale. Un marker tri-state mantiene compatibili le installazioni già configurate e consente di
+  riprendere un setup interrotto senza perdere i valori salvati.
+
 ### Da fare
-- Setup wizard migliorato (Step F, rimandato).
 - GitHub Pages: la landing statica esiste già (`docs/index.html` + `docs/faq.html`); resta da abilitare Pages nel repo e sostituire i placeholder mascotte con l'artwork ufficiale.
 - Promuovere gli E2E Playwright a gate bloccante: girano già in CI (job `e2e`, `continue-on-error: true`), ma non bloccano ancora la pipeline.
 - Update ottimistici della UI dopo le eliminazioni della Libreria (rimandati).

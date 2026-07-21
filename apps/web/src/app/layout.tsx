@@ -1,10 +1,7 @@
 import { Providers } from '@/components/providers';
 import type { Metadata, Viewport } from 'next';
-import { Inter } from 'next/font/google';
 import type { ReactNode } from 'react';
 import './globals.css';
-
-const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
   title: 'AnimeUnion Docker',
@@ -33,7 +30,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="it" suppressHydrationWarning>
-      <body className={inter.className}>
+      <body className="font-sans">
         <Providers>{children}</Providers>
         {/* Invito a ruotare: visibile solo su telefono in landscape (vedi .landscape-block in
             globals.css). Copre il contenuto perche' l'app e' ottimizzata in verticale. */}

@@ -1,12 +1,12 @@
 'use client';
 
 import { PremiumStatusPanel } from '@/components/settings/premium-status';
-import { PremiumUpsell } from '@/components/settings/premium-upsell';
+import { PREMIUM_URL, PremiumUpsell } from '@/components/settings/premium-upsell';
 import { Button } from '@/components/ui/button';
 import { QueryError } from '@/components/ui/query-error';
 import { trpc } from '@/lib/trpc';
 import { isPremiumActive } from '@animeunion/shared';
-import { Settings2 } from 'lucide-react';
+import { Clock3, MessageCircle, Settings2 } from 'lucide-react';
 import Link from 'next/link';
 
 // Destinazione di primo livello per il Premium (voce sidebar), non piu' solo un tab sepolto in
@@ -42,6 +42,29 @@ export function PremiumView() {
       ) : isPremiumActive(profileQuery.data) ? (
         <div className="space-y-4">
           <PremiumStatusPanel profile={profileQuery.data} />
+          <div className="flex items-start gap-3 rounded-lg border p-4">
+            <MessageCircle className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
+            <div className="min-w-0 space-y-2">
+              <div>
+                <p className="text-sm font-medium">Assistenza prioritaria su Telegram</p>
+                <p className="text-xs text-muted-foreground">
+                  È un vantaggio Premium ufficiale. AnimeUnion non espone ancora nell’API il
+                  contatto dedicato, quindi non mostriamo link non verificati.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button asChild variant="outline" size="sm">
+                  <a href={PREMIUM_URL} target="_blank" rel="noopener noreferrer">
+                    Dettagli sul sito
+                  </a>
+                </Button>
+                <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Clock3 className="h-3.5 w-3.5" aria-hidden="true" />
+                  Contatto dedicato in attesa di pubblicazione
+                </span>
+              </div>
+            </div>
+          </div>
           <div className="flex items-start gap-3 rounded-lg border p-4">
             <Settings2
               className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground"

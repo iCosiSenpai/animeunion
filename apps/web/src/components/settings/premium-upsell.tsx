@@ -3,51 +3,49 @@
 import { Button } from '@/components/ui/button';
 import {
   ArrowUpRight,
-  BarChart3,
-  Cloud,
+  CalendarDays,
   Crown,
-  Heart,
-  Layers,
+  MessageCircle,
   Palette,
+  ScanSearch,
   Sparkles,
-  Zap,
+  Users,
 } from 'lucide-react';
 
 export const PREMIUM_URL = 'https://animeunion.tv/premium';
 
-// Vetrina (upsell): le funzioni Premium proposte. Nessun gating reale qui — tutto ciò che l'app
-// fa oggi resta gratuito; il collegamento all'account del sito è futuro (con l'admin).
+// Vetrina aderente ai vantaggi pubblicati da AnimeUnion. Alcuni vivono sul sito, altri sono
+// integrati nell'app: la descrizione lo dichiara senza promettere feature prive di contratto API.
 const PERKS = [
   {
-    icon: Layers,
-    title: 'Download simultanei',
-    desc: 'Scarica 2–3 episodi in parallelo invece di uno alla volta.',
-  },
-  { icon: Zap, title: 'Priorità di coda', desc: 'I tuoi download passano avanti agli altri.' },
-  {
-    icon: Cloud,
-    title: 'Backup su cloud',
-    desc: 'Le tue copie al sicuro anche fuori dal NAS.',
-  },
-  {
-    icon: Heart,
-    title: 'Seguiti illimitati',
-    desc: 'Nessun limite alle serie che puoi seguire.',
-  },
-  {
     icon: Sparkles,
-    title: 'SUB+DUB e qualità massima',
-    desc: 'Entrambe le lingue e la migliore qualità, in automatico.',
+    title: 'Download neurale XQ/XQ+',
+    desc: 'Nell’app Docker, per i piani autorizzati dal flag neuralExport.',
+  },
+  {
+    icon: MessageCircle,
+    title: 'Assistenza prioritaria su Telegram',
+    desc: 'Vantaggio Premium ufficiale; il contatto dedicato sarà mostrato quando AnimeUnion lo esporrà.',
+  },
+  {
+    icon: CalendarDays,
+    title: 'Calendario sincronizzato',
+    desc: 'Link ICS personale disponibile sul sito AnimeUnion.',
+  },
+  {
+    icon: Users,
+    title: 'Watch Together',
+    desc: 'Stanze con capienza e funzioni che dipendono dal piano.',
+  },
+  {
+    icon: ScanSearch,
+    title: 'Ricerca per immagine',
+    desc: 'Quote maggiori sul sito in base al piano Premium.',
   },
   {
     icon: Palette,
-    title: 'Temi e wallpaper esclusivi',
-    desc: 'Personalizzazioni riservate ai sostenitori.',
-  },
-  {
-    icon: BarChart3,
-    title: 'Statistiche avanzate',
-    desc: 'Più dettagli sulla tua libreria e cronologia.',
+    title: 'Temi esclusivi',
+    desc: 'Personalizzazioni Premium disponibili sul sito.',
   },
 ];
 
@@ -86,8 +84,8 @@ export function PremiumUpsell() {
       </ul>
 
       <p className="text-xs text-muted-foreground">
-        Le funzioni Premium arriveranno nell’app. Il collegamento con il tuo account del sito è in
-        arrivo.
+        Lo stato Premium viene letto dal tuo account AnimeUnion. La disponibilità varia per piano; i
+        vantaggi indicati come funzioni del sito non sono ancora integrati nell’app Docker.
       </p>
     </div>
   );

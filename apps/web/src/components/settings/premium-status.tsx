@@ -82,7 +82,8 @@ export function PremiumStatusPanel({ profile }: { profile: UserProfile }) {
                 Download simultanei
               </p>
               <p className="text-xs text-muted-foreground">
-                Fino a 3 episodi in parallelo. Impostalo in Impostazioni › Download.
+                Funzione sperimentale dell’app Docker, attiva per gli account Premium. È stata
+                richiesta ad AnimeUnion una policy API dedicata.
               </p>
             </div>
           </li>

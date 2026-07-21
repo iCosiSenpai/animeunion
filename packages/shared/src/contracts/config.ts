@@ -28,6 +28,10 @@ export type HomeSectionPref = z.infer<typeof homeSectionPrefSchema>;
 export const homeLayoutSchema = z.array(homeSectionPrefSchema).default([]).catch([]);
 
 export const appConfigSchema = z.object({
+  // Stato onboarding tri-state: null = installazione legacy/non ancora iniziata, false = wizard in
+  // corso, true = completato esplicitamente. Il fallback legacy viene deciso dal client insieme
+  // alla cartella obbligatoria, evitando di riaprire il wizard agli upgrade già configurati.
+  setupCompleted: z.boolean().nullable().default(null),
   // Cartelle di download (impostate nelle Impostazioni dell'app, NON nel .env).
   // Routing per (tipo × lingua); le DUB/film, se vuote, ricadono sulla serie SUB.
   // seriesPathSub vuota = "non configurato": innesca il wizard e blocca i download.

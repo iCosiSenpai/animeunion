@@ -1147,7 +1147,9 @@ Tutta la roadmap 8 settimane e le appendici di polish (STEP 2.5 / 2.6) sono stat
 rilasciate (ultima release **v0.16.0**). Restano aperti solo i seguenti punti, tracciati anche nella
 sezione `[Unreleased] → Da fare` del `CHANGELOG.md`:
 
-- [ ] **Setup wizard migliorato** (Step F, rimandato)
+- [x] **Setup wizard migliorato** — lo Step 7.5 aveva già consegnato stepper, verifica cartelle,
+  Aspetto, Jellyfin e riepilogo; il Task 6 della chiusura v0.17.0 aggiunge uno stato di completamento
+  esplicito e retrocompatibile, così il salvataggio delle cartelle non interrompe più il wizard.
 - [ ] **GitHub Pages** — la landing statica esiste già (`docs/index.html` + `docs/faq.html`, con placeholder mascotte); resta da abilitare Pages nelle impostazioni del repo e sostituire i placeholder con l'artwork ufficiale (vedi §12)
 - [ ] **E2E Playwright come gate bloccante** — gli E2E girano già in CI (job `e2e` in `.github/workflows/ci.yml`, `npm run test:e2e`) ma come job **non bloccante** (`continue-on-error: true`); resta da promuoverli a gate una volta stabili
 - [ ] **Update ottimistici della UI dopo le eliminazioni della Libreria** (rimandati)

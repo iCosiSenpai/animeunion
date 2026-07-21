@@ -3,15 +3,16 @@
 > **Leggi questo file per primo a ogni sessione.** È la fonte unica e vivente di: visione, stato,
 > roadmap a step, regole, gotchas.
 >
-> **Ripresa di sessione (Regola #16):** Dopo aver letto CLAUDE.md, apri il file di piano del batch
-> corrente in **`plan/`** (indicato in "Roadmap verso vX" qui sotto). Riprendi dall'ultimo step con
-> `[ ]`. Non implementare nulla senza prima entrare in plan mode (Regola #14).
+> **Ripresa di sessione (Regola #16):** dopo aver letto CLAUDE.md, apri il file di piano del batch
+> corrente in **`plan/`** (indicato nella roadmap attiva) e riprendi dal primo Task con `[ ]`.
+> Prima di implementarlo svolgi autonomamente una fase interna di plan mode; non serve chiedere
+> all'utente di cambiare la modalità dell'interfaccia se l'esecuzione complessiva è già autorizzata.
 >
 > **Processo (vincolante):** il piano vivo del batch corrente sta in **`plan/`** nel progetto
-> (gitignored, durevole). I file in `~/.claude/plans/` sono **temporanei/effimeri**: la fonte è
-> `plan/`. La sezione **"Roadmap verso vX"** qui sotto rimanda sempre al piano attivo in `plan/`.
-> **Per ogni step si entra prima in plan mode** (approfondire → implementare a checkbox, Regola
-> #14/#15). Quando "Roadmap verso vX" esiste con step `[ ]`, c'è lavoro da fare: leggi il piano.
+> (gitignored, durevole); i file in `~/.claude/plans/` sono temporanei. La roadmap attiva rimanda
+> sempre al piano canonico. Per ogni Task: fase interna di analisi/plan → sotto-task verificabili →
+> implementazione → validazione. Con autorizzazione globale già concessa il flusso prosegue senza
+> approvazioni ripetitive, salvo decisioni non deducibili o azioni esterne ad alto impatto.
 >
 > Spec tecnica: [PLAN.md](PLAN.md). Design: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 > Contratto API: [docs/API_ANIMEUNION.md](docs/API_ANIMEUNION.md).
@@ -31,11 +32,14 @@ Shared: `packages/shared` (zod + interfaccia `AnimeSource`). Video: ffmpeg-stati
 Scheduler: setInterval (node-cron non usato). Lint: Biome. Test: Vitest (+ Playwright in futuro).
 Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
 
-## Roadmap verso v0.16.0 — "Doctor sempre attivo + Premium visibile + UX rifinita" (ATTIVO)
+## Roadmap verso v0.17.0 — "Nessun residuo morto" (ATTIVO)
 
-> Piano vivo: **[plan/doctor-premium-ux.md](plan/doctor-premium-ux.md)** (fonte canonica).
-> Branch: `feat/doctor-premium-ux` (da `main`). **Cadenza: un solo step per sessione.**
-> All'inizio di ogni sessione: leggi CLAUDE.md → apri il piano → riprendi dal primo `[ ]`.
+> Piano vivo: **[plan/chiusura-v0.16.md](plan/chiusura-v0.16.md)** (fonte canonica).
+> Piano originario: **[plan/doctor-premium-ux.md](plan/doctor-premium-ux.md)** (Step 1-14 completati;
+> Step 15-16 chiusi lì per trasferimento).
+> I Task procedono in ordine. Prima di ciascuno l'agente svolge autonomamente una fase interna di
+> plan mode (steering globale), senza richiedere cambi di modalità o nuove approvazioni quando
+> l'esecuzione complessiva è già autorizzata; si ferma solo per blocchi reali o azioni esterne ad alto impatto.
 
 - [x] **Step 1** — Doctor attivo: monitoraggio continuo + auto-resolve + notifica ripristino
 - [x] **Step 2** — Ripresa automatica download falliti per cartella read-only (dip. Step 1)
@@ -53,8 +57,21 @@ Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
 - [x] **Step 12** — Rimozione totale riferimenti a Plex (solo Jellyfin)
 - [x] **Step 13** — Statistiche oneste (catalogo dai dati ufficiali, episodi scaricati distinti)
 - [x] **Step 14** — Polish UI diffuso (empty state Home, tooltip sidebar, footer Doctor)
-- [ ] **Step 15** — Ricerca feature Premium del sito + Assistenza prioritaria Telegram
-- [ ] **Step 16** — Release v0.16.0
+- [x] **Step 15** — Chiuso nel piano originario per trasferimento → Task 3-4 di `plan/chiusura-v0.16.md`
+- [x] **Step 16** — Chiuso nel piano originario per trasferimento → Task 2 e 9 di `plan/chiusura-v0.16.md`
+
+### Piano consolidato di chiusura
+
+- [x] **Task 0** — Steering universale plan-mode + governance
+- [x] **Task 1** — Bookkeeping v0.14.0 e puntatori storici
+- [x] **Task 2** — Riconciliazione stato versione
+- [x] **Task 3** — Ricognizione feature Premium e richieste admin
+- [x] **Task 4** — Assistenza prioritaria Telegram
+- [ ] **Task 5** — Update ottimistici Libreria
+- [ ] **Task 6** — Chiusura residuo setup wizard
+- [ ] **Task 7** — GitHub Pages e artwork
+- [ ] **Task 8** — E2E Playwright bloccanti
+- [ ] **Task 9** — Release finale
 
 ## Roadmap verso v0.14.0 — "Affidabilità + Hardening + Anti-duplicati" (COMPLETO)
 
@@ -84,9 +101,9 @@ Monorepo npm workspaces: `apps/api`, `apps/web`, `packages/shared`.
 
 ## Roadmap verso v0.15.0 — "Quality + Neural Export (Anime4K)" (COMPLETO — rilasciata 2026-07-09)
 
-> Piano vivo: **[plan/quality-gpu-bridge.md](plan/quality-gpu-bridge.md)** (fonte canonica).
-> **Cadenza concordata: un solo step per sessione** (nuova sessione per ogni step, per non bruciare
-> token). All'inizio di ogni sessione: leggi CLAUDE.md → apri il piano → riprendi dal primo `[ ]`.
+> Piano archivio: **[plan/quality-gpu-bridge.md](plan/quality-gpu-bridge.md)** (batch concluso).
+> **Cadenza storica del batch concluso:** un solo step per sessione. Non usarla per riprendere
+> lavoro: lo stato è completo e il piano è solo archivio.
 
 Architettura **rivista** dopo i due contratti dell'admin (`INTEGRATION_PREMIUM.md`,
 `INTEGRATION_NEURAL_EXPORT.md`): NON più real-esrgan/Python, ma **Premium LIVE** su `/me`
@@ -107,11 +124,12 @@ razionale (incl. worker nativo vs container, nota CUDA/NVENC) nel piano.
 
 ## Stato attuale (2026-07-13)
 
-**Batch attivo: v0.16.0 — "Doctor sempre attivo + Premium visibile + UX rifinita"** (piano
-[plan/doctor-premium-ux.md](plan/doctor-premium-ux.md), branch `feat/doctor-premium-ux`). 16 step
-pianificati + Step 7.5 inserito. **Step 1-14 + 7.5 COMPLETI (2026-07-17)** (Step 9 chiuso con
-decisione B — "solo scaricati", vedi sotto); prossima sessione: Step 15 (feature Premium del sito
-+ Assistenza prioritaria Telegram). Cadenza un solo step per sessione.
+**Batch attivo: v0.17.0 — "Nessun residuo morto"** (piano
+[plan/chiusura-v0.16.md](plan/chiusura-v0.16.md), branch reale `main`). `v0.16.0` è già una release
+GitHub pubblica e immutabile (tag remoto `511c8aa`); il piano originario
+`plan/doctor-premium-ux.md` ha Step 1-14 + 7.5 completati e Step 15-16 trasferiti qui. Task 2 ha
+riconciliato la baseline; il prossimo Task operativo è Task 3 (ricognizione Premium). L'agente
+procede autonomamente con una fase interna di plan mode prima di ogni Task.
 
 - **v0.16.0 Step 14 (2026-07-17): polish UI diffuso.** Sezioni Home paginate "essenziali" ("In onda
   oggi", "Stagione in corso") non spariscono più da vuote: mostrano un empty-state "È tutto!" con
@@ -329,13 +347,13 @@ decisione B — "solo scaricati", vedi sotto); prossima sessione: Step 15 (featu
   nuovo scrivibile" è il gancio per lo Step 2. 438 test verdi, lint/typecheck/build web verdi.
   Formato del piano `plan/doctor-premium-ux.md` allineato agli altri (sotto-task a checkbox).
 
-**Versione corrente: v0.15.0 — "Quality + Neural Export (Anime4K)".** Coesistenza SD/XQ/XQ+, upscale
-via worker GPU esterno, Premium cablato sul profilo del sito, + rifiniture (download simultanei
-Premium, backup Google Drive, statistiche oneste, workflow test "nuovo utente"). Rilasciata 2026-07-09
-(bump root+api+web, ff-merge in `main`, push origin). **Deploy NAS: manuale (a carico utente)** — su
-NAS servono `AUTH_ENCRYPT_KEY` (già impostata dal v0.14.0) e le migration 0018/0019 (auto all'avvio).
-Il worker GPU (`apps/worker`) gira sul PC con RTX 5070 Ti, non sul NAS.
-- 432 test verdi, lint/typecheck (tutti i workspace) verdi, build web ok
+**Versione corrente: v0.16.0 — "Cestino condiviso Libreria + Discord".** Tag e GitHub Release
+pubblici dal 2026-07-19; `main` è avanti con soli riallineamenti documentali. La prossima release
+sarà **v0.17.0**. Baseline manifest riallineata: root, api, web, worker, neural-core e shared sono
+tutti a `0.16.0` nel lockfile. Le funzionalità v0.15.0 restano operative: coesistenza SD/XQ/XQ+,
+worker GPU esterno, Premium, backup Google Drive e workflow test nuovo utente. Il deploy NAS della
+prossima release resta un'azione esplicita del Task 9.
+- **462 test verdi**, lint/typecheck (tutti i workspace) verdi sulla baseline v0.16.0 riallineata.
 - Mini-batch Step D (2026-07-09): **backup su Google Drive** — `cloud-backup-service` con
   bring-your-own OAuth client **Desktop** (scope `drive.file`), flusso **HTTPS-free** (redirect
   loopback `http://127.0.0.1` + incolla-codice manuale, pattern rclone) perché l'app gira in HTTP e
@@ -427,8 +445,10 @@ Il worker GPU (`apps/worker`) gira sul PC con RTX 5070 Ti, non sul NAS.
   accoda piu' download. Fix v0.13.8: `healPresent` match per (stagione, numero), non per nome file —
   chiude la causa radice dei duplicati. Prima di riaccendere l'auto-download conviene SEMPRE una
   scansione + soglie al max.
-- Aperto: locandina bassa qualità in libreria (#9, serve indagine URL immagine API); riempimento
-  stagioni dimezzate = `download.addAll` per anime toccati (self-heal salta i presenti).
+- Residuo assegnato: la vecchia segnalazione "locandina Libreria a bassa qualità" viene verificata
+  nel Task 5 di `plan/chiusura-v0.16.md` insieme agli update ottimistici. Il riempimento di stagioni
+  parziali resta un'azione operativa esplicita (`download.addAll`; il self-heal salta i presenti),
+  non un'attività di sviluppo senza proprietario.
 - Auto-download "non parte"/push "assenti": quasi sempre config/ambiente, non bug — master globale
   `autoDownload` (default off) + eleggibilità per-follow; push tutto implementato ma nascosto senza
   HTTPS. Vedi memoria `autodownload-eligibility-and-push-https`.
@@ -440,9 +460,9 @@ Il worker GPU (`apps/worker`) gira sul PC con RTX 5070 Ti, non sul NAS.
   (grant da Matteo) → ramo premium testabile subito.
 - **Batch v0.15.0 CHIUSO e RILASCIATO (2026-07-09).** Piano archivio
   [plan/quality-gpu-bridge.md](plan/quality-gpu-bridge.md). Step 1-2-3 + mini-batch "Rifiniture
-  post-Step-1" (A+B+C+D) + Step finale (release) completi. **Nessun batch attivo:** prossimo lavoro da
-  decidere con l'utente (idee aperte: setup wizard Step F, GitHub Pages, E2E in CI — vedi CHANGELOG
-  [Unreleased]).
+  post-Step-1" (A+B+C+D) + Step finale (release) completi. La frase originaria "nessun batch
+  attivo" era corretta a quella data ma oggi è superata dal piano di chiusura
+  `plan/chiusura-v0.16.md`; setup, Pages ed E2E hanno ora Task assegnati.
 
 Funzioni principali operative: download automatico (1 episodio alla volta), FTS5 search, cestino
 recuperabile, backup automatico DB, verifica integrità video, Jellyfin integration, nfo sidecar,
@@ -471,8 +491,8 @@ gestore file con collega-senza-scaricare, home personalizzabile, calendario, wal
 - **API live (al 2026-06-16)**: 12/13 endpoint v1.0.3/1.1.x operativi con token reale. Base path:
   `https://api.animeunion.tv/api/v1/integration`. Rate limit: 120 req/min per token.
   Solo `POST /me/favorites/sync` non deployato (non necessario).
-- **Branch**: tutto il lavoro viene ff-merged in `main` e pushato su `origin/main`. Il batch corrente
-  è `feat/mobile-first-rinforzo`.
+- **Branch**: il branch reale del batch e il rapporto con `main` vengono accertati nel Task 2 prima
+  di qualsiasi merge/tag; non usare più il vecchio puntatore `feat/mobile-first-rinforzo`.
 - **Credenziali**: email/password in `.env` (gitignored); token in SQLite (`auth`). Mai segreti nel
   codice/compose. Account: `lookatale95@gmail.com`.
 - **Credenziali NAS (deploy)**: in **`.secrets/nas.md`** (gitignored). L'alias `ssh nas` (a chiave)

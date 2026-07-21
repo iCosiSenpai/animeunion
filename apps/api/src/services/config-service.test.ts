@@ -172,6 +172,15 @@ describe('ConfigService', () => {
     expect(service.isConfigured()).toBe(true);
   });
 
+  it('setupCompleted distingue legacy, setup in corso e completato', () => {
+    const service = createConfigService({ db: createTestDb() });
+    expect(service.get('setupCompleted')).toBeNull();
+    service.set('setupCompleted', false);
+    expect(service.get('setupCompleted')).toBe(false);
+    service.set('setupCompleted', true);
+    expect(service.getAll().setupCompleted).toBe(true);
+  });
+
   it('resolveDownloadRoot ritorna stringa vuota finché non configurato', () => {
     const service = createConfigService({ db: createTestDb() });
     expect(service.resolveDownloadRoot(false, 'SUB_ITA')).toBe('');

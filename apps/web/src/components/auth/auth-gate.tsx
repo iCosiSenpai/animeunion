@@ -6,6 +6,7 @@ import type { ReactNode } from 'react';
 import { InitialSync } from './initial-sync';
 import { LockScreen } from './lock-screen';
 import { SetupScreen } from './setup-screen';
+import { shouldShowSetup } from './setup-state';
 import { SetupWizard } from './setup-wizard';
 
 function FullScreenSpinner() {
@@ -49,7 +50,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     return <FullScreenSpinner />;
   }
 
-  if (!configQuery.data.seriesPathSub) {
+  if (shouldShowSetup(configQuery.data)) {
     return <SetupWizard />;
   }
 

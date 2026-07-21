@@ -114,3 +114,78 @@ GET /integration/news?limit=5  -> { "data": [ { "title", "url", "publishedAt", "
 
 Se per te è più comodo cambiare nomi/percorsi va benissimo: basta che ci accordiamo sulla forma
 e sui nomi dei campi. Grazie mille!
+
+---
+
+## C. Follow-up Premium per l'app Docker (v0.17.0)
+
+> Stato verificato sui contratti `INTEGRATION_PREMIUM.md` / `INTEGRATION_NEURAL_EXPORT.md` e sulla
+> [pagina Premium ufficiale](https://animeunion.tv/premium). Contenuto della pagina pubblica
+> riformulato per conformità alle restrizioni di licenza.
+
+### Stato attuale
+
+`GET /integration/me` è il punto di verità e oggi espone un solo flag applicativo:
+
+```jsonc
+{
+  "premium": { "tier": "MEGA_FAN", "active": true, "expiresAt": "..." },
+  "features": { "neuralExport": true }
+}
+```
+
+L'app usa già correttamente `features.neuralExport` per XQ/XQ+. Per le altre funzioni non deve
+inferire la policy dal tier: un flag assente equivale a `false`.
+
+### Matrice di integrazione
+
+| Funzione | Fonte/policy attuale | Stato nell'app Docker | Richiesta API |
+|---|---|---|---|
+| Neural Export XQ/XQ+ | `features.neuralExport` | Implementata e ri-verificata prima dell'export | Nessuna |
+| Download simultanei | Gate locale su `premium.active`; non compare tra i flag | Implementata, ma la policy non è server-driven | Aggiungere `features.concurrentDownloads` o confermare esplicitamente il fallback su `premium.active` |
+| Assistenza prioritaria Telegram | Pubblicizzata per i tier Premium; nessun URL/flag nel contratto | Da esporre senza inventare un contatto | Aggiungere `features.prioritySupport` e un link autorevole, es. `support.telegramUrl` |
+| Calendario ICS | Pubblicizzato sul sito | L'app ha un calendario, ma nessun link ICS personale | Esporre un URL firmato/personale oppure un endpoint dedicato |
+| Temi esclusivi | Pubblicizzati sul sito | Nessun catalogo/entitlement di temi Premium | Aggiungere flag e manifest/endpoint asset prima di mostrarli come disponibili |
+| Watch Together / voce | Funzioni del sito con limiti per tier | Fuori scope dell'app self-hosted oggi | Eventuale deep-link o API solo se si vuole integrarli |
+| Ricerca per immagine | Quote differenziate sul sito | Nessun endpoint integration | Esporre endpoint e quota residua solo se la funzione deve entrare nell'app |
+| AI episodio / compagna AI | Funzioni dei tier superiori sul sito | Nessun contratto integration | Servono endpoint, quota/tokens e policy di privacy dedicati |
+| Badge/coroncina tier | Funzione sociale del sito | L'app mostra già nome tier e scadenza | Nessuna, salvo URL profilo/deep-link |
+| Download senza attese | Segnalato come funzione futura sul sito | Semantica non definita per l'app | Chiarire se riguarda CDN, code server o solo sito; poi esporre un flag |
+
+### Correzioni richieste all'upsell dell'app
+
+La vetrina attuale dell'app non deve presentare come perk ufficiali funzioni non presenti né nella
+pagina pubblica né in `features`: priorità di coda, backup cloud, seguiti illimitati, SUB+DUB
+automatico e statistiche avanzate. Il backup Google Drive resta una funzione self-hosted disponibile
+indipendentemente dal Premium. Fino a nuovi flag, la UI deve distinguere chiaramente:
+
+1. funzioni attive e autorizzate dal server;
+2. vantaggi disponibili sul sito ma non ancora integrati nell'app;
+3. idee future, che non vanno mostrate come promesse commerciali.
+
+### Messaggio pronto per l'admin AnimeUnion
+
+> Stiamo chiudendo la v0.17.0 dell'app Docker e vogliamo mantenere il gating interamente server-driven,
+> come previsto da `INTEGRATION_PREMIUM.md`. Oggi `/integration/me.features` espone soltanto
+> `neuralExport`, mentre l'app ha anche download simultanei e la pagina Premium pubblicizza assistenza
+> prioritaria Telegram, calendario ICS e temi. Puoi confermarci/aggiungere questi campi opzionali?
+>
+> ```jsonc
+> {
+>   "features": {
+>     "neuralExport": true,
+>     "concurrentDownloads": true,
+>     "prioritySupport": true,
+>     "exclusiveThemes": false,
+>     "calendarIcs": true
+>   },
+>   "support": { "telegramUrl": "https://t.me/..." },
+>   "links": { "calendarIcsUrl": "https://..." }
+> }
+> ```
+>
+> I campi assenti resteranno `false`/nascosti. In particolare ci serve il link ufficiale del canale o
+> bot per l'assistenza prioritaria: il link pubblico `https://t.me/aniuniontv` sembra il canale della
+> community, quindi non vogliamo usarlo impropriamente come supporto. Puoi anche confermare se, fino
+> all'arrivo di `features.concurrentDownloads`, il gate su `premium.active` è accettabile oppure va
+> disabilitato?

@@ -1,20 +1,108 @@
-import { expect, test } from '@playwright/test';
+import { resolve } from 'node:path';
+import {
+  type APIRequestContext,
+  type APIResponse,
+  type Page,
+  expect,
+  test,
+} from '@playwright/test';
 
-// Smoke test dei flussi critici: l'app si avvia (web + api in mock) e risponde. Volutamente
-// resiliente (la home può mostrare il wizard di setup al primo avvio): verifica lo shell, non i dati.
+const API_URL = 'http://127.0.0.1:3001';
 
-test('la home risponde e mostra il brand AnimeUnion', async ({ page }) => {
-  await page.goto('/');
-  await expect(page).toHaveTitle(/AnimeUnion/i);
-  await expect(page.locator('body')).toBeVisible();
-});
+type TrpcEnvelope<T> = {
+  error?: unknown;
+  result?: { data?: T | { json: T } };
+};
 
-test("l'API risponde su /health", async ({ request }) => {
-  const res = await request.get('http://127.0.0.1:3001/health');
-  expect(res.ok()).toBeTruthy();
-});
+async function trpcData<T>(response: APIResponse, operation: string): Promise<T> {
+  const body = await response.text();
+  expect(response.ok(), `${operation} non riuscita: ${body}`).toBeTruthy();
 
-test('il catalogo è raggiungibile', async ({ page }) => {
+  const envelope = JSON.parse(body) as TrpcEnvelope<T>;
+  expect(envelope.error, `${operation} ha restituito un errore tRPC: ${body}`).toBeUndefined();
+  if (!envelope.result || envelope.result.data === undefined) {
+    throw new Error(`${operation} non ha restituito dati tRPC: ${body}`);
+  }
+
+  const data = envelope.result.data;
+  return typeof data === 'object' && data !== null && 'json' in data ? data.json : data;
+}
+
+async function setConfig(request: APIRequestContext, key: string, value: unknown): Promise<void> {
+  const response = await request.post(`${API_URL}/trpc/config.set`, {
+    data: { key, value },
+  });
+  await trpcData(response, `config.set(${key})`);
+}
+
+async function bootstrapCatalog(request: APIRequestContext): Promise<void> {
+  const start = await trpcData<{ started: boolean }>(
+    await request.post(`${API_URL}/trpc/catalog.sync`, { data: null }),
+    'catalog.sync',
+  );
+  expect(start).toEqual({ started: true });
+
+  await expect
+    .poll(
+      async () => {
+        const status = await trpcData<{ running: boolean; lastSyncedAt: string | null }>(
+          await request.get(`${API_URL}/trpc/catalog.syncStatus`),
+          'catalog.syncStatus',
+        );
+        return status.running ? null : status.lastSyncedAt;
+      },
+      { message: 'il catalogo mock non ha completato la sincronizzazione', timeout: 10_000 },
+    )
+    .not.toBeNull();
+}
+
+async function blockExternalBrowserRequests(page: Page): Promise<void> {
+  await page.route('**/*', async (route) => {
+    const url = new URL(route.request().url());
+    if (url.hostname === '127.0.0.1') {
+      await route.continue();
+      return;
+    }
+    await route.fulfill({ status: 204, contentType: 'application/octet-stream', body: '' });
+  });
+}
+
+test('un nuovo utente autenticato vede il setup, non un falso catalogo', async ({
+  page,
+  request,
+}) => {
+  await setConfig(request, 'setupCompleted', null);
+  await setConfig(request, 'seriesPathSub', '');
+  await blockExternalBrowserRequests(page);
+
   await page.goto('/catalog');
-  await expect(page).toHaveTitle(/AnimeUnion/i);
+
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'La tua libreria, nel posto giusto.' }),
+  ).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Iniziamo' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'Catalogo' })).toHaveCount(0);
+});
+
+test("l'API espone un health payload esatto", async ({ request }) => {
+  const response = await request.get(`${API_URL}/health`);
+
+  expect(response.status()).toBe(200);
+  await expect(response.json()).resolves.toEqual({ status: 'ok' });
+});
+
+test('il catalogo configurato renderizza i dati mock senza CDN esterni', async ({
+  page,
+  request,
+}) => {
+  await setConfig(request, 'seriesPathSub', resolve('.'));
+  await setConfig(request, 'setupCompleted', true);
+  await setConfig(request, 'animationsEnabled', false);
+  await bootstrapCatalog(request);
+  await blockExternalBrowserRequests(page);
+
+  await page.goto('/catalog?sort=title');
+  await expect(page.getByRole('heading', { level: 1, name: 'Catalogo' })).toBeVisible();
+  await expect(page.getByText('50 risultati', { exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Edens Zero' })).toBeVisible();
 });

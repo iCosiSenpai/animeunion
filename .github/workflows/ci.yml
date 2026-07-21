@@ -42,9 +42,7 @@ jobs:
   e2e:
     name: E2E (Playwright)
     runs-on: ubuntu-latest
-    # Non bloccante: gli E2E avviano l'intero stack in mock e sono più fragili dei test unitari;
-    # un loro fallimento non deve bloccare la CI (il gate resta il job "build").
-    continue-on-error: true
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -64,10 +62,13 @@ jobs:
       - name: E2E (Playwright)
         run: npm run test:e2e
 
-      - name: Upload report
+      - name: Upload Playwright diagnostics
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
-          path: playwright-report/
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: error
           retention-days: 7

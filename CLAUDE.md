@@ -126,16 +126,16 @@ razionale (incl. worker nativo vs container, nota CUDA/NVENC) nel piano.
 
 **Batch attivo: v0.17.0 — "Nessun residuo morto"** (piano canonico
 [plan/chiusura-v0.16.md](plan/chiusura-v0.16.md), branch reale `main`). `v0.16.0` è una release
-GitHub pubblica e immutabile (tag `511c8aa`). Il checkpoint locale `a2cde04` contiene la chiusura dei
-Task 2-8 ed è un commit avanti a `origin/main`; non è stato pushato. Il Task 9 ha allineato manifest
-e lockfile a `0.17.0`, corretto la sincronizzazione automatica del catalogo e completato i gate locali
-post-upgrade: `npm ci`, lint/typecheck, **51 file/530 test**, build Next di **16 pagine**, Playwright
-**30/30 + 3/3 + 3/3**, Compose e immagini Docker API/web verificate a `0.17.0`. Resta rosso
-`npm audit --omit=dev` per il ramo transitivo Next 15.5.21: PostCSS `<8.5.10` (1 moderate) e Sharp
-`<0.35.0` (2 high). L'utente ha accettato esplicitamente il rischio per v0.17.0 il 2026-07-22; la
-nota durevole è `SECURITY.md` e gli advisory non sono dichiarati risolti. Commit, push, tag, GitHub
-Release, immagini GHCR e deploy NAS sono autorizzati ma restano da eseguire e verificare in ordine.
-Il Task 8 resta aperto finché una CI remota non verifica il nuovo gate E2E.
+GitHub pubblica e immutabile (tag `511c8aa`). I commit `a2cde04` e `6c3b3cb` sono pubblicati su
+`origin/main`; la CI `29921965740` è verde sia per lint/typecheck/test sia per il gate E2E
+Playwright, quindi il Task 8 è chiuso. Il Task 9 ha allineato manifest e lockfile a `0.17.0`, corretto
+la sincronizzazione automatica del catalogo e completato i gate locali post-upgrade: `npm ci`,
+lint/typecheck, **51 file/530 test**, build Next di **16 pagine**, Playwright **30/30 + 3/3 + 3/3**,
+Compose e immagini Docker API/web verificate a `0.17.0`. Resta rosso `npm audit --omit=dev` per il
+ramo transitivo Next 15.5.21: PostCSS `<8.5.10` (1 moderate) e Sharp `<0.35.0` (2 high). L'utente ha
+accettato esplicitamente il rischio per v0.17.0 il 2026-07-22; la nota durevole è `SECURITY.md` e gli
+advisory non sono dichiarati risolti. Commit e push sono completati; tag, GitHub Release, immagini
+GHCR e deploy NAS sono autorizzati e restano da eseguire e verificare in ordine.
 
 - **v0.16.0 Step 14 (2026-07-17): polish UI diffuso.** Sezioni Home paginate "essenziali" ("In onda
   oggi", "Stagione in corso") non spariscono più da vuote: mostrano un empty-state "È tutto!" con

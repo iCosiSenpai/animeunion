@@ -123,7 +123,7 @@ gate E2E e release finale.
 - [x] **Task 5.5** — Setup wizard desktop ampio e meno verticale
 - [x] **Task 6** — Chiusura del miglioramento setup wizard / onboarding
 - [x] **Task 7** — GitHub Pages live e gestione artwork ufficiale
-- [ ] **Task 8** — E2E Playwright promossi a gate bloccante
+- [x] **Task 8** — E2E Playwright promossi a gate bloccante
 - [ ] **Task 9** — Release finale e chiusura completa del batch
 
 ## Task 0 — Regola universale plan-mode + governance del nuovo piano
@@ -537,8 +537,9 @@ soggetta a conferma esplicita.
   consecutive, poi lint, typecheck, suite completa, build web, diff-check e review indipendente.
 - [x] Creare un checkpoint locale del batch validato: commit `a2cde04`
   (`chore: checkpoint post-v0.16 closure work`), con working tree pulito e nessun push.
-- [ ] Autorizzazione ricevuta: pushare il checkpoint e verificare una CI remota verde; rendere
+- [x] Autorizzazione ricevuta: pushare il checkpoint e verificare una CI remota verde; rendere
   eventualmente il check E2E richiesto in branch protection solo con ulteriore conferma separata.
+  Commit `a2cde04` e `6c3b3cb` pubblicati; CI `29921965740` completata con esito `success`.
 
 **Esito locale (2026-07-21):** Playwright possiede tre processi distinti e non riutilizzabili:
 mock upstream locale su `3100`, API `tsx` non-watch su `3001` con database `:memory:` e source mock,
@@ -565,10 +566,10 @@ teardown. Verdi anche Biome (**314 file**), typecheck di api/web/worker/neural-c
 (**50 file/519 test**), build Next (**16 pagine**), diagnostica editor e `git diff HEAD --check`.
 Prima review semantica `NEEDS_CHANGES` per Google Fonts; seconda review post-fix: **`CLEAN`**.
 
-**Stato remoto:** il checkpoint locale `a2cde04` contiene implementazione ed evidenze ed è un commit
-avanti a `origin/main`. Non è stato ancora eseguito il push e non esiste una CI remota sul nuovo
-gate; branch protection e ruleset restano assenti. L'utente ha autorizzato push e fasi release il
-2026-07-22; Task 8 rimane aperto soltanto fino alla verifica della nuova CI.
+**Stato remoto (verificato 2026-07-22):** il checkpoint `a2cde04` e il commit release candidate
+`6c3b3cb` sono pubblicati su `origin/main`. La CI `29921965740` è `success`: entrambi i job
+`Lint, Typecheck, Test` ed `E2E (Playwright)` sono verdi, incluso l'upload della diagnostica
+Playwright. Task 8 chiuso. Branch protection e ruleset restano assenti e non vengono modificati.
 
 **Rischi e vincoli:** nessuna nuova dipendenza è necessaria; `package-lock.json` e le modifiche
 preesistenti restano fuori scope. Build/start devono terminare con Playwright senza lasciare processi
@@ -679,8 +680,9 @@ provata sul percorso automatico, non aggirata con bootstrap API nel test.
       con `.nvmrc` a `20.20.2` e lockfile coerente.
     - [x] Rieseguire diff-check, porte e review indipendente fino al verdetto `CLEAN`.
       Review semantica finale del candidato v0.17.0: **`CLEAN`** (2026-07-22).
-- [ ] Autorizzazione ricevuta: creare il commit release e pushare `main`; attendere CI verde e
-  chiudere il residuo remoto del Task 8 prima di creare il tag.
+- [x] Autorizzazione ricevuta: creare il commit release e pushare `main`; attendere CI verde e
+  chiudere il residuo remoto del Task 8 prima di creare il tag. Completato con commit `6c3b3cb` e
+  CI `29921965740` verde su entrambi i job.
 - [ ] Autorizzazione ricevuta: creare/pushare `v0.17.0`, verificare Docker Publish multi-arch, creare
   la GitHub Release e controllare tag `v0.17.0` + `latest` su entrambe le immagini GHCR.
 - [ ] Autorizzazione ricevuta: aggiornare i servizi necessari sul NAS e svolgere smoke post-deploy;
@@ -698,11 +700,12 @@ provata sul percorso automatico, non aggirata con bootstrap API nel test.
 | Cestino/Libreria | **Verde:** 36 test FileManager, 38 Library e 8 rollback UI, inclusi containment e symlink | Utente/maintainer NAS; volumi e permessi reali; delete/restore/retention con junction o symlink rappresentativi | **Non eseguito** |
 | Setup | **Verde:** gate tri-state, E2E fresh-state e build | Utente; profilo isolato `newuser`; completare login, wizard e ingresso nell'app | **Verificato il 2026-07-21**; nuovo deploy NAS non eseguito |
 | Pages | **Verde:** checker/hash e smoke Chromium del Task 7; landing e FAQ pubbliche rispondono `200` | Nessuna credenziale; URL Pages live; verificare landing, FAQ e anchor | **Verificato**; artwork ufficiale resta opzionale |
-| E2E | **Verde:** Playwright **30/30 + 3/3 + 3/3**, porte rilasciate | Maintainer repository; GitHub Actions dopo push autorizzato; job E2E bloccante verde | **Push autorizzato; in attesa di esecuzione e CI** |
+| E2E | **Verde:** Playwright **30/30 + 3/3 + 3/3**, porte rilasciate | Maintainer repository; GitHub Actions dopo push autorizzato; job E2E bloccante verde | **Verificato il 2026-07-22:** CI `29921965740`, job `E2E (Playwright)` `success` |
 | Drive/GPU/NAS | **Verde nei contratti:** servizi/core, typecheck, suite e immagini Docker locali | Utente; OAuth Drive, worker Windows GPU e NAS; backup/restore reale, job Neural e deploy con smoke | **Non eseguito** |
 
 La classificazione locale è completa. Le evidenze reali non osservate restano esplicitamente aperte;
-non sono state lette credenziali né mutati servizi esterni. L'eccezione audit Next è accettata e
+non sono state lette credenziali. Le sole mutazioni esterne eseguite finora sono il push autorizzato
+su `main` e le workflow conseguenti, tutte verificate verdi. L'eccezione audit Next è accettata e
 non bloccante per v0.17.0; i gate remoti restano separati e non vengono compensati dai test locali
 verdi.
 

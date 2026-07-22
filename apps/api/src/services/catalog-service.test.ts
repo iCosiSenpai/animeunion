@@ -409,6 +409,148 @@ describe('CatalogService', () => {
     expect(status.lastSyncedAt).not.toBeNull();
   });
 
+  it('syncCatalog non marca come fresca una risposta source vuota', async () => {
+    const db = createTestDb();
+    const config = createConfigService({ db });
+    const source = {
+      searchAnime: async () => ({
+        data: [],
+        meta: { page: 1, perPage: 24, total: 0, hasMore: false },
+      }),
+    } as unknown as AnimeSource;
+    const service = createCatalogService({ db, source, config, logger: testLogger });
+
+    await expect(service.syncCatalog()).rejects.toThrow('Sync catalogo vuota');
+
+    expect(db.select().from(schema.anime).all()).toHaveLength(0);
+    expect(service.syncStatus()).toEqual({ running: false, lastSyncedAt: null });
+  });
+
+  it('syncCatalog vuota preserva dati e timestamp dell ultima sync riuscita', async () => {
+    const db = createTestDb();
+    const config = createConfigService({ db });
+    const successfulService = createCatalogService({
+      db,
+      source: createMockSource(),
+      config,
+      logger: testLogger,
+      now: () => new Date('2026-07-20T10:00:00.000Z'),
+    });
+    await successfulService.syncCatalog();
+    const previousStatus = successfulService.syncStatus();
+
+    const emptySource = {
+      searchAnime: async () => ({
+        data: [],
+        meta: { page: 1, perPage: 24, total: 0, hasMore: false },
+      }),
+    } as unknown as AnimeSource;
+    const failingService = createCatalogService({
+      db,
+      source: emptySource,
+      config,
+      logger: testLogger,
+      now: () => new Date('2026-07-21T10:00:00.000Z'),
+    });
+
+    await expect(failingService.syncCatalog()).rejects.toThrow('Sync catalogo vuota');
+
+    expect(db.select().from(schema.anime).all()).toHaveLength(50);
+    expect(failingService.syncStatus()).toEqual(previousStatus);
+  });
+
+  it('syncCatalog rifiuta una pagina finale non vuota ma inferiore al totale dichiarato', async () => {
+    const db = createTestDb();
+    const config = createConfigService({ db });
+    const firstPage = await createMockSource().searchAnime('', 1);
+    const first = firstPage.data[0];
+    if (!first) {
+      throw new Error('catalogo mock vuoto');
+    }
+    const source = {
+      searchAnime: async () => ({
+        data: [first],
+        meta: { page: 1, perPage: 24, total: 2, hasMore: false },
+      }),
+    } as unknown as AnimeSource;
+    const service = createCatalogService({ db, source, config, logger: testLogger });
+
+    await expect(service.syncCatalog()).rejects.toThrow('attesi 2 anime, ricevuti 1');
+
+    expect(db.select().from(schema.anime).all()).toHaveLength(0);
+    expect(service.syncStatus()).toEqual({ running: false, lastSyncedAt: null });
+  });
+
+  it('syncCatalog fallita su una pagina successiva non applica gli upsert raccolti', async () => {
+    const db = createTestDb();
+    const config = createConfigService({ db });
+    const mockSource = createMockSource();
+    const successfulService = createCatalogService({
+      db,
+      source: mockSource,
+      config,
+      logger: testLogger,
+      now: () => new Date('2026-07-20T10:00:00.000Z'),
+    });
+    await successfulService.syncCatalog();
+    const previousStatus = successfulService.syncStatus();
+    const firstPage = await mockSource.searchAnime('', 1);
+    const first = firstPage.data[0];
+    if (!first) {
+      throw new Error('catalogo mock vuoto');
+    }
+    const previousRow = db.select().from(schema.anime).where(eq(schema.anime.id, first.id)).get();
+    const incompleteSource = {
+      searchAnime: async (_query: string, page: number) =>
+        page === 1
+          ? {
+              data: [{ ...first, title: 'Titolo che non deve essere persistito' }],
+              meta: { page: 1, perPage: 1, total: 2, hasMore: true },
+            }
+          : {
+              data: [],
+              meta: { page: 2, perPage: 1, total: 2, hasMore: false },
+            },
+    } as unknown as AnimeSource;
+    const failingService = createCatalogService({
+      db,
+      source: incompleteSource,
+      config,
+      logger: testLogger,
+      now: () => new Date('2026-07-21T10:00:00.000Z'),
+    });
+
+    await expect(failingService.syncCatalog()).rejects.toThrow('attesi 2 anime, ricevuti 1');
+
+    expect(db.select().from(schema.anime).where(eq(schema.anime.id, first.id)).get()).toEqual(
+      previousRow,
+    );
+    expect(failingService.syncStatus()).toEqual(previousStatus);
+  });
+
+  it('syncCatalog esegue rollback di dati e timestamp se un upsert fallisce', async () => {
+    const db = createTestDb();
+    const config = createConfigService({ db });
+    const firstPage = await createMockSource().searchAnime('', 1);
+    const first = firstPage.data[0];
+    const second = firstPage.data[1];
+    if (!first || !second) {
+      throw new Error('catalogo mock insufficiente');
+    }
+    const source = {
+      searchAnime: async () => ({
+        data: [first, { ...second, slug: first.slug }],
+        meta: { page: 1, perPage: 24, total: 2, hasMore: false },
+      }),
+    } as unknown as AnimeSource;
+    const service = createCatalogService({ db, source, config, logger: testLogger });
+
+    await expect(service.syncCatalog()).rejects.toThrow();
+
+    expect(db.select().from(schema.anime).all()).toHaveLength(0);
+    expect(service.syncStatus()).toEqual({ running: false, lastSyncedAt: null });
+  });
+
   it('recent e topRated ordinano correttamente', async () => {
     const { service } = makeService();
     await service.syncCatalog();

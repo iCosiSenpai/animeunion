@@ -1,27 +1,48 @@
 'use client';
 
 import { trpc } from '@/lib/trpc';
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { toast } from 'sonner';
+import { createInitialCatalogSyncCoordinator, runInitialCatalogSync } from './initial-sync-runner';
+
+// L'operazione appartiene al modulo, non al singolo effect: in Strict Mode e durante i remount di
+// AuthGate continua a osservare la sync e a invalidare la QueryClient condivisa dai Providers.
+const coordinateInitialCatalogSync = createInitialCatalogSyncCoordinator();
 
 export function InitialSync() {
   const utils = trpc.useUtils();
-  const sync = trpc.catalog.sync.useMutation();
-  const started = useRef(false);
+  const startSync = trpc.catalog.sync.useMutation().mutateAsync;
 
   useEffect(() => {
-    if (started.current) {
-      return;
-    }
-    started.current = true;
-    void (async () => {
-      const status = await utils.catalog.syncStatus.fetch();
-      if (!status.lastSyncedAt && !status.running) {
-        sync.mutate();
-        toast.message('Sincronizzazione del catalogo avviata in background.');
-      }
-    })();
-  }, [utils, sync]);
+    let mounted = true;
+    const operation = coordinateInitialCatalogSync(() =>
+      runInitialCatalogSync({
+        fetchStatus: () => utils.catalog.syncStatus.fetch(undefined, { staleTime: 0 }),
+        startSync,
+        invalidateCatalog: () => utils.catalog.invalidate(),
+      }),
+    );
+
+    void operation
+      .then(({ started }) => {
+        if (mounted && started) {
+          toast.success('Catalogo sincronizzato.');
+        }
+      })
+      .catch((error) => {
+        if (mounted) {
+          toast.error(
+            error instanceof Error
+              ? error.message
+              : 'Impossibile completare la sincronizzazione del catalogo.',
+          );
+        }
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [startSync, utils]);
 
   return null;
 }

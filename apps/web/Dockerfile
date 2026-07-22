@@ -13,7 +13,9 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ \
   && rm -rf /var/lib/apt/lists/*
 COPY . .
-RUN npm ci
+# L'immagine Node include già gli header nativi in /usr/local: il fallback
+# node-gyp resta disponibile anche quando il prebuilt non è raggiungibile.
+RUN npm_config_nodedir=/usr/local npm ci
 ARG API_URL=http://api:3001
 ENV API_URL=$API_URL
 RUN npm run build -w @animeunion/web

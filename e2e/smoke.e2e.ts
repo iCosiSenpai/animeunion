@@ -35,27 +35,6 @@ async function setConfig(request: APIRequestContext, key: string, value: unknown
   await trpcData(response, `config.set(${key})`);
 }
 
-async function bootstrapCatalog(request: APIRequestContext): Promise<void> {
-  const start = await trpcData<{ started: boolean }>(
-    await request.post(`${API_URL}/trpc/catalog.sync`, { data: null }),
-    'catalog.sync',
-  );
-  expect(start).toEqual({ started: true });
-
-  await expect
-    .poll(
-      async () => {
-        const status = await trpcData<{ running: boolean; lastSyncedAt: string | null }>(
-          await request.get(`${API_URL}/trpc/catalog.syncStatus`),
-          'catalog.syncStatus',
-        );
-        return status.running ? null : status.lastSyncedAt;
-      },
-      { message: 'il catalogo mock non ha completato la sincronizzazione', timeout: 10_000 },
-    )
-    .not.toBeNull();
-}
-
 async function blockExternalBrowserRequests(page: Page): Promise<void> {
   await page.route('**/*', async (route) => {
     const url = new URL(route.request().url());
@@ -91,18 +70,17 @@ test("l'API espone un health payload esatto", async ({ request }) => {
   await expect(response.json()).resolves.toEqual({ status: 'ok' });
 });
 
-test('il catalogo configurato renderizza i dati mock senza CDN esterni', async ({
+test('il catalogo configurato si sincronizza e renderizza i dati mock senza CDN esterni', async ({
   page,
   request,
 }) => {
   await setConfig(request, 'seriesPathSub', resolve('.'));
   await setConfig(request, 'setupCompleted', true);
   await setConfig(request, 'animationsEnabled', false);
-  await bootstrapCatalog(request);
   await blockExternalBrowserRequests(page);
 
   await page.goto('/catalog?sort=title');
   await expect(page.getByRole('heading', { level: 1, name: 'Catalogo' })).toBeVisible();
-  await expect(page.getByText('50 risultati', { exact: true })).toBeVisible();
+  await expect(page.getByText('50 risultati', { exact: true })).toBeVisible({ timeout: 10_000 });
   await expect(page.getByRole('link', { name: 'Edens Zero' })).toBeVisible();
 });

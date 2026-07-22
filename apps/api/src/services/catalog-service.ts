@@ -100,6 +100,7 @@ export function createCatalogService(options: CatalogServiceOptions): CatalogSer
   // Cache in-memory degli episodi per slug: evita di scaricare l'intera lista ad ogni
   // pre-download (getEpisodeFile con forceResolve). TTL 5min; invalidata su syncCatalog.
   const episodesCache = new Map<string, { episodes: SourceEpisode[]; ts: number }>();
+  type CatalogWriter = Pick<typeof db, 'insert' | 'delete'>;
 
   function getLastSyncedAt(): string | null {
     const row = db
@@ -118,9 +119,10 @@ export function createCatalogService(options: CatalogServiceOptions): CatalogSer
     }
   }
 
-  function setLastSyncedAt(iso: string): void {
+  function setLastSyncedAt(iso: string, writer: CatalogWriter = db): void {
     const timestamp = now().toISOString();
-    db.insert(schema.stats)
+    writer
+      .insert(schema.stats)
       .values({ key: SYNC_TIMESTAMP_KEY, value: JSON.stringify(iso), updatedAt: timestamp })
       .onConflictDoUpdate({
         target: schema.stats.key,
@@ -160,9 +162,10 @@ export function createCatalogService(options: CatalogServiceOptions): CatalogSer
     return (row?.n ?? 0) > 0;
   }
 
-  function upsertSummary(summary: AnimeSummary): void {
+  function upsertSummary(summary: AnimeSummary, writer: CatalogWriter = db): void {
     const timestamp = now().toISOString();
-    db.insert(schema.anime)
+    writer
+      .insert(schema.anime)
       .values({
         id: summary.id,
         slug: summary.slug,
@@ -200,7 +203,7 @@ export function createCatalogService(options: CatalogServiceOptions): CatalogSer
         },
       })
       .run();
-    upsertGenres(summary.id, summary.genres);
+    upsertGenres(summary.id, summary.genres, writer);
   }
 
   function upsertGenres(
@@ -212,9 +215,11 @@ export function createCatalogService(options: CatalogServiceOptions): CatalogSer
       nameEng?: string | null;
       malId?: number | null;
     }>,
+    writer: CatalogWriter = db,
   ): void {
     for (const genre of genres) {
-      db.insert(schema.genre)
+      writer
+        .insert(schema.genre)
         .values({
           id: genre.id,
           slug: genre.slug,
@@ -225,9 +230,10 @@ export function createCatalogService(options: CatalogServiceOptions): CatalogSer
         .onConflictDoNothing()
         .run();
     }
-    db.delete(schema.animeGenre).where(eq(schema.animeGenre.animeId, animeId)).run();
+    writer.delete(schema.animeGenre).where(eq(schema.animeGenre.animeId, animeId)).run();
     for (const genre of genres) {
-      db.insert(schema.animeGenre)
+      writer
+        .insert(schema.animeGenre)
         .values({ animeId, genreId: genre.id })
         .onConflictDoNothing()
         .run();
@@ -781,23 +787,69 @@ export function createCatalogService(options: CatalogServiceOptions): CatalogSer
       syncRunning = true;
       try {
         let page = 1;
-        let synced = 0;
+        let expectedTotal: number | null = null;
+        const summaries: AnimeSummary[] = [];
+        const seenAnimeIds = new Set<string>();
+
         for (;;) {
           const result = await source.searchAnime('', page);
+          if (result.meta.page !== page) {
+            throw new Error(
+              `Sync catalogo incoerente: richiesta pagina ${page}, ricevuta ${result.meta.page}`,
+            );
+          }
+          if (expectedTotal === null) {
+            expectedTotal = result.meta.total;
+          } else if (result.meta.total !== expectedTotal) {
+            throw new Error(
+              `Sync catalogo incoerente: totale cambiato da ${expectedTotal} a ${result.meta.total}`,
+            );
+          }
+          if (result.data.length === 0 && result.meta.hasMore) {
+            throw new Error(`Sync catalogo incompleta: pagina ${page} vuota con altri dati attesi`);
+          }
+
           for (const summary of result.data) {
-            upsertSummary(summary);
+            if (seenAnimeIds.has(summary.id)) {
+              throw new Error(`Sync catalogo incoerente: anime duplicato ${summary.id}`);
+            }
+            seenAnimeIds.add(summary.id);
+            summaries.push(summary);
           }
-          synced += result.data.length;
-          if (!result.meta.hasMore || result.data.length === 0) {
-            break;
+
+          if (result.meta.hasMore) {
+            if (summaries.length >= expectedTotal) {
+              throw new Error(
+                `Sync catalogo incoerente: altri dati dichiarati dopo ${summaries.length}/${expectedTotal}`,
+              );
+            }
+            page++;
+            continue;
           }
-          page++;
+          if (summaries.length !== expectedTotal) {
+            throw new Error(
+              `Sync catalogo incompleta: attesi ${expectedTotal} anime, ricevuti ${summaries.length}`,
+            );
+          }
+          break;
         }
-        setLastSyncedAt(now().toISOString());
+
+        if (summaries.length === 0) {
+          throw new Error('Sync catalogo vuota: la source non ha restituito anime');
+        }
+
+        const completedAt = now().toISOString();
+        db.transaction((tx) => {
+          for (const summary of summaries) {
+            upsertSummary(summary, tx);
+          }
+          setLastSyncedAt(completedAt, tx);
+        });
+
         episodesCache.clear();
-        logger.info({ synced }, 'Sync catalogo completato');
-        options.onSyncComplete?.(synced);
-        return { synced };
+        logger.info({ synced: summaries.length }, 'Sync catalogo completato');
+        options.onSyncComplete?.(summaries.length);
+        return { synced: summaries.length };
       } finally {
         syncRunning = false;
       }

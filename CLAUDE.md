@@ -122,14 +122,20 @@ razionale (incl. worker nativo vs container, nota CUDA/NVENC) nel piano.
   config worker) + UI (pannello Premium + azione "Migliora a XQ/XQ+"). 423 test verdi.
 - [x] **Step finale** — Release v0.15.0 — 2026-07-09
 
-## Stato attuale (2026-07-13)
+## Stato attuale (2026-07-22)
 
-**Batch attivo: v0.17.0 — "Nessun residuo morto"** (piano
-[plan/chiusura-v0.16.md](plan/chiusura-v0.16.md), branch reale `main`). `v0.16.0` è già una release
-GitHub pubblica e immutabile (tag remoto `511c8aa`); il piano originario
-`plan/doctor-premium-ux.md` ha Step 1-14 + 7.5 completati e Step 15-16 trasferiti qui. Task 2 ha
-riconciliato la baseline; il prossimo Task operativo è Task 3 (ricognizione Premium). L'agente
-procede autonomamente con una fase interna di plan mode prima di ogni Task.
+**Batch attivo: v0.17.0 — "Nessun residuo morto"** (piano canonico
+[plan/chiusura-v0.16.md](plan/chiusura-v0.16.md), branch reale `main`). `v0.16.0` è una release
+GitHub pubblica e immutabile (tag `511c8aa`). Il checkpoint locale `a2cde04` contiene la chiusura dei
+Task 2-8 ed è un commit avanti a `origin/main`; non è stato pushato. Il Task 9 ha allineato manifest
+e lockfile a `0.17.0`, corretto la sincronizzazione automatica del catalogo e completato i gate locali
+post-upgrade: `npm ci`, lint/typecheck, **51 file/530 test**, build Next di **16 pagine**, Playwright
+**30/30 + 3/3 + 3/3**, Compose e immagini Docker API/web verificate a `0.17.0`. Resta rosso
+`npm audit --omit=dev` per il ramo transitivo Next 15.5.21: PostCSS `<8.5.10` (1 moderate) e Sharp
+`<0.35.0` (2 high). L'utente ha accettato esplicitamente il rischio per v0.17.0 il 2026-07-22; la
+nota durevole è `SECURITY.md` e gli advisory non sono dichiarati risolti. Commit, push, tag, GitHub
+Release, immagini GHCR e deploy NAS sono autorizzati ma restano da eseguire e verificare in ordine.
+Il Task 8 resta aperto finché una CI remota non verifica il nuovo gate E2E.
 
 - **v0.16.0 Step 14 (2026-07-17): polish UI diffuso.** Sezioni Home paginate "essenziali" ("In onda
   oggi", "Stagione in corso") non spariscono più da vuote: mostrano un empty-state "È tutto!" con
@@ -347,13 +353,15 @@ procede autonomamente con una fase interna di plan mode prima di ogni Task.
   nuovo scrivibile" è il gancio per lo Step 2. 438 test verdi, lint/typecheck/build web verdi.
   Formato del piano `plan/doctor-premium-ux.md` allineato agli altri (sotto-task a checkbox).
 
-**Versione corrente: v0.16.0 — "Cestino condiviso Libreria + Discord".** Tag e GitHub Release
-pubblici dal 2026-07-19; `main` è avanti con soli riallineamenti documentali. La prossima release
-sarà **v0.17.0**. Baseline manifest riallineata: root, api, web, worker, neural-core e shared sono
-tutti a `0.16.0` nel lockfile. Le funzionalità v0.15.0 restano operative: coesistenza SD/XQ/XQ+,
-worker GPU esterno, Premium, backup Google Drive e workflow test nuovo utente. Il deploy NAS della
-prossima release resta un'azione esplicita del Task 9.
-- **462 test verdi**, lint/typecheck (tutti i workspace) verdi sulla baseline v0.16.0 riallineata.
+**Versione pubblica corrente: v0.16.0 — "Cestino condiviso Libreria + Discord".** Tag e GitHub
+Release pubblici dal 2026-07-19. Il candidato locale è **v0.17.0**: root, api, web, worker,
+neural-core e shared sono tutti a `0.17.0`; tag e release non esistono ancora. L'audit production
+Next resta rosso ma è un'eccezione **accettata e non bloccante** per v0.17.0, documentata in
+`SECURITY.md`. Le funzionalità v0.15.0 restano operative: coesistenza SD/XQ/XQ+, worker GPU esterno,
+Premium, backup Google Drive e workflow test nuovo utente. Commit, push, tag, release e deploy NAS
+sono autorizzati dal 2026-07-22 e restano da eseguire in sequenza nel Task 9.
+- **Baseline storica v0.16.0:** 462 test verdi e lint/typecheck di tutti i workspace verdi prima del
+  batch di chiusura v0.17.0.
 - Mini-batch Step D (2026-07-09): **backup su Google Drive** — `cloud-backup-service` con
   bring-your-own OAuth client **Desktop** (scope `drive.file`), flusso **HTTPS-free** (redirect
   loopback `http://127.0.0.1` + incolla-codice manuale, pattern rclone) perché l'app gira in HTTP e

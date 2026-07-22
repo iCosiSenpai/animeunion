@@ -1141,21 +1141,41 @@ Frontend (Next.js)                   Backend (Fastify)                AnimeUnion
 
 ---
 
-## 10bis. Residui aperti (aggiornato 2026-07-19)
+## 10bis. Chiusura v0.17.0 (aggiornato 2026-07-22)
 
-Tutta la roadmap 8 settimane e le appendici di polish (STEP 2.5 / 2.6) sono state completate e
-rilasciate (ultima release **v0.16.0**). Restano aperti solo i seguenti punti, tracciati anche nella
-sezione `[Unreleased] → Da fare` del `CHANGELOG.md`:
+La roadmap storica è rilasciata fino a **v0.16.0**. La chiusura successiva è governata dal piano
+canonico [`plan/chiusura-v0.16.md`](plan/chiusura-v0.16.md): il codice locale è candidato a
+**v0.17.0**; commit, push, tag, release e deploy sono autorizzati dall'utente ma non vengono
+considerati completati finché i rispettivi gate non sono osservati.
 
-- [x] **Setup wizard migliorato** — lo Step 7.5 aveva già consegnato stepper, verifica cartelle,
-  Aspetto, Jellyfin e riepilogo; il Task 6 della chiusura v0.17.0 aggiunge uno stato di completamento
-  esplicito e retrocompatibile, così il salvataggio delle cartelle non interrompe più il wizard.
-- [ ] **GitHub Pages** — la landing statica esiste già (`docs/index.html` + `docs/faq.html`, con placeholder mascotte); resta da abilitare Pages nelle impostazioni del repo e sostituire i placeholder con l'artwork ufficiale (vedi §12)
-- [ ] **E2E Playwright come gate bloccante** — gli E2E girano già in CI (job `e2e` in `.github/workflows/ci.yml`, `npm run test:e2e`) ma come job **non bloccante** (`continue-on-error: true`); resta da promuoverli a gate una volta stabili
-- [ ] **Update ottimistici della UI dopo le eliminazioni della Libreria** (rimandati)
-- [x] **Routing del cestino esteso alla Libreria** (`deleteEpisode`/`deleteEntry`/`deleteSeries`/`deleteOrphans` rispettano `trashEnabled`, modulo condiviso `lib/trash.ts`) — rilasciato in v0.16.0
+- [x] **Setup wizard migliorato** — marker tri-state retrocompatibile, ripresa del setup e layout
+  desktop responsive; smoke isolato da nuovo utente confermato.
+- [x] **GitHub Pages** — landing e FAQ sono live da `main` + `/docs`, con CSS/favicon locali,
+  fallback astratto originale e HTTPS. L'artwork ufficiale resta una sostituzione opzionale, ammessa
+  solo dopo fornitura e autorizzazione esplicita; non blocca la pagina corrente.
+- [x] **E2E Playwright bloccanti, lato repository locale** — lifecycle isolato, retry zero,
+  diagnostica e artefatti coerenti; `continue-on-error` è stato rimosso.
+- [x] **Aggiornamenti dipendenze supportati** — Drizzle ORM 0.45.2, node-cron 4.6.0, undici 7.28.0,
+  Next 15.5.21 e drizzle-kit 0.31.10; lock cross-platform e immagini Docker locali verificati.
+- [x] **Audit production residuo Next accettato per v0.17.0** — eccezione non bloccante:
+  `npm audit --omit=dev` resta rosso per PostCSS `<8.5.10` (1 moderate) e Sharp `<0.35.0` (2 high).
+  L'utente/maintainer ha accettato esplicitamente il rischio il 2026-07-22; `SECURITY.md` registra
+  advisory, mitigazioni e criterio di chiusura. Proprietario patch: maintainer Next/upstream;
+  `npm audit fix --force` non è ammesso.
+- [ ] **Verifica E2E remota** — il push è autorizzato; criterio: osservare una nuova CI verde sul
+  commit candidato. Branch protection è opzionale e richiede un'autorizzazione separata.
+- [x] **Update ottimistici della Libreria** — cache, rollback concorrenti e invalidazioni completati;
+  i flussi filesystem/cestino sono stati resi conservativi rispetto a righe attive e alias fisici.
+- [ ] **Evidenze runtime esterne** — proprietario: utente per account Premium/API, notifier,
+  PWA/HTTPS, Google Drive, worker GPU e NAS; criterio: collaudo nell'ambiente reale con credenziali o
+  hardware disponibili. Gli scenari non osservati restano esplicitamente non verificati.
+- [ ] **Release v0.17.0** — proprietario: maintainer con conferma dell'utente; sequenza obbligatoria:
+  validazioni locali → commit release → push → CI verde → tag → GHCR/GitHub Release → eventuale
+  deploy NAS autorizzato.
 
-Gli "Orizzonti futuri" (§11) restano volutamente non pianificati: sono direzioni post-v1, non debiti.
+La specifica GitHub Pages del §12 resta come archivio del concept iniziale ed è superseduta dallo
+stato live documentato qui e nel piano canonico; non va interpretata come una lista di attività
+ancora aperte. Gli "Orizzonti futuri" (§11) restano direzioni post-v1, non debiti della v0.17.0.
 
 ---
 

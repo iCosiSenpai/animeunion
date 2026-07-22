@@ -29,8 +29,10 @@ gate E2E e release finale.
   che i contratti attuali permettono.
 - Prima della release va riconciliato lo stato versione: package a `0.16.0`, shared a `0.12.0`,
   CHANGELOG già contenente `0.16.0` e stato dichiarato non uniforme.
-- Push, tag, merge su `main`, configurazione GitHub Pages e deploy NAS richiedono conferma esplicita
-  subito prima dell'azione ad impatto condiviso/esterno.
+- L'utente ha autorizzato esplicitamente il 2026-07-22 commit e push su `main`, tag `v0.17.0`,
+  GitHub Release, pubblicazione GHCR e deploy NAS. Le azioni restano sequenziali e vengono marcate
+  complete solo dopo la verifica del rispettivo gate; branch protection richiede invece una
+  decisione separata.
 
 ## AVANZAMENTO
 
@@ -533,8 +535,10 @@ soggetta a conferma esplicita.
   `playwright-report`/`test-results`, così una failure E2E rende rossa la workflow.
 - [x] Eseguire almeno dieci ripetizioni nella stessa invocazione e due invocazioni fresche
   consecutive, poi lint, typecheck, suite completa, build web, diff-check e review indipendente.
-- [ ] Dopo autorizzazione esplicita, creare commit/push dedicato e verificare una CI remota verde;
-  configurare eventualmente il check E2E richiesto in branch protection solo con ulteriore conferma.
+- [x] Creare un checkpoint locale del batch validato: commit `a2cde04`
+  (`chore: checkpoint post-v0.16 closure work`), con working tree pulito e nessun push.
+- [ ] Autorizzazione ricevuta: pushare il checkpoint e verificare una CI remota verde; rendere
+  eventualmente il check E2E richiesto in branch protection solo con ulteriore conferma separata.
 
 **Esito locale (2026-07-21):** Playwright possiede tre processi distinti e non riutilizzabili:
 mock upstream locale su `3100`, API `tsx` non-watch su `3001` con database `:memory:` e source mock,
@@ -561,10 +565,10 @@ teardown. Verdi anche Biome (**314 file**), typecheck di api/web/worker/neural-c
 (**50 file/519 test**), build Next (**16 pagine**), diagnostica editor e `git diff HEAD --check`.
 Prima review semantica `NEEDS_CHANGES` per Google Fonts; seconda review post-fix: **`CLEAN`**.
 
-**Stato remoto:** implementazione e validazione locale sono complete. Il Task resta aperto nella
-checkbox di avanzamento esclusivamente per commit/push dedicato, verifica di una nuova CI GitHub e
-l'eventuale required check di branch protection. In questa fase non sono stati eseguiti commit,
-push o mutazioni della configurazione remota.
+**Stato remoto:** il checkpoint locale `a2cde04` contiene implementazione ed evidenze ed è un commit
+avanti a `origin/main`. Non è stato ancora eseguito il push e non esiste una CI remota sul nuovo
+gate; branch protection e ruleset restano assenti. L'utente ha autorizzato push e fasi release il
+2026-07-22; Task 8 rimane aperto soltanto fino alla verifica della nuova CI.
 
 **Rischi e vincoli:** nessuna nuova dipendenza è necessaria; `package-lock.json` e le modifiche
 preesistenti restano fuori scope. Build/start devono terminare con Playwright senza lasciare processi
@@ -588,14 +592,133 @@ viene rappresentata come protezione merge finché non è configurata e verificat
 **Obiettivo:** pubblicare la versione determinata nel Task 2 e lasciare piani, documentazione,
 immagini e deploy nello stesso stato verificabile.
 
+**Audit iniziale (2026-07-21):** root e cinque workspace sono allineati a `0.16.0`; tag, GitHub
+Release e immagini GHCR `latest`/`v0.16.0` confermano che la prossima versione è `0.17.0`. Il
+checkpoint `a2cde04` è locale e `main` è avanti di un commit; l'ultima CI remota verde riguarda
+`225582c`. Docker Publish è abilitato e parte su tag `v*`, pubblicando api/web multi-arch, ma non
+dipende automaticamente dalla CI: la sequenza deve essere push → CI verde → tag. Pages è live da
+`main` + `/docs`; branch protection e ruleset sono assenti.
+
+`CHANGELOG.md`, `PLAN.md` §10bis e `CLAUDE.md` contengono residui ormai stale. Il lifecycle npm
+`version` esegue `format` e `git add .`, quindi il bump viene applicato in modo esplicito ai manifest
+e al lockfile, senza usarlo. I collaudi con account/credenziali o hardware reali non vengono simulati:
+devono avere proprietario, ambiente e criterio di chiusura.
+
+**Gap catalogo emerso dallo screenshot:** l'immagine coincide col primo fallimento E2E pre-fix e
+non ci sono listener locali correnti, ma rivela un difetto reale. `InitialSync` avvia l'import
+fire-and-forget senza osservarne la fine né invalidare `catalog.browse`/`filters`; una pagina già
+risolta a zero può quindi restare su “Nessun anime trovato” dopo una sync riuscita. La correzione va
+provata sul percorso automatico, non aggirata con bootstrap API nel test.
+
+**Sotto-task verificabili:**
+- [x] Auditare versioni, documenti, workflow CI/GHCR, Pages, stato remoto, consumer della sync e
+  provenienza dello screenshot senza leggere segreti o mutare servizi esterni.
+- [x] Rendere autorevole la sync iniziale: osservare anche una sync già in corso, gestire l'esito,
+  invalidare le query catalogo al completamento e aggiornare lo smoke E2E affinché provi il percorso
+  automatico da DB vuoto senza bootstrap API manuale.
+- [x] Decidere e coprire la semantica di una sync con zero elementi, evitando che un falso successo
+  renda fresco un catalogo vuoto o nasconda dati precedenti.
+- [x] Portare root, api, web, worker, neural-core, shared e lockfile a `0.17.0` senza lifecycle npm
+  invasivi; verificare che ogni fonte versione runtime sia coerente.
+- [x] Trasformare `[Unreleased]` nel changelog v0.17.0 e riallineare `PLAN.md`, `CLAUDE.md` e questo
+  piano, rimuovendo soltanto residui realmente chiusi e mantenendo espliciti i blocchi esterni.
+- [x] Gestire l'audit npm production emerso dal build Docker senza `--force` o downgrade: applicare
+  patch esatte e gli upgrade minimi Drizzle/node-cron, validare API scheduler/DB, lockfile, audit,
+  suite e build, quindi documentare l'eventuale eccezione accettata prima della candidatura.
+  - [x] Confermare che lockfile e albero risolvono con `npm ci --ignore-scripts`: **471 pacchetti**
+    installati; il fallimento del `npm ci` ordinario resta isolato al download GitHub eseguito dal
+    lifecycle di `ffmpeg-static@5.3.0`, non alla risoluzione npm.
+  - [x] Ripristinare l'asset ufficiale `ffmpeg` b6.1.1 tramite la cache supportata dal pacchetto,
+    ottenere un `npm ci` ordinario verde e verificare il binario; nessun mirror non verificato.
+    Completato tramite `FFMPEG_BINARIES_URL` loopback effimero sui tre body ufficiali già presenti
+    nella cache `ffmpeg-static`: asset gzip SHA-256 `8883A3DF…6D77`; FFmpeg 6.1.1 eseguibile,
+    README e licenza presenti; server locale chiuso dopo le tre richieste.
+  - [x] Applicare gli upgrade supportati con versioni esatte: Drizzle ORM `0.45.2`, node-cron
+    `4.6.0`, undici `7.28.0`, Next `15.5.21` e drizzle-kit `0.31.10`; rimuovere
+    `@types/node-cron` e validare il lock cross-platform senza override non supportati.
+  - [x] Rieseguire `npm audit --omit=dev`: residuo confermato esclusivamente nel ramo Next con
+    PostCSS `<8.5.10` (**1 moderate**) e Sharp `<0.35.0` (**2 high**). `npm audit fix --force`
+    proporrebbe il downgrade distruttivo a Next 9.3.3 e non è stato eseguito.
+  - [x] Sbloccare il residuo audit tramite accettazione esplicita del rischio. Proprietario patch:
+    maintainer Next/upstream; criterio tecnico futuro: Next supportata con PostCSS ≥8.5.10 e Sharp
+    ≥0.35.0.
+    - [x] Accettazione ricevuta il 2026-07-22 e registrata in `SECURITY.md`, changelog, roadmap e
+      stato corrente senza dichiarare le CVE risolte.
+    - [x] Rieseguire audit/diff-check e review indipendente prima del commit release.
+- [x] Classificare ed eseguire i collaudi runtime automatizzabili (Doctor, ripresa download,
+  Premium, notifier, PWA, cestino, setup, Pages, E2E); per account, credenziali, GPU e NAS sono
+  registrati sotto proprietario, ambiente, prova richiesta e stato senza dichiarare verde ciò che
+  non è stato osservato.
+- [x] Validare lint, typecheck, suite unit/integration, build web, E2E ripetuti, compose config e build
+  Docker api/web; chiudere ogni failure e ottenere una review semantica finale `CLEAN`.
+  - [x] Eseguire lint (**316 file**) e typecheck di tutti i workspace sulle dipendenze aggiornate;
+    API, web, worker, neural-core e shared verdi a `0.17.0`.
+  - [x] Eseguire l'intera suite Vitest e la build production web.
+    - [x] Suite Vitest verde: **51 file, 530 test**, inclusi scheduler, Drizzle e FFmpeg reali.
+    - [x] Lock npm cross-platform ripristinato con metadata registry ufficiali: **8** target SWC,
+      **24** artifact Sharp e **10** libvips; nuovo `npm ci` verde e build Next 15.5.21 di
+      **16 pagine** completata senza auto-patch o warning.
+  - [x] Eseguire Playwright `--repeat-each=10` (**30/30**) e due invocazioni fresche consecutive
+    (**3/3**, **3/3**); teardown verificato con porte `3000`, `3001` e `3100` libere.
+  - [x] Validare `docker compose config`, build API/web e versione `0.17.0` dentro entrambe le
+    immagini prodotte.
+    - [x] `docker compose config --quiet` verde.
+    - [x] Il fallback sorgente di `better-sqlite3` usa gli header inclusi nell'immagine Node sotto
+      `/usr/local/include/node`, senza dipendere dal download degli header durante `node-gyp`.
+    - [x] Immagini API/web ricostruite e ispezionate: root/API/web `0.17.0`, Next `15.5.21`, Drizzle
+      `0.45.2`, node-cron `4.6.0`, undici `7.28.0`; SQLite in-memory e FFmpeg eseguibile verdi.
+  - [x] Eseguire diff-check, controllo stato/porte e review semantica finale prima del verdetto.
+    - [x] Prima review indipendente: `NEEDS_CHANGES` per audit production non accettato e metadata
+      contraddittori tra changelog/stato manifest.
+    - [x] Tenere le note sotto `[Unreleased]` e riallineare lo stato corrente in `CLAUDE.md`.
+    - [x] Seconda review indipendente: `NEEDS_CHANGES` per classificazione/autorizzazioni stale,
+      descrizione Sharp imprecisa e floor Node incompatibile con undici 7.28.0.
+    - [x] Classificare l'audit come eccezione accettata non bloccante e registrare in modo uniforme
+      l'autorizzazione già concessa per commit, push, tag, release e deploy NAS.
+    - [x] Documentare con precisione Sharp nei runner Docker e portare il floor Node a `>=20.18.1`,
+      con `.nvmrc` a `20.20.2` e lockfile coerente.
+    - [x] Rieseguire diff-check, porte e review indipendente fino al verdetto `CLEAN`.
+      Review semantica finale del candidato v0.17.0: **`CLEAN`** (2026-07-22).
+- [ ] Autorizzazione ricevuta: creare il commit release e pushare `main`; attendere CI verde e
+  chiudere il residuo remoto del Task 8 prima di creare il tag.
+- [ ] Autorizzazione ricevuta: creare/pushare `v0.17.0`, verificare Docker Publish multi-arch, creare
+  la GitHub Release e controllare tag `v0.17.0` + `latest` su entrambe le immagini GHCR.
+- [ ] Autorizzazione ricevuta: aggiornare i servizi necessari sul NAS e svolgere smoke post-deploy;
+  branch protection resta una mutazione remota separata e non autorizzata.
+
+**Matrice collaudi (esito locale e gate reali al 2026-07-22):**
+
+| Area | Evidenza automatizzata / locale | Gate reale: proprietario, ambiente e prova | Stato reale |
+|---|---|---|---|
+| Doctor | **Verde:** 9 test Doctor nella suite 530/530 | Utente/maintainer NAS; volumi reali; simulare mount assente/errato e verificare diagnosi e ripristino | **Non eseguito** |
+| Ripresa download | **Verde:** 46 test download service, 28 worker e 2 scheduler, inclusi interleaving/restart | Utente; account/source e filesystem NAS; interrompere un download, riavviare e verificare ripresa senza duplicati | **Non eseguito** |
+| Premium | **Verde:** parsing profilo, auth e gate entitlement con source mock nella suite | Utente + admin AnimeUnion; account Premium reale; osservare `/integration/me` e capability/UI effettive | **Non eseguito** |
+| Telegram/Discord | **Verde:** notifier con `MockAgent` e 7 test notification service | Utente; token/chat Telegram e webhook Discord reali; ricevere entrambi i messaggi di test | **Non eseguito** |
+| PWA/Push | **Verde:** 8 test push service, manifest/service worker e build Next 16 pagine | Utente; browser su deploy HTTPS; installare la PWA e ricevere una push reale | **Non eseguito** |
+| Cestino/Libreria | **Verde:** 36 test FileManager, 38 Library e 8 rollback UI, inclusi containment e symlink | Utente/maintainer NAS; volumi e permessi reali; delete/restore/retention con junction o symlink rappresentativi | **Non eseguito** |
+| Setup | **Verde:** gate tri-state, E2E fresh-state e build | Utente; profilo isolato `newuser`; completare login, wizard e ingresso nell'app | **Verificato il 2026-07-21**; nuovo deploy NAS non eseguito |
+| Pages | **Verde:** checker/hash e smoke Chromium del Task 7; landing e FAQ pubbliche rispondono `200` | Nessuna credenziale; URL Pages live; verificare landing, FAQ e anchor | **Verificato**; artwork ufficiale resta opzionale |
+| E2E | **Verde:** Playwright **30/30 + 3/3 + 3/3**, porte rilasciate | Maintainer repository; GitHub Actions dopo push autorizzato; job E2E bloccante verde | **Push autorizzato; in attesa di esecuzione e CI** |
+| Drive/GPU/NAS | **Verde nei contratti:** servizi/core, typecheck, suite e immagini Docker locali | Utente; OAuth Drive, worker Windows GPU e NAS; backup/restore reale, job Neural e deploy con smoke | **Non eseguito** |
+
+La classificazione locale è completa. Le evidenze reali non osservate restano esplicitamente aperte;
+non sono state lette credenziali né mutati servizi esterni. L'eccezione audit Next è accettata e
+non bloccante per v0.17.0; i gate remoti restano separati e non vengono compensati dai test locali
+verdi.
+
+**Sequenza remota obbligatoria:** commit release locale → push `main` → CI bloccante verde → creazione
+e push `v0.17.0` → GHCR verde → GitHub Release → deploy NAS → smoke. Le autorizzazioni necessarie
+sono già state ricevute; nessuna fase successiva può compensare una precedente non verificata.
+
 **Guida:**
 - Eseguire i collaudi runtime accumulati: Doctor, ripresa download, Premium, Telegram/Discord, PWA,
   cestino Libreria, setup, Pages ed E2E.
 - Aggiornare CHANGELOG, manifest/lockfile, `CLAUDE.md`, `PLAN.md` §10bis e archivio storico.
 - Assicurarsi che non rimangano checkbox aperte senza proprietario: eventuali dipendenze esterne
   devono avere stato, referente e criterio di chiusura espliciti.
-- Eseguire commit release; chiedere conferma prima di merge/push/tag, configurazione remota o deploy.
-- Verificare CI/GHCR multi-arch e poi, su conferma, aggiornare solo i servizi necessari sul NAS.
+- Eseguire commit release, push, tag, pubblicazione e deploy nella sequenza già autorizzata; non
+  modificare branch protection.
+- Verificare CI/GHCR multi-arch e aggiornare sul NAS solo i servizi necessari.
 
 **Test:** lint, typecheck, unit/integration, build web, E2E bloccanti e smoke post-deploy.
 
@@ -607,7 +730,7 @@ piani senza residui ambigui.
 - URL/handle ufficiale dell'assistenza Telegram: da ottenere dall'utente o dall'admin prima di
   pubblicare un link.
 - Artwork ufficiale della mascotte: sostituibile solo quando viene fornito/autorizzato.
-- Ulteriori modifiche a GitHub Pages, branch protection, push/tag e deploy NAS richiedono accesso
-  e conferma esplicita.
+- Modifiche ulteriori a GitHub Pages e branch protection richiedono una nuova autorizzazione;
+  commit, push, tag, GitHub Release, pubblicazione GHCR e deploy NAS di v0.17.0 sono già autorizzati.
 - Le feature Premium non esposte dai contratti API non vengono simulate lato client come se fossero
   entitlement server autorevoli.

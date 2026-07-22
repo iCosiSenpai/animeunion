@@ -13,7 +13,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends python3 make g+
 # Copia tutto il monorepo (filtrato da .dockerignore) PRIMA di npm ci, così la
 # risoluzione dei workspace funziona sia con symlink (Linux) sia con copia.
 COPY . .
-RUN npm ci
+# L'immagine Node include già gli header nativi in /usr/local: il fallback
+# node-gyp resta disponibile anche quando il prebuilt non è raggiungibile.
+RUN npm_config_nodedir=/usr/local npm ci
 
 FROM node:20-bookworm-slim AS runner
 WORKDIR /app

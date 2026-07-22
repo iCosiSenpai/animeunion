@@ -7,16 +7,51 @@ e il progetto aderisce al [Semantic Versioning](https://semver.org/lang/it/).
 
 ## [Unreleased]
 
-### Fixed
-- **Setup wizard completabile:** il salvataggio e la verifica delle cartelle non fanno più uscire
-  prematuramente dall'onboarding; Aspetto, Jellyfin e riepilogo restano raggiungibili fino al CTA
-  finale. Un marker tri-state mantiene compatibili le installazioni già configurate e consente di
-  riprendere un setup interrotto senza perdere i valori salvati.
+## [0.17.0] - 2026-07-22
 
-### Da fare
-- GitHub Pages: la landing statica esiste già (`docs/index.html` + `docs/faq.html`); resta da abilitare Pages nel repo e sostituire i placeholder mascotte con l'artwork ufficiale.
-- Promuovere gli E2E Playwright a gate bloccante: girano già in CI (job `e2e`, `continue-on-error: true`), ma non bloccano ancora la pipeline.
-- Update ottimistici della UI dopo le eliminazioni della Libreria (rimandati).
+Chiusura del batch "Nessun residuo morto": onboarding completabile, cancellazioni Libreria
+reattive e fail-closed, Pages pubbliche, sincronizzazione iniziale autorevole e Playwright promosso a
+gate CI.
+
+### Added
+- **Stato esplicito dell'onboarding:** il marker tri-state `setupCompleted` distingue installazioni
+  legacy, setup in corso e setup concluso; il wizard può essere ripreso mantenendo i dati già
+  salvati. Il layout desktop usa un rail di avanzamento e griglie responsive senza duplicare il
+  flusso mobile.
+- **Landing e FAQ GitHub Pages:** landing, FAQ, stylesheet e favicon sono versionati localmente,
+  pubblicati da `main` + `/docs` e privi di dipendenze di rendering esterne. In assenza di artwork
+  autorizzato viene usato un fallback astratto originale.
+- **Harness E2E deterministico:** mock upstream, API isolata e build Next standalone usano porte e
+  lifecycle espliciti, teardown verificato e diagnostica Playwright riproducibile.
+
+### Changed
+- **Eliminazioni Libreria ottimistiche:** episodio, entry, serie e orfani aggiornano subito cache e
+  statistiche, compongono rollback concorrenti e rivalidano Libreria, download, catalogo e Seguiti.
+- **Playwright è un gate CI bloccante:** retry zero, un worker, report/trace/screenshot coerenti e
+  artefatti caricati anche in caso di errore; rimosso `continue-on-error` dal job E2E.
+- **UX Premium aderente ai contratti:** la pagina distingue capability realmente esposte dall'API,
+  funzioni sperimentali e dipendenze esterne, senza pubblicare claim o contatti Telegram non
+  contrattualizzati.
+
+### Security
+- **Aggiornamenti production supportati:** Drizzle ORM 0.45.2, node-cron 4.6.0, undici 7.28.0 e
+  Next 15.5.21; drizzle-kit passa a 0.31.10 e il typing ormai incluso di node-cron sostituisce
+  `@types/node-cron`. Il lock conserva gli artifact SWC/Sharp cross-platform richiesti dalle immagini
+  multi-arch.
+- **Audit production residuo sotto Next:** `npm audit --omit=dev` segnala PostCSS `<8.5.10`
+  (1 moderate) e Sharp `<0.35.0` (2 high), entrambi transitivi di Next 15.5.21. Il rischio residuo è
+  stato accettato esplicitamente per v0.17.0 il 2026-07-22 ed è tracciato in `SECURITY.md`; gli
+  advisory restano aperti fino a una patch supportata. Non è stato usato `npm audit fix --force`.
+
+### Fixed
+- **Cancellazioni e finalizzazioni filesystem fail-closed:** identità di serie, alias/symlink,
+  cartelle condivise, cestino, download e Neural Export vengono rivalidati sotto un coordinatore
+  comune; cancel, restart e readiness non possono più resuscitare o pubblicare job superati.
+- **Setup wizard completabile:** salvare e verificare le cartelle non smonta più il wizard prima di
+  Aspetto, Jellyfin e riepilogo; gli errori restano recuperabili.
+- **Catalogo aggiornato dopo la sync automatica:** il client osserva anche una sincronizzazione già
+  in corso e invalida le query catalogo al completamento. Una source che restituisce zero anime non
+  aggiorna più il timestamp di freschezza né nasconde il catalogo precedente.
 
 ## [0.16.0] - 2026-07-19
 

@@ -1,6 +1,6 @@
 {
   "name": "animeunion-docker",
-  "version": "0.16.0",
+  "version": "0.17.0",
   "private": true,
   "description": "AnimeUnion Docker — applicazione ufficiale affiliata ad AnimeUnion per il download self-hosted degli anime.",
   "license": "AGPL-3.0-only",
@@ -11,7 +11,7 @@
     "url": "https://github.com/iCosiSenpai/animeunion.git"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=20.18.1"
   },
   "workspaces": ["apps/*", "packages/*"],
   "scripts": {

@@ -1,0 +1,31 @@
+# Packaging Windows (NSIS) del worker desktop. Build NON firmata: alla prima esecuzione Windows
+# mostra SmartScreen → "Ulteriori informazioni" → "Esegui comunque" (vedi README/FAQ). Il feed
+# auto-update è GitHub Releases (electron-updater legge latest.yml dalla release).
+appId: tv.animeunion.worker
+productName: AnimeUnion Worker
+directories:
+  output: release
+  buildResources: build
+# main.cjs bundla worker/neural-core/shared/@trpc/electron-updater; basta dist + package.json.
+files:
+  - dist/**
+  - package.json
+# L'ffmpeg con libplacebo+Vulkan (con le sue LICENSE/README GPL) va in vendor/ffmpeg e viene
+# imbarcato in resources/ffmpeg. È obbligatorio prima del packaging.
+extraResources:
+  - from: vendor/ffmpeg
+    to: ffmpeg
+    filter:
+      - "**/*"
+publish:
+  provider: github
+  owner: iCosiSenpai
+  repo: animeunion
+win:
+  target: nsis
+  icon: build/icon.ico
+  artifactName: AnimeUnion-Worker-Setup-${version}.${ext}
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true

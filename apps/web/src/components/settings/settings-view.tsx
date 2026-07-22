@@ -6,6 +6,7 @@ import { FolderInput } from '@/components/settings/folder-picker';
 import { HomeLayoutSection } from '@/components/settings/home-layout-section';
 import { InstallButton } from '@/components/settings/install-button';
 import { NeuralExportPanel } from '@/components/settings/neural-export-panel';
+import { NeuralPairingCard } from '@/components/settings/neural-pairing-card';
 import { PremiumLockedNote, PremiumUnlockedNote } from '@/components/settings/premium-feature';
 import { PushToggle } from '@/components/settings/push-toggle';
 import { RequestsSection } from '@/components/settings/requests-section';
@@ -338,6 +339,24 @@ export function SettingsView() {
 
   const update = <K extends keyof AppConfig>(key: K, value: AppConfig[K]) => {
     setDraft((prev) => (prev ? { ...prev, [key]: value } : prev));
+  };
+
+  // Dopo un pairing riuscito, il worker (URL/token/abilitazione) è stato scritto lato server dal
+  // flusso di abbinamento. Ri-sincronizziamo solo le chiavi del worker nel draft, così non risultano
+  // "modifiche non salvate" fantasma né un salvataggio successivo le sovrascrive.
+  const handlePaired = async () => {
+    const fresh = await utils.config.getAll.fetch();
+    setDraft((prev) =>
+      prev
+        ? {
+            ...prev,
+            neuralWorkerUrl: fresh.neuralWorkerUrl,
+            neuralWorkerToken: fresh.neuralWorkerToken,
+            neuralExportEnabled: fresh.neuralExportEnabled,
+          }
+        : prev,
+    );
+    await utils.neuralExport.status.invalidate();
   };
 
   const saveChanges = async (): Promise<boolean> => {
@@ -678,17 +697,16 @@ export function SettingsView() {
                   </p>
                   <ol className="ml-4 list-decimal space-y-1.5 text-xs text-muted-foreground">
                     <li>
-                      Avvia il worker sul PC con GPU (istruzioni in{' '}
-                      <code className="rounded bg-muted px-1 py-0.5">apps/worker/README.md</code>).
+                      Installa e avvia l'app <strong>AnimeUnion Worker</strong> sul PC con GPU.
                     </li>
-                    <li>
-                      Incolla qui l'URL LAN del worker e il token (lo stesso{' '}
-                      <code className="rounded bg-muted px-1 py-0.5">WORKER_TOKEN</code> del
-                      worker).
-                    </li>
-                    <li>Salva, poi usa “Verifica worker” per controllare che sia raggiungibile.</li>
+                    <li>Qui sotto genera un codice di abbinamento.</li>
+                    <li>Inserisci il codice nell'app: il collegamento avviene in automatico.</li>
                     <li>Dal catalogo, sul singolo episodio, scegli “Migliora a XQ / XQ+”.</li>
                   </ol>
+                  <p className="text-xs text-muted-foreground">
+                    L'app AnimeUnion Worker per ora non è firmata: al primo avvio Windows mostra
+                    SmartScreen — clicca “Ulteriori informazioni” e poi “Esegui comunque”.
+                  </p>
                 </div>
 
                 <div className="space-y-4 rounded-xl border p-4">
@@ -715,56 +733,7 @@ export function SettingsView() {
                       </SelectContent>
                     </Select>
                   </Field>
-                  <Field
-                    label="URL del worker"
-                    hint="Indirizzo LAN del worker GPU. Es. http://192.168.1.50:8787"
-                  >
-                    <Input
-                      autoComplete="off"
-                      placeholder="http://…:8787"
-                      value={draft.neuralWorkerUrl}
-                      onChange={(e) => update('neuralWorkerUrl', e.target.value)}
-                    />
-                  </Field>
-                  <Field
-                    label="Token del worker"
-                    hint="Deve combaciare con WORKER_TOKEN impostato sul worker."
-                  >
-                    <div className="space-y-1.5">
-                      <Input
-                        type="password"
-                        autoComplete="off"
-                        placeholder={
-                          original?.neuralWorkerToken === SECRET_MASK
-                            ? 'Configurato — digita per sostituirlo'
-                            : 'incolla il token'
-                        }
-                        value={
-                          draft.neuralWorkerToken === SECRET_MASK ? '' : draft.neuralWorkerToken
-                        }
-                        onChange={(e) => update('neuralWorkerToken', e.target.value)}
-                      />
-                      {original?.neuralWorkerToken === SECRET_MASK &&
-                      draft.neuralWorkerToken === SECRET_MASK ? (
-                        <p className="text-xs text-muted-foreground">
-                          Token configurato (mascherato). Lascia vuoto per mantenerlo, digita per
-                          sostituirlo o{' '}
-                          <button
-                            type="button"
-                            className="text-primary underline-offset-4 hover:underline"
-                            onClick={() => update('neuralWorkerToken', '')}
-                          >
-                            rimuovilo
-                          </button>
-                          .
-                        </p>
-                      ) : null}
-                    </div>
-                  </Field>
-                  <p className="text-xs text-muted-foreground">
-                    Salva le modifiche, poi usa “Verifica worker” qui sotto per controllare la
-                    connessione.
-                  </p>
+                  <NeuralPairingCard onPaired={handlePaired} />
                 </div>
                 <NeuralExportPanel />
               </div>

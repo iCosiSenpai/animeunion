@@ -1,0 +1,58 @@
+name: Worker Desktop
+
+# Build + pubblicazione dell'installer Windows (NSIS, non firmato) del worker desktop su GitHub
+# Releases. Si attiva manualmente o su tag `worker-desktop-v*`. Guardia: parte solo se la repo
+# variable WORKER_DESKTOP_PUBLISH_ENABLED == 'true'. L'ffmpeg con libplacebo+Vulkan viene scaricato
+# dalla repo variable FFMPEG_LIBPLACEBO_URL (zip) e imbarcato.
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'worker-desktop-v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build & publish Windows installer
+    if: ${{ vars.WORKER_DESKTOP_PUBLISH_ENABLED == 'true' }}
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck (app)
+        run: npm run typecheck:app -w @animeunion/worker-desktop
+
+      - name: Vendor ffmpeg (libplacebo + Vulkan)
+        shell: pwsh
+        env:
+          FFMPEG_LIBPLACEBO_URL: ${{ vars.FFMPEG_LIBPLACEBO_URL }}
+        run: |
+          if (-not $env:FFMPEG_LIBPLACEBO_URL) {
+            throw "Imposta la repo variable FFMPEG_LIBPLACEBO_URL (zip ffmpeg con libplacebo+Vulkan)"
+          }
+          New-Item -ItemType Directory -Force -Path apps/worker-desktop/vendor/ffmpeg | Out-Null
+          Invoke-WebRequest -Uri $env:FFMPEG_LIBPLACEBO_URL -OutFile ffmpeg.zip
+          Expand-Archive -Path ffmpeg.zip -DestinationPath ffmpeg-extract -Force
+          $exe = Get-ChildItem -Path ffmpeg-extract -Recurse -Filter ffmpeg.exe | Select-Object -First 1
+          if (-not $exe) { throw "ffmpeg.exe non trovato nell'archivio scaricato" }
+          Copy-Item $exe.FullName apps/worker-desktop/vendor/ffmpeg/ffmpeg.exe
+          # Includi le licenze GPL dell'ffmpeg, se presenti nell'archivio.
+          Get-ChildItem -Path ffmpeg-extract -Recurse -Include LICENSE*, README*, COPYING* |
+            ForEach-Object { Copy-Item $_.FullName apps/worker-desktop/vendor/ffmpeg/ -ErrorAction SilentlyContinue }
+
+      - name: Build & publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run release -w @animeunion/worker-desktop

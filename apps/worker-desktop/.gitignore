@@ -1,0 +1,4 @@
+dist/
+release/
+# Build ffmpeg imbarcata (grande, non versionata): posizionala qui prima del packaging.
+vendor/

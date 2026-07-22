@@ -106,6 +106,32 @@ export const neuralWorkerHealthSchema = neuralWorkerCapabilitiesSchema.extend({
 });
 export type NeuralWorkerHealth = z.infer<typeof neuralWorkerHealthSchema>;
 
+// --- Pairing worker (abbinamento automatico app desktop ↔ NAS) ---
+
+// Codice di abbinamento breve a scadenza, generato dal NAS e mostrato in Impostazioni.
+export const neuralPairingCodeSchema = z.object({
+  code: z.string(),
+  expiresAt: z.string(),
+});
+export type NeuralPairingCode = z.infer<typeof neuralPairingCodeSchema>;
+
+// Richiesta di pairing dall'app desktop: codice + URL LAN del worker + token generato dall'app.
+export const neuralPairRequestSchema = z.object({
+  code: z.string().min(1),
+  workerUrl: z.string().url(),
+  token: z.string().min(1),
+});
+export type NeuralPairRequest = z.infer<typeof neuralPairRequestSchema>;
+
+// Esito del pairing: config salvata + salute del worker verificata al volo.
+export const neuralPairResultSchema = z.object({
+  paired: z.boolean(),
+  reachable: z.boolean(),
+  ffmpegCapable: z.boolean(),
+  fps: z.number().nullable().default(null),
+});
+export type NeuralPairResult = z.infer<typeof neuralPairResultSchema>;
+
 // --- DTO per la UI (tRPC) ---
 
 // Sintesi profilo per la UI (senza dettagli di encode).

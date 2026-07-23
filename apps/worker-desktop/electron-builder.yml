@@ -3,13 +3,21 @@
 # auto-update è GitHub Releases (electron-updater legge latest.yml dalla release).
 appId: tv.animeunion.worker
 productName: AnimeUnion Worker
+# electron è hoisted alla root del monorepo (npm workspaces), quindi electron-builder non riesce a
+# dedurne la versione dal node_modules locale né dal range "^33.3.1". La fissiamo qui: elettron-builder
+# la usa per scaricare la dist Electron da imbarcare. Allinearla a devDependencies quando si aggiorna.
+electronVersion: 33.4.11
 directories:
   output: release
   buildResources: assets
 # main.cjs bundla worker/neural-core/shared/@trpc/electron-updater; basta dist + package.json.
+# ffmpeg-static (82MB) arriva transitivo da @animeunion/api (video-verify), ma il worker usa il
+# nostro ffmpeg con libplacebo in resources/ffmpeg e main.cjs non lo referenzia (tree-shaken):
+# lo escludiamo per non gonfiare installer e auto-update con un ffmpeg sbagliato (senza libplacebo).
 files:
   - dist/**
   - package.json
+  - "!**/node_modules/ffmpeg-static/**"
 # L'ffmpeg con libplacebo+Vulkan (con le sue LICENSE/README GPL) va in vendor/ffmpeg e viene
 # imbarcato in resources/ffmpeg. È obbligatorio prima del packaging.
 extraResources:

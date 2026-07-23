@@ -1,4 +1,4 @@
-import { randomInt, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { createWriteStream, openAsBlob } from 'node:fs';
 import { rm, stat } from 'node:fs/promises';
 import { dirname } from 'node:path';
@@ -9,9 +9,8 @@ import {
   type NeuralExportJobView,
   type NeuralExportRecipe,
   type NeuralExportStatus,
-  type NeuralPairRequest,
-  type NeuralPairResult,
-  type NeuralPairingCode,
+  type NeuralWorkerEnrollRequest,
+  type NeuralWorkerEnrollResult,
   type NeuralWorkerHealth,
   type Quality,
   hasNeuralExport,
@@ -38,7 +37,6 @@ const RECIPE_TTL_MS = 6 * 60 * 60 * 1000;
 const HEALTH_TIMEOUT_MS = 3000;
 const DEFAULT_POLL_INTERVAL_MS = 5000;
 const DEFAULT_POLL_TIMEOUT_MS = 2 * 60 * 60 * 1000; // 2h: un 4K puo' durare a lungo
-const PAIRING_CODE_TTL_MS = 5 * 60 * 1000; // 5 min: finestra per completare l'abbinamento
 
 interface NeuralSourceGeneration {
   updatedAt: string;
@@ -149,10 +147,8 @@ export interface NeuralExportService {
   }>;
   listJobs(limit?: number): NeuralExportJobView[];
   cancel(jobId: string): Promise<boolean>;
-  /** Genera un codice di abbinamento breve a scadenza (mostrato in Impostazioni). */
-  createPairingCode(): NeuralPairingCode;
-  /** Completa l'abbinamento: valida il codice, verifica il worker e salva la config. */
-  pair(input: NeuralPairRequest): Promise<NeuralPairResult>;
+  /** Collega un worker: verifica /health con il token e salva URL/token/nome, abilitando la feature. */
+  enroll(input: NeuralWorkerEnrollRequest): Promise<NeuralWorkerEnrollResult>;
   /** Marca error i job rimasti appesi (queued/running) da un riavvio precedente. */
   recoverInterrupted(): void;
   /** Attende che i processExport in volo terminino (per i test). */
@@ -174,17 +170,6 @@ export function createNeuralExportService(deps: NeuralExportServiceDeps): Neural
 
   let recipeCache: { at: number; recipe: NeuralExportRecipe } | null = null;
   const inFlight = new Set<Promise<void>>();
-  // Codici di abbinamento attivi: codice -> scadenza (epoch ms). In-memory: il pairing è un gesto
-  // interattivo di pochi minuti, non deve sopravvivere a un riavvio del NAS.
-  const pairingCodes = new Map<string, number>();
-
-  function prunePairingCodes(nowMs: number): void {
-    for (const [code, expiry] of pairingCodes) {
-      if (expiry <= nowMs) {
-        pairingCodes.delete(code);
-      }
-    }
-  }
 
   async function getRecipe(): Promise<NeuralExportRecipe | null> {
     if (recipeCache && now().getTime() - recipeCache.at < RECIPE_TTL_MS) {
@@ -565,7 +550,15 @@ export function createNeuralExportService(deps: NeuralExportServiceDeps): Neural
         entitled,
         recipeVersion: recipe?.version ?? null,
         profiles,
-        worker: { configured, enabled, reachable, ffmpegCapable, fps },
+        worker: {
+          configured,
+          enabled,
+          reachable,
+          ffmpegCapable,
+          fps,
+          name: config.get('neuralWorkerName'),
+          url: workerUrl,
+        },
       };
     },
 
@@ -706,41 +699,22 @@ export function createNeuralExportService(deps: NeuralExportServiceDeps): Neural
       return true;
     },
 
-    createPairingCode(): NeuralPairingCode {
-      const nowMs = now().getTime();
-      prunePairingCodes(nowMs);
-      // Codice numerico a 6 cifre: facile da leggere e digitare nell'app desktop.
-      const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
-      const expiry = nowMs + PAIRING_CODE_TTL_MS;
-      pairingCodes.set(code, expiry);
-      return { code, expiresAt: new Date(expiry).toISOString() };
-    },
-
-    async pair({ code, workerUrl, token }): Promise<NeuralPairResult> {
-      const nowMs = now().getTime();
-      prunePairingCodes(nowMs);
-      const expiry = pairingCodes.get(code);
-      if (!expiry || expiry <= nowMs) {
-        throw new PreconditionError('Codice di abbinamento non valido o scaduto');
-      }
-
-      // Verifica che il NAS raggiunga davvero il worker con l'URL/token forniti dall'app.
+    async enroll({ workerUrl, token, name }): Promise<NeuralWorkerEnrollResult> {
+      // Verifica che il NAS raggiunga davvero il worker con l'URL/token forniti dall'app desktop.
       const url = trimSlash(workerUrl.trim());
       const health = await pingWorker(url, token);
       if (!health) {
-        // Codice NON consumato: l'utente può ritentare entro la scadenza dopo aver risolto la rete.
         throw new PreconditionError(
-          'Worker non raggiungibile dal NAS: verifica che il PC e il worker siano accesi e sulla stessa rete.',
+          'Worker non raggiungibile dal NAS: verifica che il PC con GPU sia acceso, il worker avviato e sulla stessa rete.',
         );
       }
-
-      // Successo: consuma il codice (monouso) e salva la config. Il token è cifrato dal config service.
-      pairingCodes.delete(code);
+      // Successo: salva la config (il token è cifrato dal config service) e abilita la feature.
       config.set('neuralWorkerUrl', url);
       config.set('neuralWorkerToken', token);
+      config.set('neuralWorkerName', (name ?? '').trim());
       config.set('neuralExportEnabled', true);
       return {
-        paired: true,
+        enrolled: true,
         reachable: true,
         ffmpegCapable: health.ffmpegCapable && health.hasVulkan,
         fps: health.fps,

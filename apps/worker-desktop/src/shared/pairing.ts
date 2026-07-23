@@ -32,11 +32,3 @@ export function normalizeBaseUrl(input: string): string | null {
 export function buildWorkerUrl(ip: string, port: number): string {
   return `http://${ip}:${port}`;
 }
-
-/** Esito del pairing riportato alla GUI. */
-export interface PairOutcome {
-  ok: boolean;
-  reachable: boolean;
-  ffmpegCapable: boolean;
-  message: string | null;
-}

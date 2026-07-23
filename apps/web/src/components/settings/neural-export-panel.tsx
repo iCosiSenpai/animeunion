@@ -162,8 +162,8 @@ export function NeuralExportPanel() {
             />
             <StatusRow
               ok={!!worker?.configured}
-              label="Worker configurato"
-              detail={worker?.configured ? undefined : 'Imposta URL e token del worker'}
+              label="Worker collegato"
+              detail={worker?.configured ? undefined : 'Collega il worker dall’app sul PC con GPU'}
             />
             <StatusRow
               ok={!!worker?.reachable}
@@ -226,8 +226,16 @@ export function NeuralExportPanel() {
       )}
 
       <p className="px-1 text-xs text-muted-foreground">
-        Shader Anime4K © bloc97 e contributori — licenza MIT (github.com/bloc97/Anime4K). L'upscale
-        è eseguito localmente sul tuo hardware.
+        Shader{' '}
+        <a
+          href="https://github.com/bloc97/Anime4K"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-primary underline-offset-4 hover:underline"
+        >
+          Anime4K
+        </a>{' '}
+        © bloc97 e contributori — licenza MIT. L'upscale è eseguito localmente sul tuo hardware.
       </p>
     </div>
   );

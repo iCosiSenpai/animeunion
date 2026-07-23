@@ -1,8 +1,8 @@
 {
   "name": "@animeunion/worker-desktop",
-  "version": "0.17.0",
+  "version": "0.18.0",
   "private": true,
-  "description": "AnimeUnion Worker — app desktop Windows (GPU) per l'upscale neurale, con GUI, tray e pairing automatico col NAS.",
+  "description": "AnimeUnion Worker — app desktop Windows (GPU) per l'upscale neurale, con GUI, tray e collegamento automatico al NAS.",
   "author": "iCosiSenpai (https://github.com/iCosiSenpai)",
   "license": "AGPL-3.0-only",
   "type": "module",
@@ -23,7 +23,8 @@
     "@animeunion/shared": "*",
     "@animeunion/worker": "*",
     "@trpc/client": "^11.0.0",
-    "electron-updater": "6.3.9"
+    "electron-updater": "6.3.9",
+    "pino": "^9.6.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.5",

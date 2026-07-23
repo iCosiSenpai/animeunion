@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import { IPC, type WorkerApi } from '../shared/ipc';
+import { IPC, type LogLine, type WorkerApi } from '../shared/ipc';
 import type { DesktopStatus } from '../shared/status';
 
 /**
@@ -20,8 +20,19 @@ const api: WorkerApi = {
   getAutostart: () => ipcRenderer.invoke(IPC.getAutostart),
   setAutostart: (enabled) => ipcRenderer.invoke(IPC.setAutostart, enabled),
   openLogs: () => ipcRenderer.invoke(IPC.openLogs),
-  getPairingInfo: () => ipcRenderer.invoke(IPC.getPairingInfo),
-  pair: (input) => ipcRenderer.invoke(IPC.pair, input),
+  getLogs: () => ipcRenderer.invoke(IPC.getLogs),
+  onLog: (listener) => {
+    const handler = (_event: Electron.IpcRendererEvent, line: LogLine): void => listener(line);
+    ipcRenderer.on(IPC.logLine, handler);
+    return () => {
+      ipcRenderer.removeListener(IPC.logLine, handler);
+    };
+  },
+  getConnectionInfo: () => ipcRenderer.invoke(IPC.getConnectionInfo),
+  discoverNas: () => ipcRenderer.invoke(IPC.discoverNas),
+  enroll: (input) => ipcRenderer.invoke(IPC.enroll, input),
+  gpuTest: () => ipcRenderer.invoke(IPC.gpuTest),
+  allowFirewall: () => ipcRenderer.invoke(IPC.allowFirewall),
 };
 
 contextBridge.exposeInMainWorld('workerApi', api);

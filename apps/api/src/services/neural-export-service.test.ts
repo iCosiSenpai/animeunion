@@ -632,88 +632,38 @@ describe('neural-export-service', () => {
     await svc.waitForIdle();
   });
 
-  describe('pairing', () => {
-    it('createPairingCode + pair valido: salva la config e verifica il worker', async () => {
+  describe('enroll', () => {
+    it('enroll valido: salva URL/token/nome, abilita la feature e verifica il worker', async () => {
       config.set('neuralExportEnabled', false);
       const svc = makeService();
-      const { code, expiresAt } = svc.createPairingCode();
-      expect(code).toMatch(/^\d{6}$/);
-      expect(new Date(expiresAt).getTime()).toBeGreaterThan(Date.now());
 
-      const result = await svc.pair({
-        code,
+      const result = await svc.enroll({
         workerUrl: 'http://192.168.1.20:8787/',
         token: 'app-token',
+        name: 'PC-GPU',
       });
-      expect(result).toEqual({ paired: true, reachable: true, ffmpegCapable: true, fps: null });
-      // URL salvato senza slash finale, token persistito, feature abilitata dal pairing.
+      expect(result).toEqual({ enrolled: true, reachable: true, ffmpegCapable: true, fps: null });
+      // URL salvato senza slash finale, token/nome persistiti, feature abilitata dall'enroll.
       expect(config.get('neuralWorkerUrl')).toBe('http://192.168.1.20:8787');
       expect(config.get('neuralWorkerToken')).toBe('app-token');
+      expect(config.get('neuralWorkerName')).toBe('PC-GPU');
       expect(config.get('neuralExportEnabled')).toBe(true);
     });
 
-    it('pair con codice sbagliato -> errore, config invariata', async () => {
-      const svc = makeService();
-      svc.createPairingCode();
-      await expect(
-        svc.pair({ code: '000000', workerUrl: 'http://192.168.1.20:8787', token: 'x' }),
-      ).rejects.toThrow(/non valido|scaduto/i);
-      expect(config.get('neuralWorkerUrl')).toBe('http://worker.local:8787');
-    });
-
-    it('pair con codice scaduto -> errore', async () => {
-      let clock = Date.parse('2026-07-08T00:00:00.000Z');
-      const svc = makeService({ now: () => new Date(clock) });
-      const { code } = svc.createPairingCode();
-      clock += 6 * 60 * 1000; // oltre il TTL di 5 minuti
-      await expect(
-        svc.pair({ code, workerUrl: 'http://192.168.1.20:8787', token: 'x' }),
-      ).rejects.toThrow(/scaduto|non valido/i);
-    });
-
-    it('pair con worker non raggiungibile -> errore e codice riutilizzabile', async () => {
-      let reachable = false;
+    it('enroll con worker non raggiungibile -> errore, config invariata', async () => {
       const fetchImpl: NeuralFetch = vi.fn(async (url) => {
         if (url.endsWith('/health')) {
-          return reachable
-            ? json({
-                ok: true,
-                ffmpegCapable: true,
-                hasLibplacebo: true,
-                hasVulkan: true,
-                fps: null,
-              })
-            : json({}, false, 500);
+          return json({}, false, 500);
         }
         return json({}, false, 404);
       });
       const svc = makeService({ fetchImpl });
-      const { code } = svc.createPairingCode();
-
       await expect(
-        svc.pair({ code, workerUrl: 'http://192.168.1.20:8787', token: 'app-token' }),
+        svc.enroll({ workerUrl: 'http://192.168.1.20:8787', token: 'x', name: '' }),
       ).rejects.toThrow(/raggiungibile/i);
       // Il tentativo fallito non tocca la config.
       expect(config.get('neuralWorkerUrl')).toBe('http://worker.local:8787');
-
-      // Codice non consumato: risolta la rete, lo stesso codice completa il pairing.
-      reachable = true;
-      const result = await svc.pair({
-        code,
-        workerUrl: 'http://192.168.1.20:8787',
-        token: 'app-token',
-      });
-      expect(result.paired).toBe(true);
-      expect(config.get('neuralWorkerUrl')).toBe('http://192.168.1.20:8787');
-    });
-
-    it('un codice è monouso: dopo un pairing riuscito non è più valido', async () => {
-      const svc = makeService();
-      const { code } = svc.createPairingCode();
-      await svc.pair({ code, workerUrl: 'http://192.168.1.20:8787', token: 'app-token' });
-      await expect(
-        svc.pair({ code, workerUrl: 'http://192.168.1.20:8787', token: 'app-token' }),
-      ).rejects.toThrow(/non valido|scaduto/i);
+      expect(config.get('neuralWorkerName')).toBe('');
     });
   });
 });

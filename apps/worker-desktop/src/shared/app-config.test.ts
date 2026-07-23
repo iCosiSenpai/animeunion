@@ -18,6 +18,8 @@ describe('app-config', () => {
     expect(cfg.animeunionUrl).toBe('');
     expect(cfg.autostart).toBe(true);
     expect(cfg.workerToken).toMatch(/^[0-9a-f]{64}$/);
+    // Nome default = hostname del PC (non vuoto).
+    expect(cfg.workerName.length).toBeGreaterThan(0);
   });
 
   it('createDefaultConfig applica gli override (config persistita)', () => {

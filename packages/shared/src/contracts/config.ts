@@ -93,6 +93,9 @@ export const appConfigSchema = z.object({
   neuralWorkerUrl: z.string().default(''),
   // Token condiviso col worker (segreto: cifrato a riposo, mascherato al frontend).
   neuralWorkerToken: z.string().default(''),
+  // Nome del worker (hostname del PC con GPU), mostrato in Impostazioni. Non è un segreto: lo
+  // manda il worker stesso in fase di enrollment, serve solo a riconoscerlo nella UI.
+  neuralWorkerName: z.string().default(''),
   // Backup cloud su Google Drive (bring-your-own OAuth client Desktop). Master off di default.
   // Il refresh token e il client secret sono segreti (cifrati a riposo, mascherati al FE).
   gdriveEnabled: z.boolean().default(false),

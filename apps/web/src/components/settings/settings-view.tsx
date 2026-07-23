@@ -6,7 +6,7 @@ import { FolderInput } from '@/components/settings/folder-picker';
 import { HomeLayoutSection } from '@/components/settings/home-layout-section';
 import { InstallButton } from '@/components/settings/install-button';
 import { NeuralExportPanel } from '@/components/settings/neural-export-panel';
-import { NeuralPairingCard } from '@/components/settings/neural-pairing-card';
+import { NeuralWorkerCard } from '@/components/settings/neural-worker-card';
 import { PremiumLockedNote, PremiumUnlockedNote } from '@/components/settings/premium-feature';
 import { PushToggle } from '@/components/settings/push-toggle';
 import { RequestsSection } from '@/components/settings/requests-section';
@@ -31,6 +31,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
+import { Switch } from '@/components/ui/switch';
 import { trpc } from '@/lib/trpc';
 import { cn } from '@/lib/utils';
 import { type AppConfig, SECRET_MASK, isPremiumActive } from '@animeunion/shared';
@@ -341,10 +342,10 @@ export function SettingsView() {
     setDraft((prev) => (prev ? { ...prev, [key]: value } : prev));
   };
 
-  // Dopo un pairing riuscito, il worker (URL/token/abilitazione) è stato scritto lato server dal
-  // flusso di abbinamento. Ri-sincronizziamo solo le chiavi del worker nel draft, così non risultano
-  // "modifiche non salvate" fantasma né un salvataggio successivo le sovrascrive.
-  const handlePaired = async () => {
+  // Quando il worker si collega (enrollment lato server), URL/token/nome/abilitazione sono stati
+  // scritti dal NAS. Ri-sincronizziamo quelle chiavi nel draft, così non risultano "modifiche non
+  // salvate" fantasma né un salvataggio successivo le sovrascrive.
+  const handleWorkerChanged = async () => {
     const fresh = await utils.config.getAll.fetch();
     setDraft((prev) =>
       prev
@@ -352,6 +353,7 @@ export function SettingsView() {
             ...prev,
             neuralWorkerUrl: fresh.neuralWorkerUrl,
             neuralWorkerToken: fresh.neuralWorkerToken,
+            neuralWorkerName: fresh.neuralWorkerName,
             neuralExportEnabled: fresh.neuralExportEnabled,
           }
         : prev,
@@ -699,8 +701,14 @@ export function SettingsView() {
                     <li>
                       Installa e avvia l'app <strong>AnimeUnion Worker</strong> sul PC con GPU.
                     </li>
-                    <li>Qui sotto genera un codice di abbinamento.</li>
-                    <li>Inserisci il codice nell'app: il collegamento avviene in automatico.</li>
+                    <li>
+                      Nell'app premi <strong>Consenti sulla rete</strong> (una volta), poi{' '}
+                      <strong>Cerca AnimeUnion</strong>.
+                    </li>
+                    <li>
+                      Premi <strong>Collega al NAS</strong>: il worker comparirà qui sotto in
+                      automatico, senza codici né token.
+                    </li>
                     <li>Dal catalogo, sul singolo episodio, scegli “Migliora a XQ / XQ+”.</li>
                   </ol>
                   <p className="text-xs text-muted-foreground">
@@ -720,20 +728,18 @@ export function SettingsView() {
                     label="Abilita download neurale"
                     hint="Master del Download Neurale. Off = XQ/XQ+ nascosti ovunque."
                   >
-                    <Select
-                      value={draft.neuralExportEnabled ? 'on' : 'off'}
-                      onValueChange={(v) => update('neuralExportEnabled', v === 'on')}
-                    >
-                      <SelectTrigger className="w-40">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="on">Attivo</SelectItem>
-                        <SelectItem value="off">Disattivo</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <div className="flex items-center gap-3">
+                      <Switch
+                        checked={draft.neuralExportEnabled}
+                        onCheckedChange={(v) => update('neuralExportEnabled', v)}
+                        aria-label="Abilita download neurale"
+                      />
+                      <span className="text-sm text-muted-foreground">
+                        {draft.neuralExportEnabled ? 'Attivo' : 'Disattivo'}
+                      </span>
+                    </div>
                   </Field>
-                  <NeuralPairingCard onPaired={handlePaired} />
+                  <NeuralWorkerCard onWorkerChanged={handleWorkerChanged} />
                 </div>
                 <NeuralExportPanel />
               </div>

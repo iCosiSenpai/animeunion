@@ -106,31 +106,35 @@ export const neuralWorkerHealthSchema = neuralWorkerCapabilitiesSchema.extend({
 });
 export type NeuralWorkerHealth = z.infer<typeof neuralWorkerHealthSchema>;
 
-// --- Pairing worker (abbinamento automatico app desktop ↔ NAS) ---
+// --- Discovery + enrollment worker (collegamento automatico app desktop ↔ NAS) ---
 
-// Codice di abbinamento breve a scadenza, generato dal NAS e mostrato in Impostazioni.
-export const neuralPairingCodeSchema = z.object({
-  code: z.string(),
-  expiresAt: z.string(),
+// Carta d'identità del worker, esposta su GET /identity SENZA autenticazione (nessun segreto):
+// permette a NAS/browser di riconoscere un worker AnimeUnion durante lo scan della LAN.
+export const neuralWorkerIdentitySchema = z.object({
+  app: z.literal('animeunion-worker'),
+  name: z.string(),
+  version: z.string(),
+  capabilities: neuralWorkerCapabilitiesSchema,
 });
-export type NeuralPairingCode = z.infer<typeof neuralPairingCodeSchema>;
+export type NeuralWorkerIdentity = z.infer<typeof neuralWorkerIdentitySchema>;
 
-// Richiesta di pairing dall'app desktop: codice + URL LAN del worker + token generato dall'app.
-export const neuralPairRequestSchema = z.object({
-  code: z.string().min(1),
+// Richiesta di enrollment dall'app desktop al NAS: URL LAN del worker + token generato dall'app +
+// nome del PC. Niente codice: è il worker (avviato dall'utente sul suo PC) a collegarsi al NAS.
+export const neuralWorkerEnrollRequestSchema = z.object({
   workerUrl: z.string().url(),
   token: z.string().min(1),
+  name: z.string().default(''),
 });
-export type NeuralPairRequest = z.infer<typeof neuralPairRequestSchema>;
+export type NeuralWorkerEnrollRequest = z.infer<typeof neuralWorkerEnrollRequestSchema>;
 
-// Esito del pairing: config salvata + salute del worker verificata al volo.
-export const neuralPairResultSchema = z.object({
-  paired: z.boolean(),
+// Esito dell'enrollment: config salvata + salute del worker verificata al volo dal NAS.
+export const neuralWorkerEnrollResultSchema = z.object({
+  enrolled: z.boolean(),
   reachable: z.boolean(),
   ffmpegCapable: z.boolean(),
   fps: z.number().nullable().default(null),
 });
-export type NeuralPairResult = z.infer<typeof neuralPairResultSchema>;
+export type NeuralWorkerEnrollResult = z.infer<typeof neuralWorkerEnrollResultSchema>;
 
 // --- DTO per la UI (tRPC) ---
 
@@ -150,6 +154,9 @@ export const neuralWorkerStatusSchema = z.object({
   reachable: z.boolean(),
   ffmpegCapable: z.boolean(),
   fps: z.number().nullable().default(null),
+  // Nome e URL del worker collegato (non segreti): mostrati in Impostazioni. Vuoti = nessuno.
+  name: z.string().default(''),
+  url: z.string().default(''),
 });
 export type NeuralWorkerStatus = z.infer<typeof neuralWorkerStatusSchema>;
 

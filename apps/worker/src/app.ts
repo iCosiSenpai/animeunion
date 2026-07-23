@@ -2,10 +2,15 @@ import { randomUUID } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { createWriteStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
+import { hostname } from 'node:os';
 import { join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { probeCapabilities } from '@animeunion/neural-core';
-import { type NeuralWorkerHealth, neuralExportJobPayloadSchema } from '@animeunion/shared';
+import {
+  type NeuralWorkerHealth,
+  type NeuralWorkerIdentity,
+  neuralExportJobPayloadSchema,
+} from '@animeunion/shared';
 import multipart from '@fastify/multipart';
 import fastify from 'fastify';
 import { type JobManager, createJobManager, ensureWorkerDirs } from './job-manager';
@@ -26,11 +31,17 @@ export interface WorkerAppConfig {
   jobManager?: JobManager;
   /** Override del probe capacita' (per i test). */
   probeImpl?: typeof probeCapabilities;
+  /** Nome del worker (default: hostname del PC), esposto su /identity per la discovery. */
+  name?: string;
+  /** Versione dell'app desktop, esposta su /identity. */
+  version?: string;
 }
 
 export async function createWorkerApp(config: WorkerAppConfig) {
   const logger = config.logger ?? defaultLogger;
   const probe = config.probeImpl ?? probeCapabilities;
+  const workerName = config.name?.trim() || hostname();
+  const workerVersion = config.version?.trim() || '0';
   await ensureWorkerDirs(config.cacheDir, config.workDir);
   const jobs =
     config.jobManager ??
@@ -55,8 +66,13 @@ export async function createWorkerApp(config: WorkerAppConfig) {
   cleanupTimer.unref?.();
   app.addHook('onClose', async () => clearInterval(cleanupTimer));
 
-  // Auth a token condiviso su OGNI rotta: senza il Bearer corretto, 401.
+  // Auth a token condiviso su OGNI rotta tranne `/identity` (discovery LAN, nessun segreto): senza
+  // il Bearer corretto, 401.
   app.addHook('onRequest', async (req, reply) => {
+    const path = req.url.split('?')[0];
+    if (req.method === 'GET' && path === '/identity') {
+      return;
+    }
     const header = req.headers.authorization;
     if (header !== `Bearer ${config.token}`) {
       await reply.code(401).send({ error: 'Token worker non valido o assente' });
@@ -64,7 +80,7 @@ export async function createWorkerApp(config: WorkerAppConfig) {
   });
 
   let healthCache: { at: number; value: NeuralWorkerHealth } | null = null;
-  app.get('/health', async (): Promise<NeuralWorkerHealth> => {
+  async function getHealth(): Promise<NeuralWorkerHealth> {
     if (healthCache && Date.now() - healthCache.at < HEALTH_CACHE_MS) {
       return healthCache.value;
     }
@@ -72,6 +88,26 @@ export async function createWorkerApp(config: WorkerAppConfig) {
     const value: NeuralWorkerHealth = { ok: caps.ffmpegCapable && caps.hasVulkan, ...caps };
     healthCache = { at: Date.now(), value };
     return value;
+  }
+
+  app.get('/health', () => getHealth());
+
+  // Carta d'identità pubblica per la discovery LAN (scan da worker/browser). Nessun segreto: solo
+  // nome, versione e capacità. CORS aperto così anche il browser può sondarla.
+  app.get('/identity', async (_req, reply): Promise<NeuralWorkerIdentity> => {
+    const health = await getHealth();
+    reply.header('access-control-allow-origin', '*');
+    return {
+      app: 'animeunion-worker',
+      name: workerName,
+      version: workerVersion,
+      capabilities: {
+        ffmpegCapable: health.ffmpegCapable,
+        hasLibplacebo: health.hasLibplacebo,
+        hasVulkan: health.hasVulkan,
+        fps: health.fps,
+      },
+    };
   });
 
   app.post('/jobs', async (req, reply) => {

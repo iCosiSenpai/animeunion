@@ -26,5 +26,8 @@ export type {
   ResolveFfmpegOptions,
 } from './ffmpeg-readiness';
 
+export { runGpuSelfTest } from './gpu-selftest';
+export type { GpuSelfTestResult } from './gpu-selftest';
+
 export { logger } from './logger';
 export type { Logger } from './logger';

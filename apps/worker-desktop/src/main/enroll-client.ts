@@ -1,19 +1,19 @@
 import type { AppRouter } from '@animeunion/api/app-router';
 import { createTRPCClient, httpBatchLink } from '@trpc/client';
+import type { EnrollOutcome } from '../shared/ipc';
 import { normalizeBaseUrl } from '../shared/pairing';
-import type { PairOutcome } from '../shared/pairing';
 
 /**
- * Chiama la mutation tRPC `neuralExport.pair` sul NAS, sullo stesso endpoint `/trpc` che usa il
+ * Chiama la mutation tRPC `neuralExport.enroll` sul NAS, sullo stesso endpoint `/trpc` che usa il
  * browser (relativo all'origine di AnimeUnion). Girando nel processo main (Node), non ci sono
- * vincoli CORS. `pair` è una publicProcedure: non serve un token di sessione.
+ * vincoli CORS. `enroll` è una publicProcedure: non serve un token di sessione (salvo blocco UI).
  */
-export async function callPair(
+export async function callEnroll(
   animeunionUrl: string,
   workerUrl: string,
   token: string,
-  code: string,
-): Promise<PairOutcome> {
+  name: string,
+): Promise<EnrollOutcome> {
   const base = normalizeBaseUrl(animeunionUrl);
   if (!base) {
     return {
@@ -27,9 +27,9 @@ export async function callPair(
     links: [httpBatchLink({ url: `${base}/trpc` })],
   });
   try {
-    const res = await client.neuralExport.pair.mutate({ code, workerUrl, token });
+    const res = await client.neuralExport.enroll.mutate({ workerUrl, token, name });
     return {
-      ok: res.paired,
+      ok: res.enrolled,
       reachable: res.reachable,
       ffmpegCapable: res.ffmpegCapable,
       message: null,
@@ -39,7 +39,7 @@ export async function callPair(
       ok: false,
       reachable: false,
       ffmpegCapable: false,
-      message: error instanceof Error ? error.message : 'Abbinamento fallito',
+      message: error instanceof Error ? error.message : 'Collegamento fallito',
     };
   }
 }

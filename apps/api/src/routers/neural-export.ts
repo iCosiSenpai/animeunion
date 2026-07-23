@@ -2,9 +2,8 @@ import {
   neuralExportJobViewSchema,
   neuralExportRequestSchema,
   neuralExportStatusSchema,
-  neuralPairRequestSchema,
-  neuralPairResultSchema,
-  neuralPairingCodeSchema,
+  neuralWorkerEnrollRequestSchema,
+  neuralWorkerEnrollResultSchema,
 } from '@animeunion/shared';
 import { z } from 'zod';
 import { publicProcedure, router } from '../trpc';
@@ -20,16 +19,12 @@ export const neuralExportRouter = router({
     .input(neuralExportRequestSchema)
     .mutation(({ ctx, input }) => ctx.services.neuralExport.exportEpisode(input)),
 
-  // Genera un codice di abbinamento breve da mostrare in Impostazioni.
-  createPairingCode: publicProcedure
-    .output(neuralPairingCodeSchema)
-    .mutation(({ ctx }) => ctx.services.neuralExport.createPairingCode()),
-
-  // Completa l'abbinamento dall'app desktop: codice + URL LAN del worker + token.
-  pair: publicProcedure
-    .input(neuralPairRequestSchema)
-    .output(neuralPairResultSchema)
-    .mutation(({ ctx, input }) => ctx.services.neuralExport.pair(input)),
+  // Collega un worker dall'app desktop: URL LAN del worker + token + nome del PC. Il NAS verifica
+  // /health e salva la config (nessun codice di abbinamento: è il worker a collegarsi).
+  enroll: publicProcedure
+    .input(neuralWorkerEnrollRequestSchema)
+    .output(neuralWorkerEnrollResultSchema)
+    .mutation(({ ctx, input }) => ctx.services.neuralExport.enroll(input)),
 
   // Coda degli export (per la UI).
   jobs: publicProcedure

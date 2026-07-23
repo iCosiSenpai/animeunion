@@ -4,17 +4,27 @@ import {
   type WorkerLifecycle,
   createWorkerLifecycle,
   evaluateFfmpeg,
-  logger,
+  runGpuSelfTest,
 } from '@animeunion/worker';
 import { BrowserWindow, Menu, Tray, app, ipcMain, nativeImage, shell } from 'electron';
-import { IPC, type PairInput, type PairingInfo } from '../shared/ipc';
+import {
+  type ConnectionInfo,
+  type EnrollInput,
+  type EnrollOutcome,
+  type FirewallResult,
+  type GpuTestResult,
+  IPC,
+} from '../shared/ipc';
 import { detectLanIp } from '../shared/net';
-import { type PairOutcome, buildWorkerUrl, normalizeBaseUrl } from '../shared/pairing';
+import { buildWorkerUrl, normalizeBaseUrl } from '../shared/pairing';
 import { type DesktopStatus, type GpuReadiness, deriveDesktopStatus } from '../shared/status';
 import { buildTrayTemplate } from '../shared/tray-menu';
 import { loadConfig, updateConfig } from './app-store';
+import { discoverNasUrls } from './discovery';
+import { callEnroll } from './enroll-client';
 import { resolveAppFfmpeg } from './ffmpeg-path';
-import { callPair } from './pair-client';
+import { addFirewallRule } from './firewall';
+import { createCapturingLogger } from './logging';
 import { initAutoUpdater } from './updater';
 
 /**
@@ -22,6 +32,10 @@ import { initAutoUpdater } from './updater';
  * ffmpeg/GPU periodico, e riflette lo stato combinato su GUI e tray. Istanza singola; niente
  * chiusura all'ultima finestra (resta nel tray finché non si sceglie "Esci").
  */
+
+// Logger dell'app con cattura in-memory: le stesse righe vanno su stdout, in un ring buffer per la
+// sidebar dei log e in un evento push verso il renderer.
+const { logger, getLines: getLogLines, onLine: onLogLine } = createCapturingLogger();
 
 const GPU_PROBE_INTERVAL_MS = 30_000;
 
@@ -118,10 +132,10 @@ function showWindow(): void {
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
-    width: 720,
-    height: 560,
-    minWidth: 560,
-    minHeight: 460,
+    width: 1000,
+    height: 660,
+    minWidth: 720,
+    minHeight: 520,
     show: false,
     autoHideMenuBar: true,
     title: 'AnimeUnion Worker',
@@ -166,6 +180,15 @@ async function restartWorker(): Promise<DesktopStatus> {
   return currentStatus();
 }
 
+function portFromUrl(url: string): number | null {
+  try {
+    const parsed = new URL(url);
+    return parsed.port ? Number(parsed.port) : null;
+  } catch {
+    return null;
+  }
+}
+
 function registerIpc(): void {
   ipcMain.handle(IPC.getStatus, () => currentStatus());
   ipcMain.handle(IPC.restartWorker, () => restartWorker());
@@ -178,15 +201,34 @@ function registerIpc(): void {
   ipcMain.handle(IPC.openLogs, async () => {
     await shell.openPath(app.getPath('logs'));
   });
-  ipcMain.handle(IPC.getPairingInfo, (): PairingInfo => {
+  ipcMain.handle(IPC.getLogs, () => getLogLines());
+  ipcMain.handle(IPC.getConnectionInfo, (): ConnectionInfo => {
     const config = loadConfig();
     const ip = detectLanIp(networkInterfaces());
     return {
       animeunionUrl: config.animeunionUrl,
-      suggestedWorkerUrl: ip ? buildWorkerUrl(ip, config.port) : null,
+      workerName: config.workerName,
+      lanIp: ip,
+      workerUrl: ip ? buildWorkerUrl(ip, config.port) : null,
+      port: config.port,
+      needsFirewallHint: process.platform === 'win32',
     };
   });
-  ipcMain.handle(IPC.pair, async (_event, input: PairInput): Promise<PairOutcome> => {
+  ipcMain.handle(IPC.discoverNas, async (): Promise<string[]> => {
+    const config = loadConfig();
+    const ip = detectLanIp(networkInterfaces());
+    if (!ip) {
+      return [];
+    }
+    // Sonda la porta di default del NAS (7979) più quella già salvata, se presente.
+    const ports = new Set<number>([7979]);
+    const savedPort = portFromUrl(config.animeunionUrl);
+    if (savedPort) {
+      ports.add(savedPort);
+    }
+    return discoverNasUrls(ip, [...ports]);
+  });
+  ipcMain.handle(IPC.enroll, async (_event, input: EnrollInput): Promise<EnrollOutcome> => {
     const config = loadConfig();
     const ip = detectLanIp(networkInterfaces());
     if (!ip) {
@@ -198,7 +240,12 @@ function registerIpc(): void {
       };
     }
     const workerUrl = buildWorkerUrl(ip, config.port);
-    const outcome = await callPair(input.animeunionUrl, workerUrl, config.workerToken, input.code);
+    const outcome = await callEnroll(
+      input.animeunionUrl,
+      workerUrl,
+      config.workerToken,
+      config.workerName,
+    );
     if (outcome.ok) {
       const base = normalizeBaseUrl(input.animeunionUrl);
       if (base) {
@@ -206,6 +253,11 @@ function registerIpc(): void {
       }
     }
     return outcome;
+  });
+  ipcMain.handle(IPC.gpuTest, (): Promise<GpuTestResult> => runGpuSelfTest(ffmpegBin));
+  ipcMain.handle(IPC.allowFirewall, (): Promise<FirewallResult> => {
+    const config = loadConfig();
+    return addFirewallRule(config.port);
   });
 }
 
@@ -222,6 +274,8 @@ async function bootstrap(): Promise<void> {
       workDir: join(app.getPath('userData'), 'work'),
       port: config.port,
       host: config.host,
+      name: config.workerName,
+      version: app.getVersion(),
     },
     logger,
   });
@@ -229,6 +283,11 @@ async function bootstrap(): Promise<void> {
   createTray();
   createWindow();
   registerIpc();
+
+  // Inoltra ogni nuova riga di log al renderer (sidebar log in tempo reale).
+  onLogLine((line) => {
+    mainWindow?.webContents.send(IPC.logLine, line);
+  });
 
   await lifecycle.start().catch((error) => {
     logger.error({ err: error }, 'Avvio worker fallito');

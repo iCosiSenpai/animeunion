@@ -21,6 +21,10 @@ export interface WorkerRuntimeConfig {
   port: number;
   host: string;
   jobRetentionHours?: number;
+  /** Nome del worker (default: hostname), esposto su /identity per la discovery. */
+  name?: string;
+  /** Versione dell'app desktop, esposta su /identity. */
+  version?: string;
 }
 
 export interface WorkerStatus {
@@ -101,6 +105,8 @@ export function createWorkerLifecycle(deps: WorkerLifecycleDeps): WorkerLifecycl
         cacheDir: config.cacheDir,
         workDir: config.workDir,
         jobRetentionHours: config.jobRetentionHours,
+        name: config.name,
+        version: config.version,
         logger,
       });
       const address = await app.listen({ port: config.port, host: config.host });

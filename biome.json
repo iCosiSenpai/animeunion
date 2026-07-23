@@ -10,6 +10,7 @@
       "node_modules",
       ".next",
       "dist",
+      "release",
       "drizzle/meta",
       "docs/index.html",
       "**/components/ui",

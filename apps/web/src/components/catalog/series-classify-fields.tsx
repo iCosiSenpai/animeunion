@@ -124,11 +124,12 @@ export function ClassifyFields({
           <div className="space-y-1.5">
             <p className="text-sm font-medium">Serie madre (cartella)</p>
             {value.parentId ? (
-              <div className="flex items-center justify-between rounded-md border px-3 py-2 text-sm">
-                <span className="truncate">{value.parentTitle}</span>
+              <div className="flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm">
+                <span className="min-w-0 flex-1 truncate">{value.parentTitle}</span>
                 <Button
                   variant="ghost"
                   size="sm"
+                  className="shrink-0"
                   onClick={() => onChange({ ...value, parentId: null, parentTitle: '' })}
                 >
                   Rimuovi

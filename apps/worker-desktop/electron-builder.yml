@@ -5,7 +5,7 @@ appId: tv.animeunion.worker
 productName: AnimeUnion Worker
 directories:
   output: release
-  buildResources: build
+  buildResources: assets
 # main.cjs bundla worker/neural-core/shared/@trpc/electron-updater; basta dist + package.json.
 files:
   - dist/**
@@ -17,13 +17,14 @@ extraResources:
     to: ffmpeg
     filter:
       - "**/*"
+  - from: assets/tray.png
+    to: tray.png
 publish:
   provider: github
   owner: iCosiSenpai
   repo: animeunion
 win:
   target: nsis
-  icon: build/icon.ico
   artifactName: AnimeUnion-Worker-Setup-${version}.${ext}
 nsis:
   oneClick: false

@@ -66,8 +66,12 @@ async function probeGpu(): Promise<void> {
 }
 
 function trayIcon(): Electron.NativeImage {
-  // Icona imbarcata; in mancanza (dev) si usa un'immagine vuota: il tray resta funzionale.
-  const icon = nativeImage.createFromPath(join(app.getAppPath(), 'build', 'tray.png'));
+  // In produzione la tray icon è imbarcata come extraResource (resources/tray.png); in dev sta in
+  // build/. In mancanza si usa un'immagine vuota: il tray resta funzionale.
+  const iconPath = app.isPackaged
+    ? join(process.resourcesPath, 'tray.png')
+    : join(app.getAppPath(), 'assets', 'tray.png');
+  const icon = nativeImage.createFromPath(iconPath);
   return icon.isEmpty() ? nativeImage.createEmpty() : icon;
 }
 

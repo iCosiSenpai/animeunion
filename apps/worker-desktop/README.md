@@ -42,7 +42,8 @@ Prima del packaging:
 - Posiziona una build ffmpeg con `libplacebo`+Vulkan in `vendor/ffmpeg/` (es. la release BtbN GPL
   indicata in `apps/worker/README.md`). Viene imbarcata in `resources/ffmpeg/`. **Includi anche i
   file di licenza** dell'ffmpeg (LICENSE/README, GPL): finiscono in `resources/ffmpeg/` con il resto.
-- Aggiungi gli asset icona in `build/` (`icon.ico`, `tray.png`).
+- Le icone sono già pronte in `assets/` (`icon.png`, `tray.png`), rigenerabili con
+  `node scripts/gen-icons.mjs`. Sostituiscile col branding definitivo mantenendo nomi/dimensioni.
 
 **Firma:** l'installer è NON firmato per ora. Alla prima esecuzione Windows mostra SmartScreen
 ("Windows ha protetto il PC"): l'utente clicca **"Ulteriori informazioni"** → **"Esegui comunque"**
@@ -50,3 +51,31 @@ Prima del packaging:
 
 **Auto-update:** l'app pacchettizzata controlla GitHub Releases via `electron-updater`
 (`publish` in `electron-builder.yml`), scarica in background e installa al riavvio.
+
+## Release dell'installer (checklist)
+
+L'installer si costruisce solo su Windows (serve il binario Electron + una build ffmpeg reale) ed è
+pubblicato dal workflow `Worker Desktop` (`.github/workflows/worker-desktop.yml`), gated. Codice,
+pipeline e icone sono già pronti; restano tre passi una tantum:
+
+1. **Scegli la build ffmpeg** con `libplacebo`+Vulkan per Windows. Deve essere una **release** BtbN
+   (es. `ffmpeg-n7.1-latest-win64-gpl-7.1.zip`), **non** la master (la master fallisce l'init del
+   filtro libplacebo — vedi `apps/worker/README.md`). Copia l'URL dello `.zip`.
+2. **Imposta le repo variable** (Settings → Secrets and variables → Actions → Variables) oppure via
+   CLI:
+
+   ```bash
+   gh variable set FFMPEG_LIBPLACEBO_URL --body "<url-zip-ffmpeg-libplacebo>"
+   gh variable set WORKER_DESKTOP_PUBLISH_ENABLED --body "true"
+   ```
+
+3. **Crea e pusha il tag** per avviare la pubblicazione su GitHub Releases:
+
+   ```bash
+   git tag worker-desktop-v0.17.0
+   git push origin worker-desktop-v0.17.0
+   ```
+
+Il workflow builda (renderer + main), imbarca ffmpeg, produce l'installer NSIS non firmato e lo
+pubblica come Release; gli aggiornamenti successivi arrivano via `electron-updater`. In alternativa,
+in locale su Windows: metti l'ffmpeg in `vendor/ffmpeg/` e lancia `npm run dist -w @animeunion/worker-desktop`.

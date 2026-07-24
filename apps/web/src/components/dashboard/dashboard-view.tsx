@@ -1,29 +1,36 @@
 'use client';
 
+import { AnimeCard } from '@/components/anime/anime-card';
 import { SectionPanel } from '@/components/dashboard/section-panel';
 import { StatCard } from '@/components/dashboard/stat-card';
 import { StatusPill } from '@/components/dashboard/status-pill';
 import { type StatusTone, TONES } from '@/components/dashboard/tone';
+import { CardCarousel, CardCarouselSkeleton } from '@/components/home/card-carousel';
+import { ContinueWatchingGrid } from '@/components/home/continue-watching';
 import { Button } from '@/components/ui/button';
 import { trpc } from '@/lib/trpc';
 import { useDownloadSummary } from '@/lib/use-download-summary';
 import { cn, formatDate } from '@/lib/utils';
-import type { NotificationType } from '@animeunion/shared';
+import type { NotificationType, Season } from '@animeunion/shared';
 import {
   Activity,
   AlertTriangle,
   CheckCircle2,
+  ChevronRight,
   Clock,
+  Compass,
   Cpu,
   Download,
   HardDrive,
+  Heart,
   Library,
   ListChecks,
+  PlayCircle,
   RefreshCw,
   Sparkles,
 } from 'lucide-react';
 import Link from 'next/link';
-import type { ComponentType } from 'react';
+import type { ComponentType, ReactNode } from 'react';
 import { toast } from 'sonner';
 
 const GB = 1024 ** 3;
@@ -57,6 +64,60 @@ const NOTIF_META: Record<
   info: { icon: Activity, tone: 'neutral' },
 };
 
+const SEASON_BY_MONTH: Season[] = [
+  'WINTER',
+  'WINTER',
+  'WINTER',
+  'SPRING',
+  'SPRING',
+  'SPRING',
+  'SUMMER',
+  'SUMMER',
+  'SUMMER',
+  'FALL',
+  'FALL',
+  'FALL',
+];
+const SEASON_LABELS: Record<Season, string> = {
+  WINTER: 'Inverno',
+  SPRING: 'Primavera',
+  SUMMER: 'Estate',
+  FALL: 'Autunno',
+};
+
+/** Riga "scorciatoia" di card anime: header leggero (icona + titolo + "Vedi tutto") + contenuto. */
+function ContentRow({
+  icon: Icon,
+  title,
+  href,
+  children,
+}: {
+  icon: ComponentType<{ className?: string }>;
+  title: string;
+  href?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Icon className="h-4 w-4 text-muted-foreground" />
+          <h2 className="text-base font-semibold tracking-tight">{title}</h2>
+        </div>
+        {href ? (
+          <Link
+            href={href}
+            className="flex shrink-0 items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+          >
+            Vedi tutto <ChevronRight className="h-4 w-4" />
+          </Link>
+        ) : null}
+      </div>
+      {children}
+    </section>
+  );
+}
+
 /**
  * Dashboard "centro di controllo": stato del server a colpo d'occhio (coda download, archiviazione,
  * worker neurale, catalogo, attività recente). Legge solo dati già esposti via tRPC — nessuna
@@ -68,6 +129,14 @@ export function DashboardView() {
   const neural = trpc.neuralExport.status.useQuery(undefined, { retry: false });
   const notifications = trpc.notifications.list.useQuery(undefined, { refetchInterval: 30000 });
   const { counts } = useDownloadSummary();
+
+  // Contenuti "ibridi": i tuoi anime + scoperta della stagione (accesso rapido dal centro di controllo).
+  const now = new Date();
+  const season = SEASON_BY_MONTH[now.getMonth()] ?? 'WINTER';
+  const year = now.getFullYear();
+  const history = trpc.me.history.useQuery();
+  const follows = trpc.follow.list.useQuery();
+  const seasonal = trpc.catalog.bySeason.useQuery({ season, year, page: 1 });
 
   const sync = trpc.catalog.sync.useMutation({
     onSuccess: () => {
@@ -115,6 +184,11 @@ export function DashboardView() {
   }
 
   const recent = (notifications.data ?? []).slice(0, 6);
+
+  const historyItems = (history.data ?? []).slice(0, 6);
+  const followItems = (follows.data ?? []).map((f) => f.anime).slice(0, 6);
+  const seasonalItems = (seasonal.data?.data ?? []).slice(0, 6);
+  const hasContent = historyItems.length > 0 || followItems.length > 0;
 
   return (
     <div className="space-y-6">
@@ -324,6 +398,49 @@ export function DashboardView() {
           </SectionPanel>
         </div>
       </div>
+
+      {/* Banda contenuti (ibrido): accesso rapido ai tuoi anime + scoperta della stagione */}
+      {hasContent || seasonalItems.length > 0 || seasonal.isLoading ? (
+        <div className="space-y-8 border-t pt-8">
+          {historyItems.length > 0 ? (
+            <ContentRow icon={PlayCircle} title="Continua a guardare">
+              <ContinueWatchingGrid entries={historyItems} />
+            </ContentRow>
+          ) : null}
+          {followItems.length > 0 ? (
+            <ContentRow icon={Heart} title="I tuoi seguiti" href="/follows">
+              <CardCarousel>
+                {followItems.map((a) => (
+                  <AnimeCard key={a.id} anime={a} />
+                ))}
+              </CardCarousel>
+            </ContentRow>
+          ) : null}
+          <ContentRow
+            icon={Compass}
+            title={`Da scoprire · ${SEASON_LABELS[season]} ${year}`}
+            href={`/catalog?season=${season}&year=${year}`}
+          >
+            {seasonal.isLoading ? (
+              <CardCarouselSkeleton count={6} />
+            ) : seasonalItems.length > 0 ? (
+              <CardCarousel>
+                {seasonalItems.map((a) => (
+                  <AnimeCard key={a.id} anime={a} />
+                ))}
+              </CardCarousel>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Nessun titolo per la stagione.{' '}
+                <Link href="/catalog" className="text-primary hover:underline">
+                  Sfoglia il catalogo
+                </Link>
+                .
+              </p>
+            )}
+          </ContentRow>
+        </div>
+      ) : null}
     </div>
   );
 }

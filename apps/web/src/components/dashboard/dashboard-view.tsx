@@ -23,6 +23,7 @@ import {
   Compass,
   Cpu,
   Download,
+  DownloadCloud,
   HardDrive,
   Heart,
   Library,
@@ -36,7 +37,7 @@ import { toast } from 'sonner';
 
 const GB = 1024 ** 3;
 
-const WIDGET_IDS = ['queue', 'storage', 'neural', 'catalog', 'activity'] as const;
+const WIDGET_IDS = ['queue', 'recent', 'storage', 'neural', 'catalog', 'activity'] as const;
 const BAND_IDS = ['follows', 'onair', 'seasonal', 'topRated'] as const;
 
 const SEASON_BY_MONTH: Season[] = [
@@ -171,6 +172,7 @@ export function DashboardView() {
   const week = trpc.calendar.week.useQuery();
   const seasonal = trpc.catalog.bySeason.useQuery({ season, year, page: 1 });
   const topRated = trpc.catalog.topRated.useQuery({ page: 1 });
+  const library = trpc.library.list.useQuery(undefined, { staleTime: 60_000, retry: false });
 
   const sync = trpc.catalog.sync.useMutation({
     onSuccess: () => {
@@ -226,6 +228,13 @@ export function DashboardView() {
   const seasonalItems = (seasonal.data?.data ?? []).slice(0, 6);
   const topItems = (topRated.data?.data ?? []).slice(0, 6);
 
+  // "Ultimi scaricati": appiattisce la libreria a episodi, ordina per data di download desc.
+  const recentDownloads = (library.data ?? [])
+    .flatMap((g) => g.entries.flatMap((e) => e.episodes.map((ep) => ({ anime: g.anime, ep }))))
+    .filter((x) => x.ep.downloadedAt)
+    .sort((a, b) => (b.ep.downloadedAt ?? '').localeCompare(a.ep.downloadedAt ?? ''))
+    .slice(0, 5);
+
   function renderWidget(id: string, handle: ReactNode): ReactNode {
     switch (id) {
       case 'queue':
@@ -250,6 +259,53 @@ export function DashboardView() {
               <StatusPill tone="neutral" label={`${queued} in coda`} />
               <StatusPill tone={failed > 0 ? 'danger' : 'neutral'} label={`${failed} falliti`} />
             </div>
+          </SectionPanel>
+        );
+      case 'recent':
+        return (
+          <SectionPanel
+            handle={handle}
+            title="Ultimi scaricati"
+            icon={<DownloadCloud className="h-4 w-4" />}
+            action={
+              <Button asChild variant="ghost" size="sm">
+                <Link href="/library">Libreria</Link>
+              </Button>
+            }
+          >
+            {library.isLoading ? (
+              <p className="text-sm text-muted-foreground">Carico…</p>
+            ) : recentDownloads.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Nessun download recente.</p>
+            ) : (
+              <ul className="space-y-2.5">
+                {recentDownloads.map(({ anime, ep }) => (
+                  <li key={ep.episodeFileId}>
+                    <Link href={`/catalog/${anime.slug}`} className="group flex items-center gap-3">
+                      <span className="relative h-12 w-9 shrink-0 overflow-hidden rounded bg-muted">
+                        {anime.coverImage ? (
+                          <img
+                            src={anime.coverImage}
+                            alt=""
+                            loading="lazy"
+                            className="h-full w-full object-cover"
+                          />
+                        ) : null}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium transition-colors group-hover:text-primary">
+                          {anime.titleIta ?? anime.title}
+                        </p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          Ep. {ep.episodeNumber} · {ep.language === 'DUB_ITA' ? 'DUB' : 'SUB'}
+                          {ep.downloadedAt ? ` · ${formatDate(ep.downloadedAt)}` : ''}
+                        </p>
+                      </div>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
           </SectionPanel>
         );
       case 'storage':

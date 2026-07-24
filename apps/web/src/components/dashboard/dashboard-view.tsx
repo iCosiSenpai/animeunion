@@ -8,6 +8,7 @@ import { StatusPill } from '@/components/dashboard/status-pill';
 import { type StatusTone, TONES } from '@/components/dashboard/tone';
 import { CardCarousel, CardCarouselSkeleton } from '@/components/home/card-carousel';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
 import { trpc } from '@/lib/trpc';
 import { useDownloadSummary } from '@/lib/use-download-summary';
 import { cn, formatDate } from '@/lib/utils';
@@ -20,13 +21,10 @@ import {
   CalendarDays,
   CheckCircle2,
   ChevronRight,
-  Columns2,
   Compass,
   Cpu,
   Download,
   DownloadCloud,
-  Eye,
-  EyeOff,
   HardDrive,
   Heart,
   Library,
@@ -201,7 +199,7 @@ function formatBytes(n: number | null | undefined): string {
   return `${value.toFixed(value >= 100 || i === 0 ? 0 : 1)} ${units[i]}`;
 }
 
-/** Header di una banda anime: impugnatura + icona + titolo + "Vedi tutto". */
+/** Header di una banda anime: impugnatura + titolo cliccabile (icona-chip + chevron "vai"). */
 function Band({
   handle,
   icon: Icon,
@@ -215,22 +213,33 @@ function Band({
   href?: string;
   children: ReactNode;
 }) {
+  const heading = (
+    <>
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+        <Icon className="h-4 w-4" />
+      </span>
+      <h2 className="truncate text-lg font-semibold tracking-tight transition-colors group-hover/band:text-primary">
+        {title}
+      </h2>
+      {href ? (
+        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-all group-hover/band:translate-x-0.5 group-hover/band:text-primary" />
+      ) : null}
+    </>
+  );
   return (
     <section className="space-y-3">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          {handle}
-          <Icon className="h-4 w-4 text-muted-foreground" />
-          <h2 className="text-base font-semibold tracking-tight">{title}</h2>
-        </div>
+      <div className="flex items-center gap-2">
+        {handle}
         {href ? (
           <Link
             href={href}
-            className="flex shrink-0 items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+            className="group/band flex min-w-0 items-center gap-2.5 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            Vedi tutto <ChevronRight className="h-4 w-4" />
+            {heading}
           </Link>
-        ) : null}
+        ) : (
+          <div className="flex min-w-0 items-center gap-2.5">{heading}</div>
+        )}
       </div>
       {children}
     </section>
@@ -241,12 +250,14 @@ function animeRow(items: AnimeSummary[], isLoading: boolean, emptyText: ReactNod
   if (isLoading) {
     return <CardCarouselSkeleton count={6} />;
   }
-  if (items.length === 0) {
+  // Dedup per id: alcune sorgenti (calendario/seguiti) possono ripetere lo stesso anime → chiavi uniche.
+  const unique = items.filter((a, i, arr) => arr.findIndex((x) => x.id === a.id) === i);
+  if (unique.length === 0) {
     return <p className="text-sm text-muted-foreground">{emptyText}</p>;
   }
   return (
     <CardCarousel>
-      {items.map((a) => (
+      {unique.map((a) => (
         <AnimeCard key={a.id} anime={a} />
       ))}
     </CardCarousel>
@@ -411,13 +422,13 @@ export function DashboardView() {
   const byDay = new Map((week.data ?? []).map((e) => [e.day, e.anime]));
   const upcomingAnime: AnimeSummary[] = [];
   const seenUpcoming = new Set<string>();
-  for (let i = 0; i < 7 && upcomingAnime.length < 12; i++) {
+  for (let i = 1; i < 7 && upcomingAnime.length < 6; i++) {
     const day = WEEK_ORDER[(startIdx + i) % 7];
     if (!day) {
       continue;
     }
     for (const item of byDay.get(day) ?? []) {
-      if (!seenUpcoming.has(item.id)) {
+      if (!seenUpcoming.has(item.id) && upcomingAnime.length < 6) {
         seenUpcoming.add(item.id);
         upcomingAnime.push(item);
       }
@@ -820,8 +831,8 @@ export function DashboardView() {
             <div>
               <h2 className="text-sm font-semibold">Personalizza dashboard</h2>
               <p className="text-xs text-muted-foreground">
-                Trascina ⠿ per riordinare. Il layout è salvato sul server e ti segue tra
-                dispositivi.
+                Attiva/disattiva, scegli la larghezza e trascina ⠿ (sulle card) per riordinare. Il
+                layout è salvato sul server e ti segue tra dispositivi.
               </p>
             </div>
             <Button
@@ -855,28 +866,18 @@ export function DashboardView() {
             </div>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-6 sm:grid-cols-2">
             <div>
-              <p className="mb-1.5 text-xs font-medium text-muted-foreground">Widget</p>
-              <ul className="space-y-1">
+              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Widget
+              </p>
+              <ul className="space-y-2">
                 {layout.widgets.map((id) => (
-                  <li key={id} className="flex items-center gap-2 text-sm">
-                    <button
-                      type="button"
-                      onClick={() => toggleHidden(id)}
-                      aria-label={hidden.has(id) ? 'Mostra' : 'Nascondi'}
-                      className="rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                    >
-                      {hidden.has(id) ? (
-                        <EyeOff className="h-4 w-4" />
-                      ) : (
-                        <Eye className="h-4 w-4" />
-                      )}
-                    </button>
+                  <li key={id} className="flex items-center gap-3">
                     <span
                       className={cn(
-                        'min-w-0 flex-1 truncate',
-                        hidden.has(id) && 'text-muted-foreground line-through',
+                        'min-w-0 flex-1 truncate text-sm',
+                        hidden.has(id) && 'text-muted-foreground',
                       )}
                     >
                       {WIDGET_LABELS[id] ?? id}
@@ -884,46 +885,40 @@ export function DashboardView() {
                     <button
                       type="button"
                       onClick={() => toggleWide(id)}
-                      aria-label={wide.has(id) ? 'Larghezza normale' : 'Larghezza doppia'}
-                      title="1 o 2 colonne"
-                      className="rounded p-1 transition-colors hover:bg-accent"
+                      disabled={hidden.has(id)}
+                      className="rounded-md border px-2 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40"
                     >
-                      <Columns2
-                        className={cn(
-                          'h-4 w-4',
-                          wide.has(id) ? 'text-primary' : 'text-muted-foreground',
-                        )}
-                      />
+                      {wide.has(id) ? '2 col' : '1 col'}
                     </button>
+                    <Switch
+                      checked={!hidden.has(id)}
+                      onCheckedChange={() => toggleHidden(id)}
+                      aria-label={`${hidden.has(id) ? 'Mostra' : 'Nascondi'} ${WIDGET_LABELS[id] ?? id}`}
+                    />
                   </li>
                 ))}
               </ul>
             </div>
             <div>
-              <p className="mb-1.5 text-xs font-medium text-muted-foreground">Bande</p>
-              <ul className="space-y-1">
+              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Bande
+              </p>
+              <ul className="space-y-2">
                 {layout.bands.map((id) => (
-                  <li key={id} className="flex items-center gap-2 text-sm">
-                    <button
-                      type="button"
-                      onClick={() => toggleHidden(id)}
-                      aria-label={hidden.has(id) ? 'Mostra' : 'Nascondi'}
-                      className="rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                    >
-                      {hidden.has(id) ? (
-                        <EyeOff className="h-4 w-4" />
-                      ) : (
-                        <Eye className="h-4 w-4" />
-                      )}
-                    </button>
+                  <li key={id} className="flex items-center gap-3">
                     <span
                       className={cn(
-                        'min-w-0 flex-1 truncate',
-                        hidden.has(id) && 'text-muted-foreground line-through',
+                        'min-w-0 flex-1 truncate text-sm',
+                        hidden.has(id) && 'text-muted-foreground',
                       )}
                     >
                       {BAND_LABELS[id] ?? id}
                     </span>
+                    <Switch
+                      checked={!hidden.has(id)}
+                      onCheckedChange={() => toggleHidden(id)}
+                      aria-label={`${hidden.has(id) ? 'Mostra' : 'Nascondi'} ${BAND_LABELS[id] ?? id}`}
+                    />
                   </li>
                 ))}
               </ul>
@@ -980,7 +975,7 @@ export function DashboardView() {
       >
         {visibleWidgets.map((id) => (
           <SortableItem key={id} id={id} className={wide.has(id) ? 'sm:col-span-2' : undefined}>
-            {(handle) => renderWidget(id, handle)}
+            {(handle) => renderWidget(id, editing ? handle : null)}
           </SortableItem>
         ))}
       </Sortable>
@@ -994,7 +989,7 @@ export function DashboardView() {
       >
         {visibleBands.map((id) => (
           <SortableItem key={id} id={id}>
-            {(handle) => renderBand(id, handle)}
+            {(handle) => renderBand(id, editing ? handle : null)}
           </SortableItem>
         ))}
       </Sortable>

@@ -54,7 +54,7 @@ export function SectionPanel({
         ) : null}
       </div>
       {href ? (
-        <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/title:opacity-100" />
+        <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50 transition-colors group-hover/title:text-primary" />
       ) : null}
     </>
   );

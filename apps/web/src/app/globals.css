@@ -81,6 +81,31 @@
   body {
     @apply bg-background text-foreground;
   }
+  /* Look "app / console": la UI chrome (label, pulsanti, nav, titoli, badge, voci di menu, KPI...)
+     NON è selezionabile, così trascinando il mouse non si evidenziano scritte per sbaglio come in
+     una pagina web. I contenuti che ha senso copiare restano selezionabili: campi di testo, elementi
+     <code>/<pre>/<kbd> e qualunque nodo marcato con l'utility Tailwind `select-text` o
+     `data-selectable`. Gli input restano pienamente editabili (user-select non blocca la digitazione). */
+  body {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    user-select: none;
+  }
+  input,
+  textarea,
+  select,
+  [contenteditable="true"],
+  code,
+  pre,
+  kbd,
+  .select-text,
+  .select-text *,
+  [data-selectable],
+  [data-selectable] * {
+    -webkit-user-select: text;
+    -moz-user-select: text;
+    user-select: text;
+  }
   /* Guardia globale anti-overflow orizzontale: NESSUNA schermata deve poter scorrere lateralmente
      su mobile (causa il classico "tutto va oltre lo schermo"). `clip` (non `hidden`) non crea un
      contenitore di scroll e non rompe lo scroll-anchoring verticale. I dialog/popup sono in portale

@@ -1,6 +1,7 @@
 import {
   followAddInputSchema,
   followSetAutoDownloadInputSchema,
+  followSetNotifyInputSchema,
   followUpdateStatusInputSchema,
   followWithAnimeSchema,
 } from '@animeunion/shared';
@@ -30,6 +31,10 @@ export const followRouter = router({
   setAutoDownload: publicProcedure
     .input(followSetAutoDownloadInputSchema)
     .mutation(({ ctx, input }) => ctx.services.follow.setAutoDownload(input)),
+
+  setNotify: publicProcedure
+    .input(followSetNotifyInputSchema)
+    .mutation(({ ctx, input }) => ctx.services.follow.setNotify(input)),
 
   // Import manuale dei preferiti dal sito (oltre allo scheduler automatico).
   importFavorites: publicProcedure.mutation(({ ctx }) => ctx.services.favorites.importFromSite()),

@@ -2,24 +2,30 @@
 
 import { useSeasonGate } from '@/components/catalog/season-gate';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
-import { FOLLOW_STATUSES, FOLLOW_STATUS_LABELS } from '@/lib/follow';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Switch } from '@/components/ui/switch';
 import { trpc } from '@/lib/trpc';
-import { cn } from '@/lib/utils';
-import type { AnimeStatus, FollowStatus } from '@animeunion/shared';
-import { Check, ChevronDown, Loader2, Plus, TriangleAlert } from 'lucide-react';
+import type { AnimeStatus } from '@animeunion/shared';
+import {
+  Check,
+  ChevronDown,
+  Download,
+  Loader2,
+  Pause,
+  Plus,
+  Trash2,
+  TriangleAlert,
+} from 'lucide-react';
 import Link from 'next/link';
-import { useState } from 'react';
 import { toast } from 'sonner';
 
+/**
+ * Segui/gestisci una serie. Un solo bottone: "Segui" (un click) quando non seguita, "Seguito"/"In
+ * pausa" con popover di controlli immediati quando seguita. Niente più i 5 tag di stato: le uniche
+ * scelte che contano per un centro di download sono gli interruttori (auto-download, avvisi) + la
+ * pausa. Lo stato interno resta l'enum esistente (Segui = watching, In pausa = on_hold, Smetti di
+ * seguire = remove) così i record legacy (plan_to_watch/completed/dropped) si mappano senza migrazioni.
+ */
 export function FollowButton({
   animeId,
   animeStatus,
@@ -32,29 +38,29 @@ export function FollowButton({
   const config = trpc.config.getAll.useQuery();
   const masterOff = config.data ? !config.data.autoDownload : false;
   const current = follows.data?.find((follow) => follow.animeId === animeId) ?? null;
-  // Serie conclusa: l'auto-download resta attivabile (lo stato d'onda non e' piu' un gate),
-  // mostriamo solo una nota informativa.
   const isCompleted = animeStatus === 'COMPLETED';
-
-  const [open, setOpen] = useState(false);
-  const [status, setStatus] = useState<FollowStatus>('watching');
-  const [autoDownload, setAutoDownload] = useState(true);
-  const [autoTouched, setAutoTouched] = useState(false);
-  const [downloadExisting, setDownloadExisting] = useState(false);
 
   const { ensureConfirmed, dialog: seasonDialog } = useSeasonGate(animeId);
 
   const invalidate = () => void utils.follow.list.invalidate();
-  const add = trpc.follow.add.useMutation();
-  const update = trpc.follow.updateStatus.useMutation();
-  const setAuto = trpc.follow.setAutoDownload.useMutation();
+  const onError = (e: { message?: string }) => toast.error(e.message || 'Operazione non riuscita');
+
+  const add = trpc.follow.add.useMutation({
+    onSuccess: () => {
+      toast.success('Aggiunto ai Seguiti');
+      invalidate();
+    },
+    onError,
+  });
+  const update = trpc.follow.updateStatus.useMutation({ onSuccess: invalidate, onError });
+  const setAuto = trpc.follow.setAutoDownload.useMutation({ onSuccess: invalidate, onError });
+  const setNotify = trpc.follow.setNotify.useMutation({ onSuccess: invalidate, onError });
   const remove = trpc.follow.remove.useMutation({
     onSuccess: () => {
       toast.success('Rimosso dai Seguiti');
       invalidate();
-      setOpen(false);
     },
-    onError: (e) => toast.error(e.message),
+    onError,
   });
   const addAll = trpc.download.addAll.useMutation({
     onSuccess: (res) => {
@@ -64,173 +70,149 @@ export function FollowButton({
     onError: (e) => toast.error(e.message || 'Impossibile accodare i download'),
   });
 
-  const pending = add.isPending || update.isPending || setAuto.isPending || remove.isPending;
-
-  function onOpenChange(next: boolean) {
-    if (next) {
-      const initialStatus = current?.status ?? 'watching';
-      setStatus(initialStatus);
-      // Rispetta lo stato auto reale (anche per le serie concluse: ora e' attivabile).
-      setAutoDownload(current?.autoDownload ?? initialStatus === 'watching');
-      setAutoTouched(current?.autoDownload != null);
-      setDownloadExisting(false);
-    }
-    setOpen(next);
+  // Non seguito: un solo click segue (watching + auto-download di default). L'auto è forward-only,
+  // quindi NON scarica il backlog già uscito — solo i nuovi episodi.
+  if (!current) {
+    return (
+      <>
+        <Button
+          onClick={() => add.mutate({ animeId, status: 'watching' })}
+          disabled={add.isPending || follows.isLoading}
+        >
+          {add.isPending ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <Plus className="mr-2 h-4 w-4" />
+          )}
+          Segui
+        </Button>
+        {seasonDialog}
+      </>
+    );
   }
 
-  function pickStatus(next: FollowStatus) {
-    setStatus(next);
-    if (!autoTouched) {
-      setAutoDownload(next === 'watching');
-    }
-  }
-
-  async function onSave() {
-    try {
-      if (current) {
-        if (status !== current.status) {
-          await update.mutateAsync({ animeId, status });
-        }
-        if (autoDownload !== (current.autoDownload ?? current.status === 'watching')) {
-          await setAuto.mutateAsync({ animeId, autoDownload });
-        }
-        toast.success('Seguito aggiornato');
-      } else {
-        await add.mutateAsync({ animeId, status, autoDownload });
-        toast.success('Aggiunto ai Seguiti');
-      }
-      invalidate();
-      setOpen(false);
-      if (downloadExisting) {
-        ensureConfirmed(() => addAll.mutate({ animeId }));
-      }
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Operazione non riuscita');
-    }
-  }
+  // In pausa = on_hold; i record legacy "dropped" si mostrano anch'essi come in pausa (stesso
+  // comportamento: niente auto-download né avvisi). Riattivare = tornare a watching.
+  const paused = current.status === 'on_hold' || current.status === 'dropped';
+  const autoOn = current.autoDownload ?? current.status === 'watching';
+  const notifyOn = current.notify ?? true;
 
   return (
     <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogTrigger asChild>
-          <Button variant={current ? 'secondary' : 'default'} disabled={pending}>
-            {current ? (
-              <>
-                <Check className="mr-2 h-4 w-4" />
-                {FOLLOW_STATUS_LABELS[current.status]}
-              </>
-            ) : (
-              <>
-                <Plus className="mr-2 h-4 w-4" />
-                Segui
-              </>
-            )}
-            <ChevronDown className="ml-2 h-4 w-4" />
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button variant={paused ? 'outline' : 'secondary'}>
+            {paused ? <Pause className="mr-2 h-4 w-4" /> : <Check className="mr-2 h-4 w-4" />}
+            {paused ? 'In pausa' : 'Seguito'}
+            <ChevronDown className="ml-2 h-4 w-4 opacity-70" />
           </Button>
-        </DialogTrigger>
+        </PopoverTrigger>
 
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{current ? 'Gestisci nei Seguiti' : 'Aggiungi ai Seguiti'}</DialogTitle>
-            <DialogDescription>
-              Scegli lo stato e cosa scaricare. Lo stato decide cosa succede ai nuovi episodi.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <div className="space-y-1.5">
-              {FOLLOW_STATUSES.map((s) => (
-                <button
-                  key={s.value}
-                  type="button"
-                  onClick={() => pickStatus(s.value)}
-                  className={cn(
-                    'flex w-full flex-col items-start gap-0.5 rounded-md border p-2.5 text-left transition-colors',
-                    status === s.value
-                      ? 'border-primary bg-primary/5'
-                      : 'border-border hover:bg-accent/50',
-                  )}
-                >
-                  <span className="flex items-center gap-1.5 text-sm font-medium">
-                    {status === s.value ? <Check className="h-3.5 w-3.5 text-primary" /> : null}
-                    {s.label}
-                  </span>
-                  <span className="text-xs text-muted-foreground">{s.hint}</span>
-                </button>
-              ))}
-            </div>
-
-            <div className="space-y-2 rounded-md border p-3">
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 accent-primary"
-                  checked={autoDownload}
-                  onChange={(e) => {
-                    setAutoDownload(e.target.checked);
-                    setAutoTouched(true);
-                  }}
-                />
-                Scarica automaticamente i nuovi episodi
-              </label>
-              {autoDownload && masterOff ? (
-                <p className="flex items-start gap-1.5 pl-6 text-xs text-amber-600 dark:text-amber-400">
-                  <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                  <span>
-                    L&apos;auto-download globale è spento: attivalo in{' '}
-                    <Link
-                      href="/settings"
-                      className="font-medium underline underline-offset-2 hover:text-amber-700 dark:hover:text-amber-300"
-                    >
-                      Impostazioni
-                    </Link>{' '}
-                    perché i nuovi episodi partano da soli.
-                  </span>
-                </p>
-              ) : null}
-              {isCompleted ? (
-                <p className="pl-6 text-xs text-muted-foreground">
-                  Serie conclusa: di norma non escono nuovi episodi. Per quelli già usciti usa
-                  l&apos;opzione qui sotto.
-                </p>
-              ) : null}
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 accent-primary"
-                  checked={downloadExisting}
-                  onChange={(e) => setDownloadExisting(e.target.checked)}
-                />
-                Scarica subito gli episodi già usciti
-              </label>
-            </div>
+        <PopoverContent align="end" className="w-80 p-0">
+          <div className="border-b px-4 py-3">
+            <p className="text-sm font-medium">Gestisci il seguito</p>
+            <p className="text-xs text-muted-foreground">
+              Download automatico e avvisi per questa serie.
+            </p>
           </div>
 
-          <DialogFooter className="gap-2 sm:justify-between">
-            {current ? (
-              <Button
-                variant="ghost"
-                className="text-destructive hover:text-destructive"
-                onClick={() => remove.mutate({ animeId })}
-                disabled={pending}
-              >
-                Smetti di seguire
-              </Button>
-            ) : (
-              <span />
-            )}
-            <div className="flex gap-2">
-              <Button variant="ghost" onClick={() => setOpen(false)} disabled={pending}>
-                Annulla
-              </Button>
-              <Button onClick={onSave} disabled={pending}>
-                {pending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                {current ? 'Salva' : 'Segui'}
-              </Button>
+          <div className="space-y-3 p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium">Scarica i nuovi episodi</p>
+                <p className="text-xs text-muted-foreground">
+                  Auto-download appena escono (solo i nuovi).
+                </p>
+              </div>
+              <Switch
+                checked={autoOn && !paused}
+                disabled={paused || setAuto.isPending}
+                onCheckedChange={(v) => setAuto.mutate({ animeId, autoDownload: v })}
+                aria-label="Scarica automaticamente i nuovi episodi"
+              />
             </div>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            {autoOn && !paused && masterOff ? (
+              <p className="flex items-start gap-1.5 text-xs text-amber-600 dark:text-amber-400">
+                <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                <span>
+                  L&apos;auto-download globale è spento: attivalo in{' '}
+                  <Link href="/settings" className="font-medium underline underline-offset-2">
+                    Impostazioni
+                  </Link>
+                  .
+                </span>
+              </p>
+            ) : null}
+            {isCompleted && !paused ? (
+              <p className="text-xs text-muted-foreground">
+                Serie conclusa: di norma non escono nuovi episodi.
+              </p>
+            ) : null}
+
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium">Avvisi nuove stagioni</p>
+                <p className="text-xs text-muted-foreground">Notifica per sequel e correlati.</p>
+              </div>
+              <Switch
+                checked={notifyOn && !paused}
+                disabled={paused || setNotify.isPending}
+                onCheckedChange={(v) => setNotify.mutate({ animeId, notify: v })}
+                aria-label="Avvisami di nuove stagioni"
+              />
+            </div>
+
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full gap-2"
+              disabled={addAll.isPending}
+              onClick={() => ensureConfirmed(() => addAll.mutate({ animeId }))}
+            >
+              {addAll.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="h-4 w-4" />
+              )}
+              Scarica gli episodi già usciti
+            </Button>
+          </div>
+
+          <div className="space-y-1 border-t p-2">
+            <div className="flex items-center justify-between gap-3 rounded-md px-2 py-1.5">
+              <span className="flex items-center gap-2 text-sm font-medium">
+                <Pause className="h-4 w-4" />
+                In pausa
+              </span>
+              <Switch
+                checked={paused}
+                disabled={update.isPending}
+                onCheckedChange={(v) =>
+                  update.mutate({ animeId, status: v ? 'on_hold' : 'watching' })
+                }
+                aria-label="Metti in pausa"
+              />
+            </div>
+            <p className="px-2 pb-1 text-xs text-muted-foreground">
+              Sospende download e avvisi senza smettere di seguire.
+            </p>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full justify-start gap-2 text-destructive hover:text-destructive"
+              disabled={remove.isPending}
+              onClick={() => remove.mutate({ animeId })}
+            >
+              {remove.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Trash2 className="h-4 w-4" />
+              )}
+              Smetti di seguire
+            </Button>
+          </div>
+        </PopoverContent>
+      </Popover>
 
       {seasonDialog}
     </>

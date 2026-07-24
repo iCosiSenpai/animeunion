@@ -16,20 +16,17 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { FOLLOW_STATUSES } from '@/lib/follow';
+import { isFollowPaused } from '@/lib/follow';
 import { trpc } from '@/lib/trpc';
 import {
   type LibraryOptimisticTransaction,
   useLibraryOptimisticCache,
 } from '@/lib/use-library-optimistic-cache';
 import { formatBytes } from '@/lib/utils';
-import type { FollowStatus, FollowWithAnime } from '@animeunion/shared';
-import { Download, MoreVertical, Trash2 } from 'lucide-react';
+import type { FollowWithAnime } from '@animeunion/shared';
+import { Download, MoreVertical, Pause, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -39,7 +36,6 @@ export function FollowCard({ follow }: { follow: FollowWithAnime }) {
   const optimistic = useLibraryOptimisticCache();
   const [confirmDeleteFiles, setConfirmDeleteFiles] = useState(false);
   const [deleteFolder, setDeleteFolder] = useState(false);
-  const [askDownload, setAskDownload] = useState(false);
   // Cestino attivo: le eliminazioni spostano in `.trash` (recuperabile), quindi adattiamo la copy.
   const trashEnabled = trpc.config.getAll.useQuery(undefined, { staleTime: 60_000 }).data
     ?.trashEnabled;
@@ -49,10 +45,7 @@ export function FollowCard({ follow }: { follow: FollowWithAnime }) {
   };
 
   const updateStatus = trpc.follow.updateStatus.useMutation({
-    onSuccess: () => {
-      toast.success('Stato aggiornato');
-      invalidate();
-    },
+    onSuccess: () => invalidate(),
     onError: (error) => toast.error(error.message),
   });
   const remove = trpc.follow.remove.useMutation({
@@ -140,27 +133,15 @@ export function FollowCard({ follow }: { follow: FollowWithAnime }) {
   // Serie conclusa: l'auto-download resta attivabile (lo stato d'onda non e' piu' un gate, vedi
   // enqueueForAutoFollows), mostriamo solo una nota informativa.
   const isCompleted = anime.status === 'COMPLETED';
-  const autoEffective = follow.autoDownload ?? follow.status === 'watching';
-  // I file scaricati si possono eliminare quando la serie e' conclusa o abbandonata
-  // (per gli stati "attivi" si continua a scaricare).
-  const canDeleteFiles = follow.status === 'completed' || follow.status === 'dropped';
+  // In pausa = on_hold, o legacy "dropped" (stesso comportamento). Preferenza auto = esplicita o
+  // default su watching; effettiva solo se non in pausa.
+  const paused = isFollowPaused(follow.status);
+  const autoPref = follow.autoDownload ?? follow.status === 'watching';
+  const autoActive = autoPref && !paused;
+  // I file scaricati si possono eliminare quando la serie è in pausa o conclusa (per le serie
+  // attive si continua a scaricare: si evita così la cancellazione accidentale).
+  const canDeleteFiles = paused || follow.status === 'completed';
   const title = anime.titleIta ?? anime.title;
-
-  // Cambio stato: passando a "In corso" o "Da guardare" chiediamo se scaricare subito gli episodi
-  // (gli stati "attivi" sono quelli per cui ha senso riempire la libreria). Per gli altri stati
-  // si aggiorna e basta.
-  function onChangeStatus(next: FollowStatus) {
-    updateStatus.mutate(
-      { animeId: anime.id, status: next },
-      {
-        onSuccess: () => {
-          if (next === 'watching' || next === 'plan_to_watch') {
-            setAskDownload(true);
-          }
-        },
-      },
-    );
-  }
 
   return (
     <Card className="group overflow-hidden border border-border/50 shadow-sm transition-all duration-300 hover:border-primary/30 hover:shadow-lg">
@@ -186,31 +167,29 @@ export function FollowCard({ follow }: { follow: FollowWithAnime }) {
               <DropdownMenuItem asChild>
                 <Link href={`/catalog/${anime.slug}`}>Vai al dettaglio</Link>
               </DropdownMenuItem>
-              <DropdownMenuSub>
-                <DropdownMenuSubTrigger>Cambia stato</DropdownMenuSubTrigger>
-                <DropdownMenuSubContent>
-                  {FOLLOW_STATUSES.map((status) => (
-                    <DropdownMenuItem
-                      key={status.value}
-                      disabled={status.value === follow.status}
-                      onClick={() => onChangeStatus(status.value)}
-                    >
-                      {status.label}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
+              <DropdownMenuItem
+                onClick={() =>
+                  updateStatus.mutate({
+                    animeId: anime.id,
+                    status: paused ? 'watching' : 'on_hold',
+                  })
+                }
+              >
+                {paused ? 'Riprendi (togli pausa)' : 'Metti in pausa'}
+              </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => ensureConfirmed(() => addAll.mutate({ animeId: anime.id }))}
               >
                 Scarica episodi mancanti
               </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => setAuto.mutate({ animeId: anime.id, autoDownload: !autoEffective })}
-              >
-                {autoEffective ? 'Disattiva auto-download' : 'Attiva auto-download'}
-              </DropdownMenuItem>
-              {isCompleted ? (
+              {!paused ? (
+                <DropdownMenuItem
+                  onClick={() => setAuto.mutate({ animeId: anime.id, autoDownload: !autoPref })}
+                >
+                  {autoPref ? 'Disattiva auto-download' : 'Attiva auto-download'}
+                </DropdownMenuItem>
+              ) : null}
+              {isCompleted && !paused ? (
                 <div className="px-2 py-1 text-[11px] leading-tight text-muted-foreground">
                   Serie conclusa: di norma non escono nuovi episodi.
                 </div>
@@ -233,10 +212,15 @@ export function FollowCard({ follow }: { follow: FollowWithAnime }) {
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-        {autoEffective ? (
+        {autoActive ? (
           <span className="absolute left-1 top-1 inline-flex items-center gap-1 rounded-full bg-primary/90 px-1.5 py-0.5 text-[10px] font-medium text-primary-foreground shadow-sm">
             <Download className="h-3 w-3" />
             Auto
+          </span>
+        ) : paused ? (
+          <span className="absolute left-1 top-1 inline-flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground shadow-sm">
+            <Pause className="h-3 w-3" />
+            In pausa
           </span>
         ) : null}
       </div>
@@ -250,33 +234,6 @@ export function FollowCard({ follow }: { follow: FollowWithAnime }) {
           {title}
         </Link>
       </div>
-
-      <Dialog open={askDownload} onOpenChange={setAskDownload}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Scaricare gli episodi?</DialogTitle>
-            <DialogDescription>
-              Vuoi mettere in coda subito gli episodi mancanti di &laquo;{title}&raquo;? Puoi sempre
-              farlo dopo dal menu della serie.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="gap-2">
-            <Button variant="ghost" onClick={() => setAskDownload(false)}>
-              No, solo stato
-            </Button>
-            <Button
-              className="gap-2"
-              onClick={() => {
-                setAskDownload(false);
-                ensureConfirmed(() => addAll.mutate({ animeId: anime.id }));
-              }}
-            >
-              <Download className="h-4 w-4" />
-              Sì, scarica
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <Dialog
         open={confirmDeleteFiles}

@@ -37,3 +37,12 @@ export const FOLLOW_STATUSES: FollowStatusMeta[] = [
 export const FOLLOW_STATUS_LABELS: Record<FollowStatus, string> = Object.fromEntries(
   FOLLOW_STATUSES.map((status) => [status.value, status.label]),
 ) as Record<FollowStatus, string>;
+
+/**
+ * Stati considerati "in pausa" nel nuovo modello: on_hold (pausa esplicita) e dropped (legacy
+ * "droppato", stesso comportamento — niente auto-download né avvisi). Usato da liste/card per
+ * derivare gli stati senza migrare i vecchi record.
+ */
+export function isFollowPaused(status: FollowStatus): boolean {
+  return status === 'on_hold' || status === 'dropped';
+}

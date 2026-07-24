@@ -846,7 +846,8 @@ export function createDownloadService(deps: DownloadServiceDeps): DownloadServic
 
       // Eligibilita' dallo stato del SEGUITO, non dallo stato d'onda dell'anime.
       const eligible = follows.filter((f) => {
-        if (f.status === 'dropped') return false;
+        // Droppato e In pausa (on_hold): mai auto-download — "pausa" ferma tutto.
+        if (f.status === 'dropped' || f.status === 'on_hold') return false;
         return f.autoDownload != null ? f.autoDownload === 1 : f.status === 'watching';
       });
 

@@ -5,13 +5,31 @@ import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/ui/page-header';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { FOLLOW_STATUSES } from '@/lib/follow';
+import { isFollowPaused } from '@/lib/follow';
 import { trpc } from '@/lib/trpc';
+import type { FollowWithAnime } from '@animeunion/shared';
 import { AlertCircle, Settings2, TriangleAlert } from 'lucide-react';
 import Link from 'next/link';
 import { FollowCard } from './follow-card';
 
 const GRID_CLASS = 'grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6';
+
+// Filtri orientati al COMPORTAMENTO (non più i 5 tag di stato watchlist): cosa scarica in
+// automatico e cosa è in pausa. "In pausa" copre anche i record legacy "dropped".
+const FILTERS = [
+  { value: 'all', label: 'Tutti' },
+  { value: 'auto', label: 'Con auto-download' },
+  { value: 'paused', label: 'In pausa' },
+] as const;
+type FilterValue = (typeof FILTERS)[number]['value'];
+
+function matchesFilter(follow: FollowWithAnime, filter: FilterValue): boolean {
+  if (filter === 'all') return true;
+  const paused = isFollowPaused(follow.status);
+  if (filter === 'paused') return paused;
+  // "Con auto-download": auto attivo (esplicito o default su watching) e non in pausa.
+  return !paused && (follow.autoDownload ?? follow.status === 'watching');
+}
 
 export function FollowsView() {
   const { data, isLoading, isError, refetch } = trpc.follow.list.useQuery();
@@ -22,7 +40,8 @@ export function FollowsView() {
   // globale e' spento non parte nulla. Avvisiamo solo se c'e' davvero almeno un follow "auto".
   const masterOff = config.data ? !config.data.autoDownload : false;
   const hasAutoFollows = follows.some(
-    (follow) => follow.autoDownload ?? follow.status === 'watching',
+    (follow) =>
+      !isFollowPaused(follow.status) && (follow.autoDownload ?? follow.status === 'watching'),
   );
   const showAutoWarning = masterOff && hasAutoFollows;
 
@@ -31,7 +50,7 @@ export function FollowsView() {
       <PageHeader
         eyebrow="La tua lista"
         title="Seguiti"
-        description="Gli anime che segui sono sincronizzati con i Preferiti del sito. Lo stato (in corso, completato, ecc.) è locale e decide chi viene scaricato automaticamente."
+        description="Gli anime che segui, sincronizzati con i Preferiti del sito. Attiva l'auto-download o metti in pausa dal dettaglio della serie o dal menu della card."
       />
 
       {showAutoWarning ? (
@@ -72,30 +91,24 @@ export function FollowsView() {
           }
         />
       ) : (
-        <Tabs defaultValue="watching">
-          {/* Tutti gli stati restano nello stesso rettangolo: su schermi stretti la barra scorre in
-              orizzontale invece di mandare "Completato/Droppato" a capo fuori dal riquadro. */}
+        <Tabs defaultValue="all">
+          {/* Filtri comportamentali (non più i 5 tag). Su schermi stretti la barra scorre in
+              orizzontale invece di andare a capo fuori dal riquadro. */}
           <TabsList className="w-full max-w-full justify-start overflow-x-auto">
-            {FOLLOW_STATUSES.map((status) => {
-              const count = follows.filter((follow) => follow.status === status.value).length;
+            {FILTERS.map((f) => {
+              const count = follows.filter((follow) => matchesFilter(follow, f.value)).length;
               return (
-                <TabsTrigger
-                  key={status.value}
-                  value={status.value}
-                  title={status.hint}
-                  className="shrink-0"
-                >
-                  {status.label} ({count})
+                <TabsTrigger key={f.value} value={f.value} className="shrink-0">
+                  {f.label} ({count})
                 </TabsTrigger>
               );
             })}
           </TabsList>
 
-          {FOLLOW_STATUSES.map((status) => {
-            const items = follows.filter((follow) => follow.status === status.value);
+          {FILTERS.map((f) => {
+            const items = follows.filter((follow) => matchesFilter(follow, f.value));
             return (
-              <TabsContent key={status.value} value={status.value} className="mt-4">
-                <p className="mb-4 text-sm text-muted-foreground">{status.hint}</p>
+              <TabsContent key={f.value} value={f.value} className="mt-4">
                 {items.length === 0 ? (
                   <p className="py-16 text-center text-muted-foreground">
                     Nessun anime in questa categoria.

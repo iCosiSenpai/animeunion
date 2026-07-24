@@ -157,6 +157,9 @@ export const follow = sqliteTable(
     // number > di questo valore. Impostata al max episodio gia' presente quando l'auto-download
     // diventa attivo, cosi' non ri-scarica il backlog gia' posseduto. null = nessun limite.
     autoDownloadFromEp: integer('auto_download_from_ep'),
+    // Avvisi di nuova stagione/correlati per QUESTA serie. null = default (avvisa), 0 = disattivato,
+    // 1 = attivo. Il master globale resta il config `notifyNewSeasons`; questo è l'opt-out per-serie.
+    notify: integer('notify'),
     addedAt: text('added_at').notNull(),
     updatedAt: text('updated_at').notNull(),
     lastCheckAt: text('last_check_at'),

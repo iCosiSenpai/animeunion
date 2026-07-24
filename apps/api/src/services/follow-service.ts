@@ -3,6 +3,7 @@ import {
   type Follow,
   type FollowAddInput,
   type FollowSetAutoDownloadInput,
+  type FollowSetNotifyInput,
   type FollowUpdateStatusInput,
   type FollowWithAnime,
   followStatusSchema,
@@ -22,6 +23,7 @@ export interface FollowService {
   remove(animeId: string): void;
   updateStatus(input: FollowUpdateStatusInput): Follow;
   setAutoDownload(input: FollowSetAutoDownloadInput): Follow;
+  setNotify(input: FollowSetNotifyInput): Follow;
 }
 
 export interface FollowServiceDeps {
@@ -38,6 +40,7 @@ function toFollow(row: FollowRow): Follow {
     status: followStatusSchema.parse(row.status),
     notes: row.notes,
     autoDownload: row.autoDownload == null ? null : row.autoDownload === 1,
+    notify: row.notify == null ? null : row.notify === 1,
     addedAt: row.addedAt,
     updatedAt: row.updatedAt,
     lastCheckAt: row.lastCheckAt,
@@ -127,14 +130,21 @@ export function createFollowService(deps: FollowServiceDeps): FollowService {
       const existing = findByAnimeId(input.animeId);
       if (existing) {
         const nextAuto = input.autoDownload === undefined ? existing.autoDownload : autoDownload;
+        const nextNotify = input.notify === undefined ? existing.notify : toInt(input.notify);
         db.update(schema.follow)
-          .set({ status: input.status, autoDownload: nextAuto, updatedAt: timestamp })
+          .set({
+            status: input.status,
+            autoDownload: nextAuto,
+            notify: nextNotify,
+            updatedAt: timestamp,
+          })
           .where(eq(schema.follow.id, existing.id))
           .run();
         return toFollow({
           ...existing,
           status: input.status,
           autoDownload: nextAuto,
+          notify: nextNotify,
           updatedAt: timestamp,
         });
       }
@@ -147,6 +157,7 @@ export function createFollowService(deps: FollowServiceDeps): FollowService {
         // Forward-only: cattura il backlog gia' uscito al momento del follow, cosi' l'auto-download
         // accodera' solo gli episodi futuri (anche se piu' tardi si passa a "In corso").
         autoDownloadFromEp: maxReleasedEpisode(input.animeId),
+        notify: toInt(input.notify),
         addedAt: timestamp,
         updatedAt: timestamp,
         lastCheckAt: null,
@@ -214,6 +225,20 @@ export function createFollowService(deps: FollowServiceDeps): FollowService {
         autoDownloadFromEp: fromEp,
         updatedAt: timestamp,
       });
+    },
+
+    setNotify(input: FollowSetNotifyInput): Follow {
+      const existing = findByAnimeId(input.animeId);
+      if (!existing) {
+        throw new NotFoundError(`Follow non trovato per anime: ${input.animeId}`);
+      }
+      const timestamp = new Date().toISOString();
+      const notify = input.notify ? 1 : 0;
+      db.update(schema.follow)
+        .set({ notify, updatedAt: timestamp })
+        .where(eq(schema.follow.id, existing.id))
+        .run();
+      return toFollow({ ...existing, notify, updatedAt: timestamp });
     },
   };
 }

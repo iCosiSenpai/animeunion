@@ -2,7 +2,7 @@
 
 import { AnimeCard } from '@/components/anime/anime-card';
 import { SectionPanel } from '@/components/dashboard/section-panel';
-import { Sortable, SortableItem, useLayoutOrder } from '@/components/dashboard/sortable';
+import { Sortable, SortableItem } from '@/components/dashboard/sortable';
 import { StatCard } from '@/components/dashboard/stat-card';
 import { StatusPill } from '@/components/dashboard/status-pill';
 import { type StatusTone, TONES } from '@/components/dashboard/tone';
@@ -11,34 +11,128 @@ import { Button } from '@/components/ui/button';
 import { trpc } from '@/lib/trpc';
 import { useDownloadSummary } from '@/lib/use-download-summary';
 import { cn, formatDate } from '@/lib/utils';
-import type { AnimeSummary, NotificationType, Season } from '@animeunion/shared';
+import type { AnimeSummary, NotificationType, Season, WeekDay } from '@animeunion/shared';
 import { rectSortingStrategy, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import {
   Activity,
   AlertTriangle,
+  CalendarClock,
   CalendarDays,
   CheckCircle2,
   ChevronRight,
-  Clock,
+  Columns2,
   Compass,
   Cpu,
   Download,
   DownloadCloud,
+  Eye,
+  EyeOff,
   HardDrive,
   Heart,
   Library,
   ListChecks,
   RefreshCw,
+  RotateCcw,
+  Search,
+  ShieldCheck,
+  SlidersHorizontal,
   TrendingUp,
 } from 'lucide-react';
 import Link from 'next/link';
-import type { ComponentType, ReactNode } from 'react';
+import { useRouter } from 'next/navigation';
+import {
+  type ComponentType,
+  type FormEvent,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import { toast } from 'sonner';
 
 const GB = 1024 ** 3;
 
-const WIDGET_IDS = ['queue', 'recent', 'storage', 'neural', 'catalog', 'activity'] as const;
+const WIDGET_IDS = [
+  'queue',
+  'recent',
+  'storage',
+  'neural',
+  'catalog',
+  'upcoming',
+  'doctor',
+  'activity',
+] as const;
 const BAND_IDS = ['follows', 'onair', 'seasonal', 'topRated'] as const;
+
+const WIDGET_LABELS: Record<string, string> = {
+  queue: 'Coda download',
+  recent: 'Ultimi scaricati',
+  storage: 'Archiviazione',
+  neural: 'Worker neurale',
+  catalog: 'Catalogo',
+  upcoming: 'Prossimi episodi',
+  doctor: 'Diagnostica',
+  activity: 'Attività recente',
+};
+const BAND_LABELS: Record<string, string> = {
+  follows: 'I tuoi seguiti',
+  onair: 'In onda oggi',
+  seasonal: 'Da scoprire',
+  topRated: 'Più votati',
+};
+
+type Density = 'comfortable' | 'compact';
+interface DashboardLayout {
+  widgets: string[];
+  bands: string[];
+  hidden: string[];
+  wide: string[];
+  density: Density;
+}
+const DEFAULT_LAYOUT: DashboardLayout = {
+  widgets: [...WIDGET_IDS],
+  bands: [...BAND_IDS],
+  hidden: [],
+  wide: [],
+  density: 'comfortable',
+};
+
+function orderMerge(saved: unknown, all: readonly string[]): string[] {
+  const known = new Set(all);
+  const base = Array.isArray(saved) ? (saved as string[]).filter((id) => known.has(id)) : [];
+  for (const id of all) {
+    if (!base.includes(id)) {
+      base.push(id);
+    }
+  }
+  return base;
+}
+function mergeLayout(saved: Partial<DashboardLayout> | null): DashboardLayout {
+  const allIds = new Set<string>([...WIDGET_IDS, ...BAND_IDS]);
+  const widgetIds = new Set<string>(WIDGET_IDS);
+  return {
+    widgets: orderMerge(saved?.widgets, WIDGET_IDS),
+    bands: orderMerge(saved?.bands, BAND_IDS),
+    hidden: Array.isArray(saved?.hidden)
+      ? (saved?.hidden as string[]).filter((id) => allIds.has(id))
+      : [],
+    wide: Array.isArray(saved?.wide)
+      ? (saved?.wide as string[]).filter((id) => widgetIds.has(id))
+      : [],
+    density: saved?.density === 'compact' ? 'compact' : 'comfortable',
+  };
+}
+function parseLayout(json: string | undefined): DashboardLayout {
+  if (!json) {
+    return mergeLayout(null);
+  }
+  try {
+    return mergeLayout(JSON.parse(json) as Partial<DashboardLayout>);
+  } catch {
+    return mergeLayout(null);
+  }
+}
 
 const SEASON_BY_MONTH: Season[] = [
   'WINTER',
@@ -60,7 +154,25 @@ const SEASON_LABELS: Record<Season, string> = {
   SUMMER: 'Estate',
   FALL: 'Autunno',
 };
-const JS_DAY_TO_WEEKDAY = [
+const WEEK_ORDER: WeekDay[] = [
+  'LUNEDI',
+  'MARTEDI',
+  'MERCOLEDI',
+  'GIOVEDI',
+  'VENERDI',
+  'SABATO',
+  'DOMENICA',
+];
+const DAY_LABELS: Record<WeekDay, string> = {
+  LUNEDI: 'Lun',
+  MARTEDI: 'Mar',
+  MERCOLEDI: 'Mer',
+  GIOVEDI: 'Gio',
+  VENERDI: 'Ven',
+  SABATO: 'Sab',
+  DOMENICA: 'Dom',
+};
+const JS_DAY_TO_WEEKDAY: WeekDay[] = [
   'DOMENICA',
   'LUNEDI',
   'MARTEDI',
@@ -68,7 +180,7 @@ const JS_DAY_TO_WEEKDAY = [
   'GIOVEDI',
   'VENERDI',
   'SABATO',
-] as const;
+];
 
 const NOTIF_META: Record<
   NotificationType,
@@ -152,14 +264,18 @@ function animeRow(items: AnimeSummary[], isLoading: boolean, emptyText: ReactNod
 }
 
 /**
- * Dashboard "centro di controllo" ibrida e personalizzabile: in alto i KPI, poi una griglia di
- * widget di stato del server e delle bande di anime — entrambi riordinabili via drag & drop
- * (impugnatura ⠿) con ordine salvato in locale. Legge solo dati già esposti via tRPC.
+ * Dashboard "centro di controllo" ibrida e personalizzabile: KPI + widget di stato + bande di anime,
+ * riordinabili (⠿) e configurabili (mostra/nascondi, larghezza 1/2 colonne, densità), con layout
+ * salvato lato server (segue l'utente tra dispositivi). Legge solo dati già esposti via tRPC.
  */
 export function DashboardView() {
+  const router = useRouter();
   const utils = trpc.useUtils();
+
   const health = trpc.health.status.useQuery(undefined, { refetchInterval: 15000, retry: false });
   const neural = trpc.neuralExport.status.useQuery(undefined, { retry: false });
+  const jobs = trpc.neuralExport.jobs.useQuery(undefined, { refetchInterval: 8000, retry: false });
+  const doctor = trpc.doctor.state.useQuery(undefined, { refetchInterval: 30000, retry: false });
   const notifications = trpc.notifications.list.useQuery(undefined, { refetchInterval: 30000 });
   const { counts } = useDownloadSummary();
 
@@ -173,6 +289,7 @@ export function DashboardView() {
   const seasonal = trpc.catalog.bySeason.useQuery({ season, year, page: 1 });
   const topRated = trpc.catalog.topRated.useQuery({ page: 1 });
   const library = trpc.library.list.useQuery(undefined, { staleTime: 60_000, retry: false });
+  const configQuery = trpc.config.getAll.useQuery(undefined, { staleTime: 60_000 });
 
   const sync = trpc.catalog.sync.useMutation({
     onSuccess: () => {
@@ -181,9 +298,73 @@ export function DashboardView() {
     },
     onError: (e) => toast.error(e.message || 'Sincronizzazione non riuscita'),
   });
+  const setConfig = trpc.config.set.useMutation({
+    onError: (e) => toast.error(e.message || 'Salvataggio layout non riuscito'),
+  });
 
-  const [widgetOrder, setWidgetOrder] = useLayoutOrder('dashboard.widgets.v1', WIDGET_IDS);
-  const [bandOrder, setBandOrder] = useLayoutOrder('dashboard.bands.v1', BAND_IDS);
+  // Layout dal server (config.dashboardLayout). Init una volta sola: il primo render usa i default
+  // (SSR-safe), poi l'effetto applica il valore salvato.
+  const [layout, setLayout] = useState<DashboardLayout>(DEFAULT_LAYOUT);
+  const [editing, setEditing] = useState(false);
+  const [query, setQuery] = useState('');
+  const inited = useRef(false);
+  useEffect(() => {
+    if (!inited.current && configQuery.data) {
+      inited.current = true;
+      setLayout(parseLayout(configQuery.data.dashboardLayout));
+    }
+  }, [configQuery.data]);
+
+  const saveLayout = useCallback(
+    (next: DashboardLayout) => {
+      setLayout(next);
+      setConfig.mutate({ key: 'dashboardLayout', value: JSON.stringify(next) });
+    },
+    [setConfig],
+  );
+
+  const hidden = new Set(layout.hidden);
+  const wide = new Set(layout.wide);
+  const dense = layout.density === 'compact';
+  const visibleWidgets = layout.widgets.filter((id) => !hidden.has(id));
+  const visibleBands = layout.bands.filter((id) => !hidden.has(id));
+
+  const reorderWidgets = (nextVisible: string[]): void =>
+    saveLayout({
+      ...layout,
+      widgets: [...nextVisible, ...layout.widgets.filter((id) => hidden.has(id))],
+    });
+  const reorderBands = (nextVisible: string[]): void =>
+    saveLayout({
+      ...layout,
+      bands: [...nextVisible, ...layout.bands.filter((id) => hidden.has(id))],
+    });
+  const toggleHidden = (id: string): void => {
+    const next = new Set(layout.hidden);
+    if (next.has(id)) {
+      next.delete(id);
+    } else {
+      next.add(id);
+    }
+    saveLayout({ ...layout, hidden: [...next] });
+  };
+  const toggleWide = (id: string): void => {
+    const next = new Set(layout.wide);
+    if (next.has(id)) {
+      next.delete(id);
+    } else {
+      next.add(id);
+    }
+    saveLayout({ ...layout, wide: [...next] });
+  };
+
+  const onSearch = (e: FormEvent): void => {
+    e.preventDefault();
+    const q = query.trim();
+    if (q) {
+      router.push(`/catalog?q=${encodeURIComponent(q)}`);
+    }
+  };
 
   const downloading = (counts?.downloading ?? 0) + (counts?.processing ?? 0);
   const queued = counts?.queued ?? 0;
@@ -195,6 +376,7 @@ export function DashboardView() {
 
   const catalog = health.data?.catalog;
   const w = neural.data?.worker;
+  const activeJobs = (jobs.data ?? []).filter((j) => j.state === 'queued' || j.state === 'running');
 
   let neuralTone: StatusTone = 'neutral';
   let neuralLabel = 'Non collegato';
@@ -217,7 +399,7 @@ export function DashboardView() {
   if (downloading > 0) {
     overallTone = 'info';
     overallLabel = 'Operativo';
-  } else if (failed > 0 || diskLow) {
+  } else if (failed > 0 || diskLow || doctor.data?.healthy === false) {
     overallTone = 'warning';
     overallLabel = 'Da controllare';
   }
@@ -228,12 +410,33 @@ export function DashboardView() {
   const seasonalItems = (seasonal.data?.data ?? []).slice(0, 6);
   const topItems = (topRated.data?.data ?? []).slice(0, 6);
 
-  // "Ultimi scaricati": appiattisce la libreria a episodi, ordina per data di download desc.
   const recentDownloads = (library.data ?? [])
     .flatMap((g) => g.entries.flatMap((e) => e.episodes.map((ep) => ({ anime: g.anime, ep }))))
     .filter((x) => x.ep.downloadedAt)
     .sort((a, b) => (b.ep.downloadedAt ?? '').localeCompare(a.ep.downloadedAt ?? ''))
     .slice(0, 5);
+
+  // Prossimi episodi: dalla settimana, a partire da oggi in avanti.
+  const startIdx = Math.max(0, WEEK_ORDER.indexOf(todayWeekday));
+  const byDay = new Map((week.data ?? []).map((e) => [e.day, e.anime]));
+  const upcoming: {
+    anime: AnimeSummary;
+    day: WeekDay;
+    airTime: string | null;
+    episodeNumber: number | null;
+  }[] = [];
+  for (let i = 0; i < 7 && upcoming.length < 5; i++) {
+    const day = WEEK_ORDER[(startIdx + i) % 7];
+    if (!day) {
+      continue;
+    }
+    for (const item of byDay.get(day) ?? []) {
+      upcoming.push({ anime: item, day, airTime: item.airTime, episodeNumber: item.episodeNumber });
+      if (upcoming.length >= 5) {
+        break;
+      }
+    }
+  }
 
   function renderWidget(id: string, handle: ReactNode): ReactNode {
     switch (id) {
@@ -241,6 +444,7 @@ export function DashboardView() {
         return (
           <SectionPanel
             handle={handle}
+            dense={dense}
             title="Coda download"
             icon={<Download className="h-4 w-4" />}
             action={
@@ -265,6 +469,7 @@ export function DashboardView() {
         return (
           <SectionPanel
             handle={handle}
+            dense={dense}
             title="Ultimi scaricati"
             icon={<DownloadCloud className="h-4 w-4" />}
             action={
@@ -312,6 +517,7 @@ export function DashboardView() {
         return (
           <SectionPanel
             handle={handle}
+            dense={dense}
             title="Archiviazione"
             icon={<HardDrive className="h-4 w-4" />}
           >
@@ -324,36 +530,96 @@ export function DashboardView() {
                 .
               </p>
             ) : (
-              <ul className="space-y-2.5">
-                {dirs.map((d) => (
-                  <li key={d.key} className="flex items-center justify-between gap-3 text-sm">
-                    <span className="min-w-0 truncate">{d.label}</span>
-                    <span className="shrink-0 font-semibold tabular-nums">
-                      {formatBytes(d.freeBytes)}
-                    </span>
-                  </li>
-                ))}
+              <ul className="space-y-3">
+                {dirs.map((d) => {
+                  const used =
+                    d.totalBytes != null && d.freeBytes != null ? d.totalBytes - d.freeBytes : null;
+                  const pct =
+                    d.totalBytes && used != null
+                      ? Math.min(100, Math.max(0, (used / d.totalBytes) * 100))
+                      : null;
+                  const barTone =
+                    pct == null
+                      ? 'bg-primary'
+                      : pct > 90
+                        ? 'bg-destructive'
+                        : pct > 75
+                          ? 'bg-warning'
+                          : 'bg-primary';
+                  return (
+                    <li key={d.key} className="space-y-1">
+                      <div className="flex items-center justify-between gap-2 text-sm">
+                        <span className="min-w-0 truncate">{d.label}</span>
+                        <span className="shrink-0 text-xs text-muted-foreground">
+                          {formatBytes(d.freeBytes)} liberi
+                          {d.totalBytes ? ` / ${formatBytes(d.totalBytes)}` : ''}
+                        </span>
+                      </div>
+                      {pct != null ? (
+                        <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                          <div
+                            className={cn('h-full rounded-full', barTone)}
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                      ) : null}
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </SectionPanel>
         );
-      case 'neural':
+      case 'neural': {
+        const running = activeJobs.find((j) => j.state === 'running') ?? activeJobs[0];
         return (
-          <SectionPanel handle={handle} title="Worker neurale" icon={<Cpu className="h-4 w-4" />}>
+          <SectionPanel
+            handle={handle}
+            dense={dense}
+            title="Worker neurale"
+            icon={<Cpu className="h-4 w-4" />}
+            action={
+              <Button asChild variant="ghost" size="sm">
+                <Link href="/settings?section=downloadNeurale">Gestisci</Link>
+              </Button>
+            }
+          >
             <div className="flex items-center justify-between gap-2">
               <span className="text-sm text-muted-foreground">Stato</span>
               <StatusPill tone={neuralTone} label={neuralLabel} pulse={neuralLabel === 'Pronto'} />
             </div>
             {w?.name ? <p className="mt-2 truncate text-sm">{w.name}</p> : null}
-            <Button asChild variant="ghost" size="sm" className="mt-1 -ml-2">
-              <Link href="/settings?section=downloadNeurale">Gestisci</Link>
-            </Button>
+            {activeJobs.length > 0 ? (
+              <div className="mt-3 space-y-1">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">Upscale in corso</span>
+                  <span className="tabular-nums">{activeJobs.length} job</span>
+                </div>
+                {running ? (
+                  <>
+                    <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                      <div
+                        className="h-full rounded-full bg-primary transition-[width]"
+                        style={{ width: `${Math.round((running.progress ?? 0) * 100)}%` }}
+                      />
+                    </div>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {running.animeTitle ?? 'Episodio'}
+                      {running.episodeNumber != null ? ` · Ep. ${running.episodeNumber}` : ''} ·{' '}
+                      {running.quality}
+                    </p>
+                  </>
+                ) : null}
+              </div>
+            ) : null}
           </SectionPanel>
         );
+      }
       case 'catalog':
         return (
           <SectionPanel
             handle={handle}
+            dense={dense}
             title="Catalogo"
             icon={<Library className="h-4 w-4" />}
             action={
@@ -389,10 +655,109 @@ export function DashboardView() {
             </div>
           </SectionPanel>
         );
+      case 'upcoming':
+        return (
+          <SectionPanel
+            handle={handle}
+            dense={dense}
+            title="Prossimi episodi"
+            icon={<CalendarClock className="h-4 w-4" />}
+            action={
+              <Button asChild variant="ghost" size="sm">
+                <Link href="/calendar">Calendario</Link>
+              </Button>
+            }
+          >
+            {week.isLoading ? (
+              <p className="text-sm text-muted-foreground">Carico…</p>
+            ) : upcoming.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Nessun episodio in programma.</p>
+            ) : (
+              <ul className="space-y-2.5">
+                {upcoming.map((u) => (
+                  <li key={`${u.anime.id}-${u.day}-${u.episodeNumber ?? '?'}`}>
+                    <Link
+                      href={`/catalog/${u.anime.slug}`}
+                      className="group flex items-center gap-3"
+                    >
+                      <span className="relative h-12 w-9 shrink-0 overflow-hidden rounded bg-muted">
+                        {u.anime.coverImage ? (
+                          <img
+                            src={u.anime.coverImage}
+                            alt=""
+                            loading="lazy"
+                            className="h-full w-full object-cover"
+                          />
+                        ) : null}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium transition-colors group-hover:text-primary">
+                          {u.anime.titleIta ?? u.anime.title}
+                        </p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {u.episodeNumber != null ? `Ep. ${u.episodeNumber} · ` : ''}
+                          {DAY_LABELS[u.day]}
+                          {u.airTime ? ` ${u.airTime}` : ''}
+                        </p>
+                      </div>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </SectionPanel>
+        );
+      case 'doctor': {
+        const critical = (doctor.data?.checks ?? [])
+          .filter((c) => c.status === 'critical')
+          .slice(0, 4);
+        const ok = doctor.data ? doctor.data.healthy : true;
+        return (
+          <SectionPanel
+            handle={handle}
+            dense={dense}
+            title="Diagnostica"
+            icon={<ShieldCheck className="h-4 w-4" />}
+            action={
+              <Button asChild variant="ghost" size="sm">
+                <Link href="/diagnostica">Apri</Link>
+              </Button>
+            }
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-sm text-muted-foreground">Stato</span>
+              {ok ? (
+                <StatusPill tone="success" label="Tutto ok" />
+              ) : (
+                <StatusPill
+                  tone="danger"
+                  label={`${doctor.data?.criticalCount ?? critical.length} problemi`}
+                />
+              )}
+            </div>
+            {critical.length > 0 ? (
+              <ul className="mt-2 space-y-1.5">
+                {critical.map((c) => (
+                  <li key={c.id} className="flex items-start gap-2 text-sm">
+                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" />
+                    <div className="min-w-0">
+                      <p className="truncate">{c.label}</p>
+                      {c.detail ? (
+                        <p className="truncate text-xs text-muted-foreground">{c.detail}</p>
+                      ) : null}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </SectionPanel>
+        );
+      }
       case 'activity':
         return (
           <SectionPanel
             handle={handle}
+            dense={dense}
             title="Attività recente"
             icon={<Activity className="h-4 w-4" />}
           >
@@ -469,7 +834,7 @@ export function DashboardView() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className={cn(dense ? 'space-y-4' : 'space-y-6')}>
       <header className="flex flex-wrap items-center gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2.5">
@@ -478,10 +843,30 @@ export function DashboardView() {
           </div>
           <p className="mt-0.5 text-sm text-muted-foreground">
             Stato del server AnimeUnion
-            {health.data?.version ? ` · v${health.data.version}` : ''} · trascina ⠿ per riordinare
+            {health.data?.version ? ` · v${health.data.version}` : ''}
           </p>
         </div>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <form onSubmit={onSearch} className="relative hidden md:block">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Cerca un anime…"
+              aria-label="Cerca un anime nel catalogo"
+              className="h-9 w-52 rounded-lg border bg-background pl-8 pr-3 text-sm outline-none transition-colors focus:border-primary"
+            />
+          </form>
+          <Button
+            variant={editing ? 'default' : 'outline'}
+            size="sm"
+            className="gap-1.5"
+            onClick={() => setEditing((v) => !v)}
+          >
+            <SlidersHorizontal className="h-4 w-4" />
+            {editing ? 'Fatto' : 'Personalizza'}
+          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -503,8 +888,126 @@ export function DashboardView() {
         </div>
       </header>
 
+      {editing ? (
+        <div className="space-y-4 rounded-xl border bg-card p-4">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <h2 className="text-sm font-semibold">Personalizza dashboard</h2>
+              <p className="text-xs text-muted-foreground">
+                Trascina ⠿ per riordinare. Il layout è salvato sul server e ti segue tra
+                dispositivi.
+              </p>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1.5"
+              onClick={() => saveLayout(DEFAULT_LAYOUT)}
+            >
+              <RotateCcw className="h-4 w-4" />
+              Ripristina
+            </Button>
+          </div>
+
+          <div>
+            <p className="mb-1.5 text-xs font-medium text-muted-foreground">Densità</p>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant={dense ? 'outline' : 'default'}
+                onClick={() => saveLayout({ ...layout, density: 'comfortable' })}
+              >
+                Comoda
+              </Button>
+              <Button
+                size="sm"
+                variant={dense ? 'default' : 'outline'}
+                onClick={() => saveLayout({ ...layout, density: 'compact' })}
+              >
+                Compatta
+              </Button>
+            </div>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <p className="mb-1.5 text-xs font-medium text-muted-foreground">Widget</p>
+              <ul className="space-y-1">
+                {layout.widgets.map((id) => (
+                  <li key={id} className="flex items-center gap-2 text-sm">
+                    <button
+                      type="button"
+                      onClick={() => toggleHidden(id)}
+                      aria-label={hidden.has(id) ? 'Mostra' : 'Nascondi'}
+                      className="rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                    >
+                      {hidden.has(id) ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </button>
+                    <span
+                      className={cn(
+                        'min-w-0 flex-1 truncate',
+                        hidden.has(id) && 'text-muted-foreground line-through',
+                      )}
+                    >
+                      {WIDGET_LABELS[id] ?? id}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => toggleWide(id)}
+                      aria-label={wide.has(id) ? 'Larghezza normale' : 'Larghezza doppia'}
+                      title="1 o 2 colonne"
+                      className="rounded p-1 transition-colors hover:bg-accent"
+                    >
+                      <Columns2
+                        className={cn(
+                          'h-4 w-4',
+                          wide.has(id) ? 'text-primary' : 'text-muted-foreground',
+                        )}
+                      />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <p className="mb-1.5 text-xs font-medium text-muted-foreground">Bande</p>
+              <ul className="space-y-1">
+                {layout.bands.map((id) => (
+                  <li key={id} className="flex items-center gap-2 text-sm">
+                    <button
+                      type="button"
+                      onClick={() => toggleHidden(id)}
+                      aria-label={hidden.has(id) ? 'Mostra' : 'Nascondi'}
+                      className="rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                    >
+                      {hidden.has(id) ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </button>
+                    <span
+                      className={cn(
+                        'min-w-0 flex-1 truncate',
+                        hidden.has(id) && 'text-muted-foreground line-through',
+                      )}
+                    >
+                      {BAND_LABELS[id] ?? id}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {/* KPI: il cuore del centro di download */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className={cn('grid grid-cols-2 lg:grid-cols-4', dense ? 'gap-3' : 'gap-4')}>
         <StatCard
           label="In download"
           value={downloading}
@@ -542,15 +1045,15 @@ export function DashboardView() {
         />
       </div>
 
-      {/* Widget di stato: griglia riordinabile */}
+      {/* Widget di stato: griglia riordinabile + larghezza personalizzabile */}
       <Sortable
-        ids={widgetOrder}
-        onReorder={setWidgetOrder}
+        ids={visibleWidgets}
+        onReorder={reorderWidgets}
         strategy={rectSortingStrategy}
-        className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
+        className={cn('grid sm:grid-cols-2 xl:grid-cols-3', dense ? 'gap-3' : 'gap-4')}
       >
-        {widgetOrder.map((id) => (
-          <SortableItem key={id} id={id}>
+        {visibleWidgets.map((id) => (
+          <SortableItem key={id} id={id} className={wide.has(id) ? 'sm:col-span-2' : undefined}>
             {(handle) => renderWidget(id, handle)}
           </SortableItem>
         ))}
@@ -558,12 +1061,12 @@ export function DashboardView() {
 
       {/* Bande anime (ibrido): lista riordinabile */}
       <Sortable
-        ids={bandOrder}
-        onReorder={setBandOrder}
+        ids={visibleBands}
+        onReorder={reorderBands}
         strategy={verticalListSortingStrategy}
-        className="space-y-8 border-t pt-8"
+        className={cn('border-t', dense ? 'space-y-5 pt-6' : 'space-y-8 pt-8')}
       >
-        {bandOrder.map((id) => (
+        {visibleBands.map((id) => (
           <SortableItem key={id} id={id}>
             {(handle) => renderBand(id, handle)}
           </SortableItem>

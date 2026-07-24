@@ -130,6 +130,18 @@ export async function freeDiskBytes(path: string): Promise<number | null> {
   }
 }
 
+/** Byte liberi e totali del filesystem che contiene `path` (null se non determinabili). */
+export async function diskUsage(
+  path: string,
+): Promise<{ free: number | null; total: number | null }> {
+  try {
+    const stats = await statfs(path);
+    return { free: stats.bavail * stats.bsize, total: stats.blocks * stats.bsize };
+  } catch {
+    return { free: null, total: null };
+  }
+}
+
 /**
  * Rimuove i file temporanei `.part.<queueId>` rimasti sotto `rootPath` (es. dopo un crash a metà
  * download). Se `keepQueueIds` è passato, conserva i `.part` dei job ancora riavviabili (per il

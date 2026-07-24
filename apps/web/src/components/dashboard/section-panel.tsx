@@ -11,6 +11,7 @@ export function SectionPanel({
   icon,
   action,
   handle,
+  dense,
   children,
   bodyClassName,
   className,
@@ -21,6 +22,8 @@ export function SectionPanel({
   action?: ReactNode;
   /** Impugnatura di trascinamento (drag handle) mostrata a inizio header. */
   handle?: ReactNode;
+  /** Densità compatta: padding ridotti. */
+  dense?: boolean;
   children: ReactNode;
   bodyClassName?: string;
   className?: string;
@@ -29,7 +32,7 @@ export function SectionPanel({
   return (
     <section className={cn('overflow-hidden rounded-xl border bg-card', className)}>
       {hasHeader ? (
-        <header className="flex items-center gap-2.5 border-b px-4 py-3">
+        <header className={cn('flex items-center gap-2.5 border-b px-4', dense ? 'py-2' : 'py-3')}>
           {handle ? <div className="-ml-1 shrink-0">{handle}</div> : null}
           {icon ? <div className="shrink-0 text-muted-foreground">{icon}</div> : null}
           <div className="min-w-0">
@@ -41,7 +44,7 @@ export function SectionPanel({
           {action ? <div className="ml-auto shrink-0">{action}</div> : null}
         </header>
       ) : null}
-      <div className={cn('p-4', bodyClassName)}>{children}</div>
+      <div className={cn(dense ? 'p-3' : 'p-4', bodyClassName)}>{children}</div>
     </section>
   );
 }

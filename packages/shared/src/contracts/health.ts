@@ -8,6 +8,7 @@ export const downloadDirHealthSchema = z.object({
   exists: z.boolean(),
   writable: z.boolean(),
   freeBytes: z.number().nullable(),
+  totalBytes: z.number().nullable(),
 });
 export type DownloadDirHealth = z.infer<typeof downloadDirHealthSchema>;
 

@@ -87,6 +87,10 @@ export const appConfigSchema = z.object({
   jellyfinAutoRefresh: z.boolean().default(false),
   // Personalizzazione della home: ordine e visibilità delle sezioni (vuoto = ordine di default).
   homeLayout: homeLayoutSchema,
+  // Personalizzazione della dashboard (centro di controllo): ordine/larghezza/visibilità dei widget
+  // e delle bande + densità, serializzati in JSON dal frontend. Vuoto = layout di default. `.catch('')`
+  // così un valore legacy/corrotto non fa fallire il parse di getAll.
+  dashboardLayout: z.string().default('').catch(''),
   // Neural Export (upscale XQ/XQ+ Anime4K via worker GPU esterno). Master off di default.
   neuralExportEnabled: z.boolean().default(false),
   // URL del worker GPU sulla LAN (es. http://192.168.1.50:8787). Vuoto = non configurato.

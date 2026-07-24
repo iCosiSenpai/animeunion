@@ -2,7 +2,7 @@ import { healthStatusSchema } from '@animeunion/shared';
 import { sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { schema } from '../db';
-import { freeDiskBytes } from '../lib/download-fs';
+import { diskUsage } from '../lib/download-fs';
 import { APP_VERSION } from '../lib/version';
 import { openProcedure, publicProcedure, router } from '../trpc';
 
@@ -17,7 +17,10 @@ export const healthRouter = router({
   status: publicProcedure.output(healthStatusSchema).query(async ({ ctx }) => {
     const dirsStatus = await ctx.services.config.downloadDirsStatus();
     const dirs = await Promise.all(
-      dirsStatus.map(async (d) => ({ ...d, freeBytes: await freeDiskBytes(d.path) })),
+      dirsStatus.map(async (d) => {
+        const usage = await diskUsage(d.path);
+        return { ...d, freeBytes: usage.free, totalBytes: usage.total };
+      }),
     );
 
     const queue = ctx.services.download.getQueue();

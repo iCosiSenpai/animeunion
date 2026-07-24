@@ -1,7 +1,8 @@
 'use client';
 
 import { LanguageBadge } from '@/components/anime/language-badge';
-import { Badge } from '@/components/ui/badge';
+import { StatusPill } from '@/components/dashboard/status-pill';
+import type { StatusTone } from '@/components/dashboard/tone';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { trpc } from '@/lib/trpc';
@@ -41,15 +42,14 @@ export const STATUS_LABELS: Record<DownloadStatus, string> = {
   cancelled: 'Annullato',
 };
 
-const STATUS_VARIANT: Record<DownloadStatus, 'default' | 'secondary' | 'destructive' | 'outline'> =
-  {
-    queued: 'outline',
-    downloading: 'default',
-    processing: 'default',
-    completed: 'secondary',
-    failed: 'destructive',
-    cancelled: 'outline',
-  };
+const STATUS_TONE: Record<DownloadStatus, StatusTone> = {
+  queued: 'neutral',
+  downloading: 'info',
+  processing: 'primary',
+  completed: 'success',
+  failed: 'danger',
+  cancelled: 'neutral',
+};
 
 const ACTIVE: DownloadStatus[] = ['queued', 'downloading', 'processing'];
 
@@ -160,7 +160,11 @@ export function DownloadGroupCard({
                 {group.animeTitle}
               </Link>
               <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                <Badge variant={STATUS_VARIANT[status]}>{STATUS_LABELS[status]}</Badge>
+                <StatusPill
+                  tone={STATUS_TONE[status]}
+                  label={STATUS_LABELS[status]}
+                  pulse={status === 'downloading' || status === 'processing'}
+                />
                 <span>
                   {group.completed}/{total} {isMovie ? 'file' : 'episodi'}
                 </span>
@@ -340,7 +344,7 @@ function EpisodeRow({
           </span>
         </div>
       ) : item.status === 'completed' ? (
-        <span className="flex shrink-0 items-center gap-1 whitespace-nowrap text-xs text-green-500">
+        <span className="flex shrink-0 items-center gap-1 whitespace-nowrap text-xs text-success">
           <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
           {item.totalBytes ? formatBytes(item.totalBytes) : 'OK'}
         </span>
@@ -350,9 +354,11 @@ function EpisodeRow({
           <span className="truncate">{item.error ?? 'Errore'}</span>
         </span>
       ) : (
-        <Badge variant="outline" className="shrink-0">
-          {STATUS_LABELS[item.status]}
-        </Badge>
+        <StatusPill
+          tone={STATUS_TONE[item.status]}
+          label={STATUS_LABELS[item.status]}
+          className="shrink-0"
+        />
       )}
 
       {/* Velocita'/ETA: solo da sm in su, su mobile lo spazio non basta (causava overflow orizzontale). */}

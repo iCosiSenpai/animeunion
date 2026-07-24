@@ -1,8 +1,9 @@
 'use client';
 
+import { StatCard } from '@/components/dashboard/stat-card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import {
   Dialog,
   DialogContent,
@@ -111,29 +112,28 @@ function StatsCards({
   isLoading: boolean;
 }) {
   const items = [
-    { icon: Play, label: 'Episodi scaricati', value: stats?.totalEpisodes ?? 0 },
-    { icon: HardDrive, label: 'Spazio occupato', value: formatBytes(stats?.totalSizeBytes ?? 0) },
-    { icon: Tv, label: 'Serie', value: stats?.totalSeries ?? 0 },
+    {
+      icon: <Play className="h-5 w-5" />,
+      label: 'Episodi scaricati',
+      value: stats?.totalEpisodes ?? 0,
+    },
+    {
+      icon: <HardDrive className="h-5 w-5" />,
+      label: 'Spazio occupato',
+      value: formatBytes(stats?.totalSizeBytes ?? 0),
+    },
+    { icon: <Tv className="h-5 w-5" />, label: 'Serie', value: stats?.totalSeries ?? 0 },
   ];
 
   return (
     <div className="grid gap-4 sm:grid-cols-3">
       {items.map((item) => (
-        <Card key={item.label}>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              {item.label}
-            </CardTitle>
-            <item.icon className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <Skeleton className="h-7 w-16" />
-            ) : (
-              <div className="text-2xl font-bold">{item.value}</div>
-            )}
-          </CardContent>
-        </Card>
+        <StatCard
+          key={item.label}
+          label={item.label}
+          value={isLoading ? '—' : item.value}
+          icon={item.icon}
+        />
       ))}
     </div>
   );

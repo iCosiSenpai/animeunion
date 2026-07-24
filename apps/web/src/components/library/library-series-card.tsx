@@ -228,11 +228,11 @@ export function LibrarySeriesCard({ group }: { group: LibraryGroup }) {
                     {seasonCount} stagioni
                   </Badge>
                 ) : null}
-                <span className="flex items-center gap-1">
+                <span className="flex items-center gap-1 tabular-nums">
                   <Eye className="h-3 w-3" />
                   {group.totalEpisodes} episod{group.totalEpisodes === 1 ? 'io' : 'i'}
                 </span>
-                <span className="flex items-center gap-1">
+                <span className="flex items-center gap-1 tabular-nums">
                   <HardDrive className="h-3 w-3" />
                   {formatBytes(group.totalSizeBytes)}
                 </span>
@@ -305,10 +305,10 @@ export function LibrarySeriesCard({ group }: { group: LibraryGroup }) {
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                           <LanguageBadge language={entry.language} />
-                          <span>
+                          <span className="tabular-nums">
                             {entry.episodes.length} episod{entry.episodes.length === 1 ? 'io' : 'i'}
                           </span>
-                          <span>{formatBytes(entrySize(entry))}</span>
+                          <span className="tabular-nums">{formatBytes(entrySize(entry))}</span>
                         </div>
                         <div className="flex shrink-0 items-center gap-1">
                           {entryExternal > 0 ? (
@@ -394,8 +394,12 @@ export function LibrarySeriesCard({ group }: { group: LibraryGroup }) {
                               ) : null}
                             </div>
                             <div className="flex shrink-0 items-center gap-3 text-xs text-muted-foreground">
-                              {ep.fileSize != null ? <span>{formatBytes(ep.fileSize)}</span> : null}
-                              {ep.downloadedAt ? <span>{formatDate(ep.downloadedAt)}</span> : null}
+                              {ep.fileSize != null ? (
+                                <span className="tabular-nums">{formatBytes(ep.fileSize)}</span>
+                              ) : null}
+                              {ep.downloadedAt ? (
+                                <span className="tabular-nums">{formatDate(ep.downloadedAt)}</span>
+                              ) : null}
                               {ep.localPath ? (
                                 <TooltipProvider>
                                   <Tooltip>

@@ -1,5 +1,8 @@
 'use client';
 
+import { StatCard } from '@/components/dashboard/stat-card';
+import { StatusPill } from '@/components/dashboard/status-pill';
+import type { StatusTone } from '@/components/dashboard/tone';
 import { useAnimationsOn } from '@/components/layout/animation-provider';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -8,7 +11,17 @@ import { trpc } from '@/lib/trpc';
 import { useDownloadSummary } from '@/lib/use-download-summary';
 import type { DownloadFilter, DownloadGroupSummary } from '@animeunion/shared';
 import { AnimatePresence, motion } from 'framer-motion';
-import { AlertCircle, Download, Pause, Play, RefreshCw, Trash2 } from 'lucide-react';
+import {
+  AlertCircle,
+  AlertTriangle,
+  CheckCircle2,
+  Download,
+  ListChecks,
+  Pause,
+  Play,
+  RefreshCw,
+  Trash2,
+} from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { DownloadGroupCard } from './download-group-card';
@@ -113,19 +126,30 @@ export function DownloadsView() {
     failed: (counts?.failed ?? 0) + (counts?.cancelled ?? 0),
   };
 
+  const downloading = (counts?.downloading ?? 0) + (counts?.processing ?? 0);
+  const queuedCount = counts?.queued ?? 0;
+  const failedCount = (counts?.failed ?? 0) + (counts?.cancelled ?? 0);
+  let queueTone: StatusTone = 'neutral';
+  let queueLabel = 'Ferma';
+  if (isPaused) {
+    queueTone = 'warning';
+    queueLabel = 'In pausa';
+  } else if (downloading > 0) {
+    queueTone = 'info';
+    queueLabel = 'In download';
+  } else if (queuedCount > 0) {
+    queueTone = 'primary';
+    queueLabel = 'In coda';
+  }
+
   const groups = (summary?.groups ?? []).filter((g) => groupMatchesFilter(g, filter));
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div className="space-y-1">
-          <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary/80">
-            Attività
-          </p>
-          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Download</h1>
-          <p className="text-sm text-muted-foreground">
-            Un riquadro per anime: avanzamento, velocità ed episodi raggruppati.
-          </p>
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2.5">
+          <h1 className="text-2xl font-semibold tracking-tight">Download</h1>
+          <StatusPill tone={queueTone} label={queueLabel} pulse={downloading > 0} />
         </div>
 
         {totalCount > 0 ? (
@@ -192,6 +216,35 @@ export function DownloadsView() {
           </div>
         ) : null}
       </header>
+
+      {totalCount > 0 ? (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <StatCard
+            label="In download"
+            value={downloading}
+            icon={<Download className="h-5 w-5" />}
+            tone={downloading > 0 ? 'info' : 'neutral'}
+          />
+          <StatCard
+            label="In coda"
+            value={queuedCount}
+            icon={<ListChecks className="h-5 w-5" />}
+            tone={queuedCount > 0 ? 'primary' : 'neutral'}
+          />
+          <StatCard
+            label="Falliti"
+            value={failedCount}
+            icon={<AlertTriangle className="h-5 w-5" />}
+            tone={failedCount > 0 ? 'danger' : 'neutral'}
+          />
+          <StatCard
+            label="Completati"
+            value={completedCount}
+            icon={<CheckCircle2 className="h-5 w-5" />}
+            tone={completedCount > 0 ? 'success' : 'neutral'}
+          />
+        </div>
+      ) : null}
 
       {isPaused && totalCount > 0 ? (
         <div className="flex items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-600">

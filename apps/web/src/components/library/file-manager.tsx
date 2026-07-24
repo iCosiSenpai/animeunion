@@ -355,7 +355,7 @@ function FolderActionsDialog({
         <div className="space-y-3">
           <div className="rounded-md border p-3 text-sm">
             <p className="break-words font-medium">{picked.title}</p>
-            <p className="break-all text-xs text-muted-foreground">{folder.path}</p>
+            <p className="select-text break-all text-xs text-muted-foreground">{folder.path}</p>
           </div>
           <div className="flex items-start gap-2 rounded-md border border-primary/30 bg-primary/5 p-2.5 text-xs text-muted-foreground">
             <FileSymlink className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
@@ -416,7 +416,7 @@ function FolderActionsDialog({
         <div className="space-y-3">
           <div className="rounded-md border p-3 text-sm">
             <p className="break-words font-medium">{picked.title}</p>
-            <p className="break-all text-xs text-muted-foreground">{folder.path}</p>
+            <p className="select-text break-all text-xs text-muted-foreground">{folder.path}</p>
           </div>
           {multiSeason ? (
             <div className="flex items-start gap-2 rounded-md border border-primary/30 bg-primary/5 p-2.5 text-xs text-muted-foreground">
@@ -496,7 +496,7 @@ function TrashDialog({ onClose, onChanged }: { onClose: () => void; onChanged: (
               <li key={e.id} className="flex items-center justify-between gap-2 p-2 text-sm">
                 <div className="min-w-0">
                   <p className="truncate font-medium">{e.name}</p>
-                  <p className="truncate font-mono text-xs text-muted-foreground">
+                  <p className="select-text truncate font-mono text-xs text-muted-foreground">
                     {e.originalPath}
                   </p>
                   <p className="text-xs text-muted-foreground">
@@ -686,7 +686,7 @@ function MoveDialog({
               <ChevronLeft className="h-4 w-4" /> Su
             </Button>
           ) : null}
-          <p className="truncate font-mono text-xs text-muted-foreground">
+          <p className="select-text truncate font-mono text-xs text-muted-foreground">
             {atRoots ? 'Le tue cartelle' : data?.path}
           </p>
         </div>

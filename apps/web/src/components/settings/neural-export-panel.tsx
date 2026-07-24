@@ -92,7 +92,7 @@ function JobRow({
         </div>
       )}
       {job.state === 'error' && job.error && (
-        <p className="mt-1.5 text-xs text-destructive">{job.error}</p>
+        <p className="mt-1.5 select-text text-xs text-destructive">{job.error}</p>
       )}
     </li>
   );

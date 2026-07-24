@@ -125,7 +125,7 @@ export function SocialLogin() {
         <p className="text-sm text-muted-foreground">
           Apri la pagina di accesso e conferma questo codice:
         </p>
-        <p className="font-mono text-2xl font-bold tracking-widest">{flow.userCode}</p>
+        <p className="select-text font-mono text-2xl font-bold tracking-widest">{flow.userCode}</p>
         <a
           href={flow.verificationUriComplete}
           target="_blank"

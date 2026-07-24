@@ -179,7 +179,7 @@ export function DiagnosticsView() {
                         {d.freeBytes != null ? `${formatBytes(d.freeBytes)} liberi` : '—'}
                       </span>
                     </div>
-                    <p className="mt-1 flex items-center gap-1 break-all font-mono text-xs text-muted-foreground">
+                    <p className="mt-1 flex select-text items-center gap-1 break-all font-mono text-xs text-muted-foreground">
                       <FolderOpen className="h-3 w-3 shrink-0" />
                       {d.path || '(non impostata)'}
                     </p>

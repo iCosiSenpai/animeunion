@@ -351,7 +351,7 @@ function EpisodeRow({
       ) : item.status === 'failed' ? (
         <span className="flex max-w-[8rem] shrink-0 items-center gap-1 truncate text-xs text-destructive sm:max-w-[12rem]">
           <XCircle className="h-3.5 w-3.5 shrink-0" />
-          <span className="truncate">{item.error ?? 'Errore'}</span>
+          <span className="select-text truncate">{item.error ?? 'Errore'}</span>
         </span>
       ) : (
         <StatusPill

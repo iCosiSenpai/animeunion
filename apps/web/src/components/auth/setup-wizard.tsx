@@ -698,7 +698,7 @@ export function SetupWizard() {
                     <dt className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                       Cartella principale
                     </dt>
-                    <dd className="mt-1 break-all font-mono text-xs text-foreground">
+                    <dd className="mt-1 select-text break-all font-mono text-xs text-foreground">
                       {paths.seriesPathSub || 'Da configurare'}
                     </dd>
                   </div>

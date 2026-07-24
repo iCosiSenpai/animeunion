@@ -183,7 +183,7 @@ export function ClassifyFields({
 
       <div className="space-y-1.5">
         <p className="text-sm font-medium">Verrà salvato in</p>
-        <p className="w-full whitespace-pre-wrap break-all rounded-md border bg-muted/40 px-3 py-2 font-mono text-xs text-muted-foreground">
+        <p className="w-full select-text whitespace-pre-wrap break-all rounded-md border bg-muted/40 px-3 py-2 font-mono text-xs text-muted-foreground">
           {preview.isFetching && !preview.data ? 'Calcolo…' : (preview.data?.path ?? '—')}
         </p>
       </div>

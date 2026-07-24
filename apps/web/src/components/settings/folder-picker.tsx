@@ -72,7 +72,7 @@ export function FolderInput({
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Scegli una cartella</DialogTitle>
-            <DialogDescription className="break-all font-mono text-xs">
+            <DialogDescription className="select-text break-all font-mono text-xs">
               {browseQuery.data?.path ?? '…'}
             </DialogDescription>
           </DialogHeader>

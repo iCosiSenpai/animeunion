@@ -402,7 +402,9 @@ function GoogleDriveSection() {
               ) : (
                 <p>Nessun upload ancora in questa sessione.</p>
               )}
-              {st?.lastError && <p className="text-destructive">Ultimo errore: {st.lastError}</p>}
+              {st?.lastError && (
+                <p className="select-text text-destructive">Ultimo errore: {st.lastError}</p>
+              )}
             </div>
           </div>
         </div>

@@ -41,6 +41,11 @@ export const appConfigSchema = z.object({
   moviePathDub: z.string().default(''),
   language: languageSchema.default('SUB_ITA'),
   maxConcurrent: z.number().int().min(1).max(3).default(1),
+  // Limite di velocità di download COMPLESSIVO (somma di tutti i download in parallelo), in KB/s
+  // (1 KB = 1024 byte, coerente con formatBytes). 0 = illimitato (default) → nessun overhead. Lo
+  // applica un token-bucket condiviso nel motore di download; le modifiche valgono sui download già
+  // in corso entro ~1s. Non è un perk Premium: è un tetto per chi ha poca banda disponibile.
+  downloadSpeedLimitKbps: z.number().int().min(0).default(0),
   catalogSyncHours: z.number().int().positive().default(24),
   autoDownload: z.boolean().default(false),
   favoritesSyncMinutes: z.number().int().positive().default(10),

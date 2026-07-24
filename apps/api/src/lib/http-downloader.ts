@@ -3,6 +3,7 @@ import { rm } from 'node:fs/promises';
 import { type Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { request } from 'undici';
+import type { BandwidthLimiter } from './bandwidth-limiter';
 
 /**
  * Downloader MP4 basato su undici. NON usa l'http-client esistente (che fa
@@ -74,6 +75,12 @@ export interface DownloadOptions {
   stallTimeoutMs?: number;
   /** Byte già presenti su disco: se >0 prova a riprendere via header Range. */
   resumeFrom?: number;
+  /**
+   * Limitatore di banda CONDIVISO tra tutti i download: se presente, ogni chunk attende il proprio
+   * slot prima di essere scritto (throttle aggregato via backpressure di `pipeline`). Assente o
+   * limite 0 = nessun throttle.
+   */
+  rateLimiter?: BandwidthLimiter;
 }
 
 const DEFAULT_PROGRESS_INTERVAL_MS = 200;
@@ -130,6 +137,7 @@ export async function downloadToFile(options: DownloadOptions): Promise<Download
     stallTimeoutMs = DEFAULT_STALL_TIMEOUT_MS,
     headers,
     resumeFrom = 0,
+    rateLimiter,
   } = options;
 
   // Controller interno: abortito sia dal segnale esterno (cancel utente) sia dallo stall watchdog.
@@ -245,6 +253,19 @@ export async function downloadToFile(options: DownloadOptions): Promise<Download
           lastEmit = now;
           onProgress({ bytesDownloaded, totalBytes });
         }
+      }
+      if (rateLimiter) {
+        // Throttle aggregato: attende lo slot di banda condiviso, poi passa il chunk a valle
+        // (rallenta davvero la rete via backpressure di pipeline). Il ritardo è "nostro", quindi
+        // riallinea lastActivity per non far scattare il watchdog di stallo a limiti molto bassi.
+        rateLimiter.take(chunk.byteLength, internal.signal).then(
+          () => {
+            lastActivity = Date.now();
+            cb(null, chunk);
+          },
+          (error) => cb(error instanceof Error ? error : new Error(String(error))),
+        );
+        return;
       }
       cb(null, chunk);
     },

@@ -9,6 +9,7 @@ import type { CatalogService } from '../services/catalog-service';
 import type { ConfigService } from '../services/config-service';
 import type { FileMutationCoordinator } from '../services/file-mutation-coordinator';
 import type { RenamerService } from '../services/renamer-service';
+import { createBandwidthLimiter } from './bandwidth-limiter';
 import { atomicMove, ensureDir, freeDiskBytes, sweepPartFiles, tempPath } from './download-fs';
 import {
   DownloadAbortedError,
@@ -148,6 +149,14 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
     string,
     { lastBytes: number; lastTs: number; lastWriteTs: number; speed: number }
   >();
+
+  // Limitatore di banda CONDIVISO tra tutti i download in corso: il tetto (config
+  // `downloadSpeedLimitKbps`, KB/s, 0 = illimitato) è aggregato. Un'unica istanza, passata a ogni
+  // downloadToFile. Rilegge la config con cache ~1s, quindi un cambio si applica ai download già in
+  // corso; a 0 è un no-op senza overhead.
+  const bandwidthLimiter = createBandwidthLimiter(
+    () => config.get('downloadSpeedLimitKbps') * 1024,
+  );
 
   let timer: NodeJS.Timeout | null = null;
   let startup: Promise<void> | null = null;
@@ -389,6 +398,7 @@ export function createDownloadWorker(deps: DownloadWorkerDeps): DownloadWorker {
         signal: controller.signal,
         onProgress,
         resumeFrom,
+        rateLimiter: bandwidthLimiter,
       });
 
       // Verifica integrità opt-in: decodifica il file con ffmpeg prima di finalizzarlo. Se fallisce,

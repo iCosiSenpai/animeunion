@@ -6,22 +6,38 @@ import type { StatusTone } from '@/components/dashboard/tone';
 import { useAnimationsOn } from '@/components/layout/animation-provider';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { QueryError } from '@/components/ui/query-error';
 import { trpc } from '@/lib/trpc';
 import { useDownloadSummary } from '@/lib/use-download-summary';
+import { formatDuration, formatSpeed } from '@/lib/utils';
 import type { DownloadFilter, DownloadGroupSummary } from '@animeunion/shared';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   AlertCircle,
   AlertTriangle,
   CheckCircle2,
+  ChevronDown,
   Download,
+  Gauge,
   ListChecks,
   Pause,
   Play,
   RefreshCw,
+  Timer,
   Trash2,
+  Zap,
 } from 'lucide-react';
+import Link from 'next/link';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { DownloadGroupCard } from './download-group-card';
@@ -31,6 +47,16 @@ const FILTERS: { key: DownloadFilter; label: string }[] = [
   { key: 'active', label: 'In corso' },
   { key: 'completed', label: 'Completati' },
   { key: 'failed', label: 'Errori' },
+];
+
+// Preset rapidi del limite di banda COMPLESSIVO (KB/s, 1 KB = 1024 B). 0 = illimitata. La versione
+// "precisa" (valore libero in MB/s) vive nelle Impostazioni: qui è solo scelta veloce a un tap.
+const SPEED_PRESETS: { kbps: number; label: string }[] = [
+  { kbps: 0, label: 'Illimitata' },
+  { kbps: 1024, label: '1 MB/s' },
+  { kbps: 3072, label: '3 MB/s' },
+  { kbps: 5120, label: '5 MB/s' },
+  { kbps: 10240, label: '10 MB/s' },
 ];
 
 function groupMatchesFilter(group: DownloadGroupSummary, filter: DownloadFilter): boolean {
@@ -48,6 +74,23 @@ export function DownloadsView() {
   const { query: summaryQuery, counts, activeCount, hasFailed } = useDownloadSummary();
 
   const pausedQuery = trpc.download.isPaused.useQuery();
+
+  // Limite di velocità complessivo (config): lettura leggera + set rapido dai preset. Non è un
+  // clone del form Impostazioni (che è a valore libero), qui è solo scelta veloce.
+  const configQuery = trpc.config.getAll.useQuery(undefined, { staleTime: 60_000 });
+  const speedLimitKbps = configQuery.data?.downloadSpeedLimitKbps ?? 0;
+  const speedLimitBps = speedLimitKbps * 1024;
+  const setLimitMutation = trpc.config.set.useMutation({
+    onSuccess: () => {
+      void utils.config.getAll.invalidate();
+    },
+  });
+  const setSpeedLimit = (kbps: number) => {
+    setLimitMutation.mutate({ key: 'downloadSpeedLimitKbps', value: kbps });
+    toast.success(
+      kbps > 0 ? `Limite di banda: ${formatSpeed(kbps * 1024)}` : 'Velocità di download illimitata',
+    );
+  };
 
   // Cancel/retry/priorità toccano sia il riassunto sia le righe espanse.
   const invalidate = () => {
@@ -144,6 +187,27 @@ export function DownloadsView() {
 
   const groups = (summary?.groups ?? []).filter((g) => groupMatchesFilter(g, filter));
 
+  // Metriche live COMPLESSIVE (extra usabilità): velocità aggregata, ETA globale e avanzamento
+  // dell'intera coda. Calcolate su tutti i gruppi (non filtrati) per riflettere lo stato reale.
+  const activeItems = (summary?.groups ?? []).flatMap((g) => g.activeItems);
+  const liveSpeed = activeItems.reduce(
+    (sum, i) => sum + (i.status === 'downloading' ? (i.speedBps ?? 0) : 0),
+    0,
+  );
+  const remainingBytes = activeItems.reduce(
+    (sum, i) => sum + (i.totalBytes != null ? Math.max(0, i.totalBytes - i.bytesDownloaded) : 0),
+    0,
+  );
+  const globalEta = liveSpeed > 0 && remainingBytes > 0 ? remainingBytes / liveSpeed : null;
+  let overallDone = 0;
+  let overallTotal = 0;
+  for (const g of summary?.groups ?? []) {
+    overallTotal += g.total;
+    overallDone += g.completed + g.activeItems.reduce((sum, i) => sum + i.progress, 0);
+  }
+  const overallProgress = overallTotal > 0 ? Math.min(1, overallDone / overallTotal) : 0;
+  const overallPct = Math.round(overallProgress * 100);
+
   return (
     <div className="space-y-6">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -154,6 +218,35 @@ export function DownloadsView() {
 
         {totalCount > 0 ? (
           <div className="flex flex-wrap gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-1.5">
+                  <Gauge className="h-4 w-4" />
+                  <span className="tabular-nums">
+                    {speedLimitKbps > 0 ? formatSpeed(speedLimitBps) : 'Illimitata'}
+                  </span>
+                  <ChevronDown className="h-3.5 w-3.5 opacity-60" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel>Limite di velocità</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuRadioGroup
+                  value={String(speedLimitKbps)}
+                  onValueChange={(v) => setSpeedLimit(Number(v))}
+                >
+                  {SPEED_PRESETS.map((p) => (
+                    <DropdownMenuRadioItem key={p.kbps} value={String(p.kbps)}>
+                      {p.label}
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link href="/settings?section=download">Impostazioni avanzate…</Link>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             {isPaused ? (
               <Button
                 variant="outline"
@@ -250,6 +343,37 @@ export function DownloadsView() {
         <div className="flex items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-600">
           <Pause className="h-4 w-4" />
           Coda in pausa: i download attivi finiranno, ma non partiranno nuovi job.
+        </div>
+      ) : null}
+
+      {activeCount > 0 ? (
+        <div className="space-y-2 rounded-xl border bg-card p-4">
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-sm">
+            <div className="flex items-center gap-4">
+              <span className="flex items-center gap-1.5 font-medium tabular-nums">
+                <Zap className="h-4 w-4 text-info" />
+                {liveSpeed > 0 ? formatSpeed(liveSpeed) : '—'}
+                {speedLimitKbps > 0 ? (
+                  <span className="font-normal text-muted-foreground">
+                    / {formatSpeed(speedLimitBps)}
+                  </span>
+                ) : null}
+              </span>
+              {globalEta ? (
+                <span className="flex items-center gap-1.5 tabular-nums text-muted-foreground">
+                  <Timer className="h-4 w-4" />
+                  {formatDuration(globalEta)}
+                </span>
+              ) : null}
+            </div>
+            <span className="tabular-nums text-muted-foreground">{overallPct}% completato</span>
+          </div>
+          <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+            <div
+              className="h-full rounded-full bg-primary transition-all"
+              style={{ width: `${overallProgress * 100}%` }}
+            />
+          </div>
         </div>
       ) : null}
 

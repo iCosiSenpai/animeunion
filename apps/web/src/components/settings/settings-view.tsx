@@ -33,7 +33,7 @@ import {
 import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { trpc } from '@/lib/trpc';
-import { cn } from '@/lib/utils';
+import { cn, formatSpeed } from '@/lib/utils';
 import { type AppConfig, SECRET_MASK, isPremiumActive } from '@animeunion/shared';
 import {
   Bell,
@@ -61,7 +61,7 @@ import {
 import { useTheme } from 'next-themes';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { type ReactNode, useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 type PathKey = 'seriesPathSub' | 'seriesPathDub' | 'moviePathSub' | 'moviePathDub';
@@ -105,6 +105,70 @@ function Field({
         {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
       </div>
       <div>{children}</div>
+    </div>
+  );
+}
+
+// Controllo "preciso" del limite di velocità (Impostazioni): input libero in MB/s con stato di
+// testo locale, così la digitazione dei decimali è fluida (niente jitter da arrotondamento sul
+// valore controllato). Converte in KB/s (1 KB = 1024 B) per la config; 0 / vuoto = illimitata.
+// KB/s -> testo in MB/s per l'input (module-level: stabile, niente warning sulle dipendenze effect).
+const kbpsToMbText = (kbps: number): string =>
+  kbps > 0 ? String(Number((kbps / 1024).toFixed(2))) : '';
+
+function SpeedLimitField({
+  valueKbps,
+  onChange,
+}: {
+  valueKbps: number;
+  onChange: (kbps: number) => void;
+}) {
+  const [text, setText] = useState(() => kbpsToMbText(valueKbps));
+  const lastKbps = useRef(valueKbps);
+
+  // Ri-sincronizza se il valore persistito cambia da fuori (salvataggio/reset) e diverge dal locale.
+  useEffect(() => {
+    if (valueKbps !== lastKbps.current) {
+      lastKbps.current = valueKbps;
+      setText(kbpsToMbText(valueKbps));
+    }
+  }, [valueKbps]);
+
+  const commit = (raw: string): void => {
+    setText(raw);
+    const mb = Number.parseFloat(raw.replace(',', '.'));
+    const kbps = Number.isFinite(mb) && mb > 0 ? Math.round(mb * 1024) : 0;
+    lastKbps.current = kbps;
+    onChange(kbps);
+  };
+
+  const enabled = valueKbps > 0;
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2">
+        <Input
+          type="number"
+          min={0}
+          step={0.5}
+          inputMode="decimal"
+          className="w-32 tabular-nums"
+          value={text}
+          onChange={(e) => commit(e.target.value)}
+          placeholder="0"
+          aria-label="Limite di velocità di download in MB al secondo, 0 = illimitata"
+        />
+        <span className="text-sm text-muted-foreground">MB/s</span>
+        {enabled ? (
+          <Button variant="ghost" size="sm" className="text-xs" onClick={() => commit('')}>
+            Illimitata
+          </Button>
+        ) : null}
+      </div>
+      <p className="text-xs text-muted-foreground">
+        {enabled
+          ? `Banda totale limitata a ~${formatSpeed(valueKbps * 1024)}, ripartita tra tutti i download in parallelo.`
+          : 'Illimitata: nessun tetto di banda.'}
+      </p>
     </div>
   );
 }
@@ -618,6 +682,15 @@ export function SettingsView() {
               ) : (
                 <PremiumLockedNote fallbackLabel="1 alla volta" />
               )}
+            </Field>
+            <Field
+              label="Limite di velocità"
+              hint="Tetto di banda COMPLESSIVO per i download (somma di tutti quelli in parallelo). 0 = illimitata. Utile con connessioni lente; si applica anche ai download già in corso entro pochi secondi."
+            >
+              <SpeedLimitField
+                valueKbps={draft.downloadSpeedLimitKbps}
+                onChange={(kbps) => update('downloadSpeedLimitKbps', kbps)}
+              />
             </Field>
             <Field
               label="Verifica integrità download"

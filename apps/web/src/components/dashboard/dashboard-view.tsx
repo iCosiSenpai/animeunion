@@ -59,11 +59,10 @@ const WIDGET_IDS = [
   'storage',
   'neural',
   'catalog',
-  'upcoming',
   'doctor',
   'activity',
 ] as const;
-const BAND_IDS = ['follows', 'onair', 'seasonal', 'topRated'] as const;
+const BAND_IDS = ['follows', 'onair', 'upcoming', 'seasonal', 'topRated'] as const;
 
 const WIDGET_LABELS: Record<string, string> = {
   queue: 'Coda download',
@@ -71,13 +70,13 @@ const WIDGET_LABELS: Record<string, string> = {
   storage: 'Archiviazione',
   neural: 'Worker neurale',
   catalog: 'Catalogo',
-  upcoming: 'Prossimi episodi',
   doctor: 'Diagnostica',
   activity: 'Attività recente',
 };
 const BAND_LABELS: Record<string, string> = {
   follows: 'I tuoi seguiti',
   onair: 'In onda oggi',
+  upcoming: 'Prossimi episodi',
   seasonal: 'Da scoprire',
   topRated: 'Più votati',
 };
@@ -163,15 +162,6 @@ const WEEK_ORDER: WeekDay[] = [
   'SABATO',
   'DOMENICA',
 ];
-const DAY_LABELS: Record<WeekDay, string> = {
-  LUNEDI: 'Lun',
-  MARTEDI: 'Mar',
-  MERCOLEDI: 'Mer',
-  GIOVEDI: 'Gio',
-  VENERDI: 'Ven',
-  SABATO: 'Sab',
-  DOMENICA: 'Dom',
-};
 const JS_DAY_TO_WEEKDAY: WeekDay[] = [
   'DOMENICA',
   'LUNEDI',
@@ -416,24 +406,20 @@ export function DashboardView() {
     .sort((a, b) => (b.ep.downloadedAt ?? '').localeCompare(a.ep.downloadedAt ?? ''))
     .slice(0, 5);
 
-  // Prossimi episodi: dalla settimana, a partire da oggi in avanti.
+  // Prossimi episodi (banda): titoli in uscita da oggi in avanti, dedup per id.
   const startIdx = Math.max(0, WEEK_ORDER.indexOf(todayWeekday));
   const byDay = new Map((week.data ?? []).map((e) => [e.day, e.anime]));
-  const upcoming: {
-    anime: AnimeSummary;
-    day: WeekDay;
-    airTime: string | null;
-    episodeNumber: number | null;
-  }[] = [];
-  for (let i = 0; i < 7 && upcoming.length < 5; i++) {
+  const upcomingAnime: AnimeSummary[] = [];
+  const seenUpcoming = new Set<string>();
+  for (let i = 0; i < 7 && upcomingAnime.length < 12; i++) {
     const day = WEEK_ORDER[(startIdx + i) % 7];
     if (!day) {
       continue;
     }
     for (const item of byDay.get(day) ?? []) {
-      upcoming.push({ anime: item, day, airTime: item.airTime, episodeNumber: item.episodeNumber });
-      if (upcoming.length >= 5) {
-        break;
+      if (!seenUpcoming.has(item.id)) {
+        seenUpcoming.add(item.id);
+        upcomingAnime.push(item);
       }
     }
   }
@@ -447,11 +433,7 @@ export function DashboardView() {
             dense={dense}
             title="Coda download"
             icon={<Download className="h-4 w-4" />}
-            action={
-              <Button asChild variant="ghost" size="sm">
-                <Link href="/downloads">Apri</Link>
-              </Button>
-            }
+            href="/downloads"
           >
             <div className="flex flex-wrap gap-2">
               <StatusPill
@@ -472,11 +454,7 @@ export function DashboardView() {
             dense={dense}
             title="Ultimi scaricati"
             icon={<DownloadCloud className="h-4 w-4" />}
-            action={
-              <Button asChild variant="ghost" size="sm">
-                <Link href="/library">Libreria</Link>
-              </Button>
-            }
+            href="/library"
           >
             {library.isLoading ? (
               <p className="text-sm text-muted-foreground">Carico…</p>
@@ -520,6 +498,7 @@ export function DashboardView() {
             dense={dense}
             title="Archiviazione"
             icon={<HardDrive className="h-4 w-4" />}
+            href="/settings"
           >
             {dirs.length === 0 ? (
               <p className="text-sm text-muted-foreground">
@@ -578,11 +557,7 @@ export function DashboardView() {
             dense={dense}
             title="Worker neurale"
             icon={<Cpu className="h-4 w-4" />}
-            action={
-              <Button asChild variant="ghost" size="sm">
-                <Link href="/settings?section=downloadNeurale">Gestisci</Link>
-              </Button>
-            }
+            href="/settings?section=downloadNeurale"
           >
             <div className="flex items-center justify-between gap-2">
               <span className="text-sm text-muted-foreground">Stato</span>
@@ -622,6 +597,7 @@ export function DashboardView() {
             dense={dense}
             title="Catalogo"
             icon={<Library className="h-4 w-4" />}
+            href="/catalog"
             action={
               <Button
                 variant="ghost"
@@ -655,58 +631,6 @@ export function DashboardView() {
             </div>
           </SectionPanel>
         );
-      case 'upcoming':
-        return (
-          <SectionPanel
-            handle={handle}
-            dense={dense}
-            title="Prossimi episodi"
-            icon={<CalendarClock className="h-4 w-4" />}
-            action={
-              <Button asChild variant="ghost" size="sm">
-                <Link href="/calendar">Calendario</Link>
-              </Button>
-            }
-          >
-            {week.isLoading ? (
-              <p className="text-sm text-muted-foreground">Carico…</p>
-            ) : upcoming.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Nessun episodio in programma.</p>
-            ) : (
-              <ul className="space-y-2.5">
-                {upcoming.map((u) => (
-                  <li key={`${u.anime.id}-${u.day}-${u.episodeNumber ?? '?'}`}>
-                    <Link
-                      href={`/catalog/${u.anime.slug}`}
-                      className="group flex items-center gap-3"
-                    >
-                      <span className="relative h-12 w-9 shrink-0 overflow-hidden rounded bg-muted">
-                        {u.anime.coverImage ? (
-                          <img
-                            src={u.anime.coverImage}
-                            alt=""
-                            loading="lazy"
-                            className="h-full w-full object-cover"
-                          />
-                        ) : null}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium transition-colors group-hover:text-primary">
-                          {u.anime.titleIta ?? u.anime.title}
-                        </p>
-                        <p className="truncate text-xs text-muted-foreground">
-                          {u.episodeNumber != null ? `Ep. ${u.episodeNumber} · ` : ''}
-                          {DAY_LABELS[u.day]}
-                          {u.airTime ? ` ${u.airTime}` : ''}
-                        </p>
-                      </div>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </SectionPanel>
-        );
       case 'doctor': {
         const critical = (doctor.data?.checks ?? [])
           .filter((c) => c.status === 'critical')
@@ -718,11 +642,7 @@ export function DashboardView() {
             dense={dense}
             title="Diagnostica"
             icon={<ShieldCheck className="h-4 w-4" />}
-            action={
-              <Button asChild variant="ghost" size="sm">
-                <Link href="/diagnostica">Apri</Link>
-              </Button>
-            }
+            href="/diagnostica"
           >
             <div className="flex items-center justify-between gap-2">
               <span className="text-sm text-muted-foreground">Stato</span>
@@ -809,6 +729,12 @@ export function DashboardView() {
         return (
           <Band handle={handle} icon={CalendarDays} title="In onda oggi" href="/calendar">
             {animeRow(todayAnime, week.isLoading, 'Niente in onda oggi.')}
+          </Band>
+        );
+      case 'upcoming':
+        return (
+          <Band handle={handle} icon={CalendarClock} title="Prossimi episodi" href="/calendar">
+            {animeRow(upcomingAnime, week.isLoading, 'Nessun episodio in programma.')}
           </Band>
         );
       case 'seasonal':

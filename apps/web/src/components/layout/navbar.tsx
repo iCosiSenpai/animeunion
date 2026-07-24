@@ -1,6 +1,5 @@
 'use client';
 
-import { DownloadStatus } from '@/components/downloads/download-status';
 import { NotificationBell } from '@/components/layout/notification-bell';
 import { SearchTrigger } from '@/components/layout/search-trigger';
 import {
@@ -108,11 +107,6 @@ export function Navbar() {
             <SearchTrigger />
           </div>
 
-          {/* Su desktop (md+) la coda è già nella StatusBar sotto il navbar: qui l'icona sarebbe
-              ridondante. La teniamo solo sotto md, dove la StatusBar non c'è. */}
-          <div className="md:hidden">
-            <DownloadStatus />
-          </div>
           <NotificationBell />
           <ProfileBadge />
           <ThemeToggle />

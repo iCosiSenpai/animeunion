@@ -216,98 +216,100 @@ export function DownloadsView() {
           <StatusPill tone={queueTone} label={queueLabel} pulse={downloading > 0} />
         </div>
 
-        {totalCount > 0 ? (
-          <div className="flex flex-wrap gap-2">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-1.5">
-                  <Gauge className="h-4 w-4" />
-                  <span className="tabular-nums">
-                    {speedLimitKbps > 0 ? formatSpeed(speedLimitBps) : 'Illimitata'}
-                  </span>
-                  <ChevronDown className="h-3.5 w-3.5 opacity-60" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuLabel>Limite di velocità</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuRadioGroup
-                  value={String(speedLimitKbps)}
-                  onValueChange={(v) => setSpeedLimit(Number(v))}
+        <div className="flex flex-wrap gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-1.5">
+                <Gauge className="h-4 w-4" />
+                <span className="tabular-nums">
+                  {speedLimitKbps > 0 ? formatSpeed(speedLimitBps) : 'Illimitata'}
+                </span>
+                <ChevronDown className="h-3.5 w-3.5 opacity-60" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel>Limite di velocità</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuRadioGroup
+                value={String(speedLimitKbps)}
+                onValueChange={(v) => setSpeedLimit(Number(v))}
+              >
+                {SPEED_PRESETS.map((p) => (
+                  <DropdownMenuRadioItem key={p.kbps} value={String(p.kbps)}>
+                    {p.label}
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild>
+                <Link href="/settings?section=download">Impostazioni avanzate…</Link>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          {totalCount > 0 ? (
+            <>
+              {isPaused ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => resumeMutation.mutate()}
+                  disabled={resumeMutation.isPending || isWorking}
+                  className="gap-1"
                 >
-                  {SPEED_PRESETS.map((p) => (
-                    <DropdownMenuRadioItem key={p.kbps} value={String(p.kbps)}>
-                      {p.label}
-                    </DropdownMenuRadioItem>
-                  ))}
-                </DropdownMenuRadioGroup>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem asChild>
-                  <Link href="/settings?section=download">Impostazioni avanzate…</Link>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            {isPaused ? (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => resumeMutation.mutate()}
-                disabled={resumeMutation.isPending || isWorking}
-                className="gap-1"
-              >
-                <Play className="h-4 w-4" />
-                Riprendi
-              </Button>
-            ) : (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => pauseMutation.mutate()}
-                disabled={pauseMutation.isPending || isWorking}
-                className="gap-1"
-              >
-                <Pause className="h-4 w-4" />
-                Pausa
-              </Button>
-            )}
-            {activeCount > 0 ? (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => cancelAllMutation.mutate()}
-                disabled={cancelAllMutation.isPending || isWorking}
-                className="gap-1"
-              >
-                <AlertCircle className="h-4 w-4" />
-                Annulla tutti
-              </Button>
-            ) : null}
-            {hasFailed ? (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => retryAllMutation.mutate()}
-                disabled={retryAllMutation.isPending || isWorking}
-                className="gap-1"
-              >
-                <RefreshCw className="h-4 w-4" />
-                Riprova falliti
-              </Button>
-            ) : null}
-            {completedCount > 0 ? (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => clearMutation.mutate()}
-                disabled={clearMutation.isPending || isWorking}
-                className="gap-1"
-              >
-                <Trash2 className="h-4 w-4" />
-                Pulisci completati
-              </Button>
-            ) : null}
-          </div>
-        ) : null}
+                  <Play className="h-4 w-4" />
+                  Riprendi
+                </Button>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => pauseMutation.mutate()}
+                  disabled={pauseMutation.isPending || isWorking}
+                  className="gap-1"
+                >
+                  <Pause className="h-4 w-4" />
+                  Pausa
+                </Button>
+              )}
+              {activeCount > 0 ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => cancelAllMutation.mutate()}
+                  disabled={cancelAllMutation.isPending || isWorking}
+                  className="gap-1"
+                >
+                  <AlertCircle className="h-4 w-4" />
+                  Annulla tutti
+                </Button>
+              ) : null}
+              {hasFailed ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => retryAllMutation.mutate()}
+                  disabled={retryAllMutation.isPending || isWorking}
+                  className="gap-1"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  Riprova falliti
+                </Button>
+              ) : null}
+              {completedCount > 0 ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => clearMutation.mutate()}
+                  disabled={clearMutation.isPending || isWorking}
+                  className="gap-1"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Pulisci completati
+                </Button>
+              ) : null}
+            </>
+          ) : null}
+        </div>
       </header>
 
       {totalCount > 0 ? (

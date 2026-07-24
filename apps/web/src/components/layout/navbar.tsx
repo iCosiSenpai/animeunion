@@ -108,7 +108,11 @@ export function Navbar() {
             <SearchTrigger />
           </div>
 
-          <DownloadStatus />
+          {/* Su desktop (md+) la coda è già nella StatusBar sotto il navbar: qui l'icona sarebbe
+              ridondante. La teniamo solo sotto md, dove la StatusBar non c'è. */}
+          <div className="md:hidden">
+            <DownloadStatus />
+          </div>
           <NotificationBell />
           <ProfileBadge />
           <ThemeToggle />

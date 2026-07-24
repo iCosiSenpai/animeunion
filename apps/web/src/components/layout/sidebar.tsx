@@ -4,7 +4,7 @@ import { SearchTrigger } from '@/components/layout/search-trigger';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { navLinks, primaryNavLinks, secondaryNavLinks } from '@/lib/nav';
+import { NAV_GROUPS, navLinks, primaryNavLinks, secondaryNavLinks } from '@/lib/nav';
 import { useSidebar } from '@/lib/sidebar-store';
 import { cn } from '@/lib/utils';
 import {
@@ -19,6 +19,7 @@ import {
   Heart,
   Home,
   Info,
+  LayoutDashboard,
   Library,
   MoreHorizontal,
   Settings,
@@ -28,7 +29,7 @@ import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 
 const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
-  '/': Home,
+  '/': LayoutDashboard,
   '/catalog': Compass,
   '/follows': Heart,
   '/library': Library,
@@ -136,16 +137,33 @@ export function Sidebar() {
         </div>
 
         <TooltipProvider delayDuration={200}>
-          <nav className="flex flex-1 flex-col gap-1 p-2">
-            {navLinks.map((link) => (
-              <DesktopNavItem
-                key={link.href}
-                href={link.href}
-                label={link.label}
-                active={isActive(pathname, link.href)}
-                expanded={expanded}
-              />
-            ))}
+          <nav className="flex flex-1 flex-col gap-1 overflow-y-auto p-2">
+            {NAV_GROUPS.map((group, gi) => {
+              const links = navLinks.filter((l) => l.group === group.id);
+              if (links.length === 0) {
+                return null;
+              }
+              return (
+                <div key={group.id} className={cn('flex flex-col gap-1', gi > 0 && 'mt-2')}>
+                  {expanded ? (
+                    <p className="px-3 pb-0.5 pt-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">
+                      {group.label}
+                    </p>
+                  ) : gi > 0 ? (
+                    <div className="mx-2 my-1 border-t" />
+                  ) : null}
+                  {links.map((link) => (
+                    <DesktopNavItem
+                      key={link.href}
+                      href={link.href}
+                      label={link.label}
+                      active={isActive(pathname, link.href)}
+                      expanded={expanded}
+                    />
+                  ))}
+                </div>
+              );
+            })}
           </nav>
         </TooltipProvider>
       </aside>

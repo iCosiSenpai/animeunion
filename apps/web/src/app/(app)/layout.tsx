@@ -7,6 +7,7 @@ import { Navbar } from '@/components/layout/navbar';
 import { PageTransition } from '@/components/layout/page-transition';
 import { SetupBanner } from '@/components/layout/setup-banner';
 import { Sidebar } from '@/components/layout/sidebar';
+import { StatusBar } from '@/components/layout/status-bar';
 import type { ReactNode } from 'react';
 
 export default function AppLayout({ children }: { children: ReactNode }) {
@@ -16,6 +17,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         <Sidebar />
         <AppMain>
           <Navbar />
+          <StatusBar />
           <SetupBanner />
           <main className="container flex-1 py-6 pb-8 md:pb-6">
             <PageTransition>{children}</PageTransition>

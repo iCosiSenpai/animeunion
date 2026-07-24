@@ -1,22 +1,33 @@
+export type NavGroup = 'operazioni' | 'scoperta' | 'sistema';
+
 export interface NavLink {
   href: string;
   label: string;
+  /** Gruppo nella sidebar console (Operazioni / Scoperta / Sistema). */
+  group: NavGroup;
   /** Voce principale: mostrata nel dock mobile. Le altre finiscono nel drawer "Altro". */
   primary?: boolean;
 }
 
 export const navLinks: NavLink[] = [
-  { href: '/', label: 'Home', primary: true },
-  { href: '/catalog', label: 'Catalogo', primary: true },
-  { href: '/follows', label: 'Seguiti', primary: true },
-  { href: '/library', label: 'Libreria', primary: true },
-  { href: '/downloads', label: 'Download' },
-  { href: '/calendar', label: 'Calendario' },
-  { href: '/premium', label: 'Premium' },
-  { href: '/settings', label: 'Impostazioni' },
-  { href: '/statistiche', label: 'Statistiche' },
-  { href: '/diagnostica', label: 'Diagnostica' },
-  { href: '/about', label: 'About' },
+  { href: '/', label: 'Dashboard', group: 'operazioni', primary: true },
+  { href: '/downloads', label: 'Download', group: 'operazioni', primary: true },
+  { href: '/library', label: 'Libreria', group: 'operazioni', primary: true },
+  { href: '/catalog', label: 'Catalogo', group: 'scoperta', primary: true },
+  { href: '/follows', label: 'Seguiti', group: 'scoperta' },
+  { href: '/calendar', label: 'Calendario', group: 'scoperta' },
+  { href: '/premium', label: 'Premium', group: 'sistema' },
+  { href: '/settings', label: 'Impostazioni', group: 'sistema' },
+  { href: '/statistiche', label: 'Statistiche', group: 'sistema' },
+  { href: '/diagnostica', label: 'Diagnostica', group: 'sistema' },
+  { href: '/about', label: 'About', group: 'sistema' },
+];
+
+/** Gruppi ordinati con etichetta, per la sidebar console. */
+export const NAV_GROUPS: { id: NavGroup; label: string }[] = [
+  { id: 'operazioni', label: 'Operazioni' },
+  { id: 'scoperta', label: 'Scoperta' },
+  { id: 'sistema', label: 'Sistema' },
 ];
 
 export const primaryNavLinks: NavLink[] = navLinks.filter((l) => l.primary);

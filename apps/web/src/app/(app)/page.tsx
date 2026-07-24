@@ -1,10 +1,10 @@
-import { HomeView } from '@/components/home/home-view';
+import { DashboardView } from '@/components/dashboard/dashboard-view';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'AnimeUnion Docker',
+  title: 'Centro di controllo · AnimeUnion',
 };
 
 export default function HomePage() {
-  return <HomeView />;
+  return <DashboardView />;
 }

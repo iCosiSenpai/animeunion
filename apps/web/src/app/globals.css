@@ -4,53 +4,68 @@
 
 @layer base {
   :root {
-    /* Palette AnimeUnion light. L'accent (#6EC567) resta identico al dark: AppTheme lo sovrascrive
-       a runtime con lo stesso valore in entrambi i temi. */
+    /* Palette "centro di controllo" light: neutri slate freddi a livelli. L'accent (--primary/--ring)
+       resta la feature utente (default verde), sovrascritto a runtime da AppTheme. */
     color-scheme: light;
-    --background: 0 0% 98%;
-    --foreground: 0 0% 9%;
+    --background: 210 20% 98%;
+    --foreground: 222 24% 12%;
     --card: 0 0% 100%;
-    --card-foreground: 0 0% 9%;
+    --card-foreground: 222 24% 12%;
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 9%;
+    --popover-foreground: 222 24% 12%;
     --primary: 110 45% 59%;
     --primary-foreground: 0 0% 7%;
-    --secondary: 0 0% 93%;
-    --secondary-foreground: 0 0% 12%;
-    --muted: 0 0% 95%;
-    --muted-foreground: 0 0% 38%;
-    --accent: 0 0% 93%;
-    --accent-foreground: 0 0% 12%;
+    --secondary: 210 16% 93%;
+    --secondary-foreground: 222 20% 16%;
+    --muted: 210 16% 95%;
+    --muted-foreground: 215 14% 40%;
+    --accent: 210 16% 93%;
+    --accent-foreground: 222 20% 16%;
     --destructive: 0 72% 48%;
     --destructive-foreground: 0 0% 100%;
-    --border: 0 0% 87%;
-    --input: 0 0% 87%;
+    --border: 214 16% 88%;
+    --input: 214 16% 88%;
     --ring: 110 45% 59%;
-    --radius: 0.5rem;
+    /* Stati semantici, indipendenti dall'accent scelto: ok / attesa / info. */
+    --success: 145 62% 38%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 42%;
+    --warning-foreground: 0 0% 100%;
+    --info: 210 90% 46%;
+    --info-foreground: 0 0% 100%;
+    --radius: 0.625rem;
   }
 
   .dark {
-    /* Palette AnimeUnion dark (default storico: #242424 bg, #6EC567 accent). */
+    /* Palette "centro di controllo" dark: grafite/slate freddo, superfici a livelli per un look da
+       console premium. L'accent resta la feature utente (default verde), sovrascritto da AppTheme. */
     color-scheme: dark;
-    --background: 0 0% 14%;
-    --foreground: 0 0% 92%;
-    --card: 0 0% 11%;
-    --card-foreground: 0 0% 92%;
-    --popover: 0 0% 11%;
-    --popover-foreground: 0 0% 92%;
+    --background: 222 22% 8%;
+    --foreground: 210 20% 92%;
+    --card: 222 20% 11%;
+    --card-foreground: 210 20% 92%;
+    --popover: 222 22% 10%;
+    --popover-foreground: 210 20% 92%;
     --primary: 110 45% 59%;
     --primary-foreground: 0 0% 7%;
-    --secondary: 0 0% 20%;
-    --secondary-foreground: 0 0% 92%;
-    --muted: 0 0% 18%;
-    --muted-foreground: 0 0% 60%;
-    --accent: 0 0% 20%;
-    --accent-foreground: 0 0% 92%;
-    --destructive: 0 60% 50%;
+    --secondary: 222 16% 17%;
+    --secondary-foreground: 210 20% 92%;
+    --muted: 222 16% 15%;
+    --muted-foreground: 215 16% 63%;
+    --accent: 222 16% 18%;
+    --accent-foreground: 210 20% 92%;
+    --destructive: 0 62% 52%;
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 22%;
-    --input: 0 0% 22%;
+    --border: 222 14% 20%;
+    --input: 222 14% 20%;
     --ring: 110 45% 59%;
+    /* Stati semantici (dark). */
+    --success: 145 55% 48%;
+    --success-foreground: 145 60% 8%;
+    --warning: 38 92% 55%;
+    --warning-foreground: 38 90% 10%;
+    --info: 210 90% 62%;
+    --info-foreground: 210 90% 10%;
   }
 }
 

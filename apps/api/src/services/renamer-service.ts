@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import type { Language, Quality } from '@animeunion/shared';
-import { and, eq, lt, sql } from 'drizzle-orm';
+import { and, count, eq, lt, sql } from 'drizzle-orm';
 import type { Db } from '../db';
 import { schema } from '../db';
 import { pad2, sanitizeTitleForFs } from '../lib/download-fs';
@@ -46,9 +46,37 @@ function qualityTag(quality: Quality): string {
   return quality === 'SD' ? '' : ` [${quality}]`;
 }
 
+// Rimuove un suffisso di stagione dal titolo del franchise ("Show 2nd Season" -> "Show",
+// "Show Season 2" -> "Show", "Show II" -> "Show"). Conservativo: NON tocca le cifre nude (rischioso
+// su titoli tipo "Mob Psycho 100"). Usato solo per le stagioni > 1 quando la root (S1) non e' a
+// catalogo, cosi' tutte le stagioni del franchise finiscono nella STESSA cartella.
+function stripSeasonSuffix(title: string): string {
+  const stripped = title
+    .replace(/\s+\d+(?:st|nd|rd|th)\s+season$/i, '')
+    .replace(/\s+season\s+\d+$/i, '')
+    .replace(/\s+(?:ii|iii|iv|v)$/i, '')
+    .trim();
+  return stripped.length > 0 ? stripped : title;
+}
+
 export function createRenamerService(deps: RenamerServiceDeps): RenamerService {
   const { db, config } = deps;
   const resolver = deps.seriesResolver ?? createSeriesResolver({ db });
+
+  // Episodi effettivi di una entry: usa il conteggio dichiarato (episodeCount) quando noto (>0),
+  // altrimenti il numero REALE di episodi listati. Evita che un episodeCount stale a 0 (parte
+  // ancora in corso) azzeri l'offset dei cour spezzati e faccia collidere gli SxxExx sul disco.
+  function effectiveEpisodeCount(animeId: string, declared: number | null): number {
+    if (declared && declared > 0) {
+      return declared;
+    }
+    const row = db
+      .select({ n: count() })
+      .from(schema.episode)
+      .where(eq(schema.episode.animeId, animeId))
+      .get();
+    return row?.n ?? 0;
+  }
 
   function previousSeasonsEpisodeCount(series: SeriesInfo): number {
     if (series.seasonNumber <= 1) {
@@ -95,9 +123,13 @@ export function createRenamerService(deps: RenamerServiceDeps): RenamerService {
     const counted = new Set<string>();
     let total = 0;
     for (const row of overrideRows) {
-      if (row.episodeCount && row.episodeCount > 0 && !counted.has(row.animeId)) {
+      if (counted.has(row.animeId)) {
+        continue;
+      }
+      const eff = effectiveEpisodeCount(row.animeId, row.episodeCount);
+      if (eff > 0) {
         counted.add(row.animeId);
-        total += row.episodeCount;
+        total += eff;
       }
     }
     // 2) La serie base/root e' implicitamente la PARTE 1 quando la stagione corrente coincide con
@@ -114,14 +146,8 @@ export function createRenamerService(deps: RenamerServiceDeps): RenamerService {
       .from(schema.anime)
       .where(eq(schema.anime.id, series.seriesId))
       .get();
-    if (
-      base &&
-      !counted.has(base.id) &&
-      (base.seasonNumber ?? 1) === series.seasonNumber &&
-      base.episodeCount &&
-      base.episodeCount > 0
-    ) {
-      total += base.episodeCount;
+    if (base && !counted.has(base.id) && (base.seasonNumber ?? 1) === series.seasonNumber) {
+      total += effectiveEpisodeCount(base.id, base.episodeCount);
     }
     return total;
   }
@@ -187,8 +213,12 @@ export function createRenamerService(deps: RenamerServiceDeps): RenamerService {
       .from(schema.anime)
       .where(eq(schema.anime.slug, series.seriesSlug))
       .get();
-    const title = sanitizeTitleForFs(rootAnime?.titleIta ?? rootAnime?.title ?? titleOf(animeId));
+    const rawTitle = rootAnime?.titleIta ?? rootAnime?.title ?? titleOf(animeId);
     const seasonNumber = series.kind === 'special' ? 0 : series.seasonNumber;
+    // Stagione successiva ma root (S1) non a catalogo: il titolo ricadrebbe sull'entry corrente
+    // (es. "Show 2nd Season"). Togliamo il suffisso di stagione così tutte le stagioni del
+    // franchise finiscono nella STESSA cartella (niente libreria spezzata su Jellyfin).
+    const title = sanitizeTitleForFs(seasonNumber > 1 ? stripSeasonSuffix(rawTitle) : rawTitle);
     const displayNumber = relativeEpisodeNumber(series, episodeNumber);
     // Stagione 0 = speciali: cartella "Specials" (convenzione Jellyfin), nome file S00EXX.
     const seasonDir = seasonNumber === 0 ? 'Specials' : `Season ${pad2(seasonNumber)}`;

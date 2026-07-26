@@ -418,4 +418,66 @@ describe('RenamerService', () => {
       }),
     ).toBe(expected);
   });
+
+  it('cour spezzato con episodeCount della parte 1 a 0 ma episodi reali presenti: offset dal conteggio reale (no collisione)', () => {
+    insertAnime(db, { id: 'root', slug: 'root-show', title: 'Root Show', episodeCount: 12 });
+    insertAnime(db, { id: 'p1', slug: 'root-show-p1', title: 'Root P1', episodeCount: 0 });
+    insertAnime(db, { id: 'p2', slug: 'root-show-p2', title: 'Root P2', episodeCount: 12 });
+    const ts = new Date().toISOString();
+    // Part 1: episodeCount dichiarato 0 (metadati stale / parte in corso) ma 12 episodi reali.
+    for (let n = 1; n <= 12; n++) {
+      db.insert(schema.episode)
+        .values({ id: `p1-e${n}`, animeId: 'p1', number: n, createdAt: ts, updatedAt: ts })
+        .run();
+    }
+    db.insert(schema.seriesOverride)
+      .values([
+        {
+          animeId: 'p1',
+          seriesAnimeId: 'root',
+          seasonNumber: 2,
+          partNumber: 1,
+          kind: 'tv',
+          updatedAt: ts,
+        },
+        {
+          animeId: 'p2',
+          seriesAnimeId: 'root',
+          seasonNumber: 2,
+          partNumber: 2,
+          kind: 'tv',
+          updatedAt: ts,
+        },
+      ])
+      .run();
+    const renamer = makeRenamer(db, { seriesPathSub: '/data/anime' });
+
+    // Col fix l'offset viene dal conteggio REALE di p1 (12 episodi) → part 2 ep1 = S02E13, niente
+    // collisione con part 1 ep1. Prima restava S02E01 e sovrascriveva part 1 ep1.
+    expect(
+      renamer.computeEpisodePath({ animeId: 'p2', episodeNumber: 1, language: 'SUB_ITA' }),
+    ).toBe(join('/data/anime', 'Root Show', 'Season 02', 'Root Show - S02E13 - SUB ITA.mp4'));
+  });
+
+  it('stagione 2 senza la stagione 1 a catalogo: cartella franchise senza suffisso di stagione', () => {
+    // Solo la S2 è a catalogo (seriesId dall'API); la S1 (seriesId+seasonNumber=1) non c'è.
+    insertAnime(db, {
+      id: 's2only',
+      slug: 'my-hero-2nd-season',
+      title: 'My Hero Academia 2nd Season',
+      seriesId: 'mha',
+      seasonNumber: 2,
+      episodeCount: 25,
+    });
+    const renamer = makeRenamer(db, {
+      seriesPathSub: '/data/anime',
+      seriesPathDub: '/data/anime-dub',
+    });
+
+    // Senza il fix: cartella "My Hero Academia 2nd Season" (→ due cartelle quando arriva la S1).
+    // Col fix: "My Hero Academia", così tutte le stagioni stanno nello stesso franchise.
+    expect(
+      renamer.computeEpisodePath({ animeId: 's2only', episodeNumber: 1, language: 'SUB_ITA' }),
+    ).toBe(join('/data/anime', 'My Hero Academia', 'Season 02', 'My Hero Academia - S02E01.mp4'));
+  });
 });

@@ -1,4 +1,5 @@
 import {
+  libraryDeleteAnimeInputSchema,
   libraryDeleteEntryInputSchema,
   libraryDeleteEpisodeInputSchema,
   libraryDeleteResultSchema,
@@ -40,6 +41,11 @@ export const libraryRouter = router({
     .input(libraryDeleteSeriesInputSchema)
     .output(libraryDeleteResultSchema)
     .mutation(({ ctx, input }) => ctx.services.library.deleteSeries(input)),
+
+  deleteAnime: publicProcedure
+    .input(libraryDeleteAnimeInputSchema)
+    .output(libraryDeleteResultSchema)
+    .mutation(({ ctx, input }) => ctx.services.library.deleteAnimeFiles(input)),
 
   deleteOrphans: publicProcedure
     .input(z.object({ paths: z.array(z.string().min(1)) }))

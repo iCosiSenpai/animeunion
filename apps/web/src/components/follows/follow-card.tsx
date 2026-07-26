@@ -37,6 +37,7 @@ export function FollowCard({ follow }: { follow: FollowWithAnime }) {
   const [confirmDeleteFiles, setConfirmDeleteFiles] = useState(false);
   const [deleteFolder, setDeleteFolder] = useState(false);
   const [confirmUnfollow, setConfirmUnfollow] = useState(false);
+  const [deleteSeasonFiles, setDeleteSeasonFiles] = useState(false);
   // Cestino attivo: le eliminazioni spostano in `.trash` (recuperabile), quindi adattiamo la copy.
   const trashEnabled = trpc.config.getAll.useQuery(undefined, { staleTime: 60_000 }).data
     ?.trashEnabled;
@@ -53,9 +54,26 @@ export function FollowCard({ follow }: { follow: FollowWithAnime }) {
     onSuccess: () => {
       toast.success('Rimosso dai seguiti');
       setConfirmUnfollow(false);
+      setDeleteSeasonFiles(false);
       invalidate();
     },
     onError: (error) => toast.error(error.message),
+  });
+  // Cancellazione scoped alla SINGOLA stagione (questo animeId, tutte le lingue), non al franchise:
+  // usata dall'opzione dell'unfollow. La cancellazione dell'intera serie resta l'azione separata.
+  const deleteAnime = trpc.library.deleteAnime.useMutation({
+    onSuccess: (res) => {
+      if (res.deletedFiles > 0) {
+        toast.success(
+          trashEnabled
+            ? `${res.deletedFiles} file spostati nel cestino`
+            : `${res.deletedFiles} file eliminati`,
+        );
+      }
+      void utils.library.list.invalidate();
+      void utils.library.stats.invalidate();
+    },
+    onError: (error) => toast.error(error.message || 'Eliminazione file fallita'),
   });
   const setAuto = trpc.follow.setAutoDownload.useMutation({
     onSuccess: () => {
@@ -237,32 +255,54 @@ export function FollowCard({ follow }: { follow: FollowWithAnime }) {
         </Link>
       </div>
 
-      <Dialog open={confirmUnfollow} onOpenChange={setConfirmUnfollow}>
+      <Dialog
+        open={confirmUnfollow}
+        onOpenChange={(open) => {
+          setConfirmUnfollow(open);
+          if (!open) setDeleteSeasonFiles(false);
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Smettere di seguire?</DialogTitle>
             <DialogDescription>
-              &laquo;{title}&raquo; uscirà dai Seguiti (e dai Preferiti del sito). I file già
-              scaricati <strong>restano nella libreria</strong> e non vengono cancellati: puoi
-              rimuoverli a parte con «Elimina file scaricati».
+              &laquo;{title}&raquo; uscirà dai Seguiti (e dai Preferiti del sito). Di default i file
+              scaricati <strong>restano nella libreria</strong>.
             </DialogDescription>
           </DialogHeader>
+          <label className="flex cursor-pointer items-start gap-2 rounded-md border p-3 text-sm">
+            <input
+              type="checkbox"
+              className="mt-0.5 h-4 w-4 shrink-0 accent-destructive"
+              checked={deleteSeasonFiles}
+              onChange={(e) => setDeleteSeasonFiles(e.target.checked)}
+            />
+            <span>
+              Elimina anche i file scaricati di <strong>questa stagione</strong>. Le altre stagioni
+              della serie restano; i file esterni collegati non vengono toccati.
+            </span>
+          </label>
           <DialogFooter className="gap-2">
             <Button
               variant="ghost"
               onClick={() => setConfirmUnfollow(false)}
-              disabled={remove.isPending}
+              disabled={remove.isPending || deleteAnime.isPending}
             >
               Annulla
             </Button>
             <Button
               variant="destructive"
               className="gap-2"
-              onClick={() => remove.mutate({ animeId: anime.id })}
-              disabled={remove.isPending}
+              onClick={() => {
+                if (deleteSeasonFiles) {
+                  deleteAnime.mutate({ animeId: anime.id });
+                }
+                remove.mutate({ animeId: anime.id });
+              }}
+              disabled={remove.isPending || deleteAnime.isPending}
             >
               <Trash2 className="h-4 w-4" />
-              Smetti di seguire
+              {deleteSeasonFiles ? 'Smetti ed elimina i file' : 'Smetti di seguire'}
             </Button>
           </DialogFooter>
         </DialogContent>

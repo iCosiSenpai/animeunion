@@ -51,6 +51,7 @@ export function FollowButton({
   const isCompleted = animeStatus === 'COMPLETED';
 
   const [confirmUnfollow, setConfirmUnfollow] = useState(false);
+  const [deleteSeasonFiles, setDeleteSeasonFiles] = useState(false);
   const { ensureConfirmed, dialog: seasonDialog } = useSeasonGate(animeId);
 
   const invalidate = () => void utils.follow.list.invalidate();
@@ -77,10 +78,28 @@ export function FollowButton({
     onSuccess: () => {
       toast.success('Rimosso dai Seguiti');
       setConfirmUnfollow(false);
+      setDeleteSeasonFiles(false);
       invalidate();
     },
     onError,
   });
+  const trashEnabled = config.data?.trashEnabled ?? false;
+  const deleteAnime = trpc.library.deleteAnime.useMutation({
+    onSuccess: (res) => {
+      if (res.deletedFiles > 0) {
+        toast.success(
+          trashEnabled
+            ? `${res.deletedFiles} file spostati nel cestino`
+            : `${res.deletedFiles} file eliminati`,
+        );
+      }
+      void utils.library.list.invalidate();
+      void utils.library.stats.invalidate();
+      void utils.catalog.invalidate();
+    },
+    onError,
+  });
+  const pendingUnfollow = remove.isPending || deleteAnime.isPending;
 
   // Non seguito: "Segui e scarica" -> segue (watching + auto-download di default; forward-only, quindi
   // gli episodi già usciti NON partono da soli) e apre subito il popup di download per il backlog.
@@ -227,32 +246,54 @@ export function FollowButton({
         </PopoverContent>
       </Popover>
 
-      <Dialog open={confirmUnfollow} onOpenChange={setConfirmUnfollow}>
+      <Dialog
+        open={confirmUnfollow}
+        onOpenChange={(open) => {
+          setConfirmUnfollow(open);
+          if (!open) setDeleteSeasonFiles(false);
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Smettere di seguire?</DialogTitle>
             <DialogDescription>
-              &laquo;{title}&raquo; uscirà dai Seguiti (e dai Preferiti del sito). I file già
-              scaricati <strong>restano nella libreria</strong> e non vengono cancellati: puoi
-              rimuoverli a parte dalla Libreria, se vuoi.
+              &laquo;{title}&raquo; uscirà dai Seguiti (e dai Preferiti del sito). Di default i file
+              scaricati <strong>restano nella libreria</strong>.
             </DialogDescription>
           </DialogHeader>
+          <label className="flex cursor-pointer items-start gap-2 rounded-md border p-3 text-sm">
+            <input
+              type="checkbox"
+              className="mt-0.5 h-4 w-4 shrink-0 accent-destructive"
+              checked={deleteSeasonFiles}
+              onChange={(e) => setDeleteSeasonFiles(e.target.checked)}
+            />
+            <span>
+              Elimina anche i file scaricati di <strong>questa stagione</strong>. Le altre stagioni
+              della serie restano; i file esterni collegati non vengono toccati.
+            </span>
+          </label>
           <DialogFooter className="gap-2">
             <Button
               variant="ghost"
               onClick={() => setConfirmUnfollow(false)}
-              disabled={remove.isPending}
+              disabled={pendingUnfollow}
             >
               Annulla
             </Button>
             <Button
               variant="destructive"
               className="gap-2"
-              onClick={() => remove.mutate({ animeId })}
-              disabled={remove.isPending}
+              onClick={() => {
+                if (deleteSeasonFiles) {
+                  deleteAnime.mutate({ animeId });
+                }
+                remove.mutate({ animeId });
+              }}
+              disabled={pendingUnfollow}
             >
-              {remove.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              Smetti di seguire
+              {pendingUnfollow ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              {deleteSeasonFiles ? 'Smetti ed elimina i file' : 'Smetti di seguire'}
             </Button>
           </DialogFooter>
         </DialogContent>

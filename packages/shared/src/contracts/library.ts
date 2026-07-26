@@ -81,6 +81,12 @@ export const libraryDeleteSeriesInputSchema = z.object({
   animeId: z.string().min(1),
   deleteFolder: z.boolean().optional().default(false),
 });
+// Eliminazione dei file di UNA singola stagione/entry (questo animeId, tutte le lingue) — NON il
+// franchise. Usato dall'unfollow "elimina i file di questa stagione".
+export const libraryDeleteAnimeInputSchema = z.object({
+  animeId: z.string().min(1),
+  deleteFolder: z.boolean().optional().default(false),
+});
 
 export const libraryDeleteResultSchema = z.object({
   deletedFiles: z.number().int(),

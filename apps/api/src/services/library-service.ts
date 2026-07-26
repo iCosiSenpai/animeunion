@@ -52,6 +52,11 @@ export interface LibraryService {
   }): Promise<LibraryDeleteResult>;
   /** Elimina tutti i file scaricati dell'intera serie/franchise. */
   deleteSeries(input: { animeId: string; deleteFolder?: boolean }): Promise<LibraryDeleteResult>;
+  /** Elimina i file scaricati di UNA stagione/entry (questo animeId, tutte le lingue); non il franchise. */
+  deleteAnimeFiles(input: {
+    animeId: string;
+    deleteFolder?: boolean;
+  }): Promise<LibraryDeleteResult>;
   /** Elimina i file orfani indicati (rilevati dalla scansione). */
   deleteOrphans(paths: string[]): Promise<LibraryDeleteResult>;
   /**
@@ -1127,6 +1132,32 @@ export function createLibraryService(deps: LibraryServiceDeps): LibraryService {
       return publicDeleteResult(result);
     },
 
+    async deleteAnimeFiles({ animeId, deleteFolder }) {
+      const ids = db
+        .select({ id: schema.episodeFile.id })
+        .from(schema.episodeFile)
+        .innerJoin(schema.episode, eq(schema.episode.id, schema.episodeFile.episodeId))
+        .where(
+          and(
+            eq(schema.episode.animeId, animeId),
+            eq(schema.episodeFile.downloadStatus, 'downloaded'),
+          ),
+        )
+        .all()
+        .map((row) => row.id);
+      // Come deleteEntry ma senza filtro lingua: solo QUESTA stagione (animeId), non il franchise.
+      if (deleteFolder && trashOn()) {
+        return publicDeleteResult(await trashSeriesFolders(ids, collectPaths(ids)));
+      }
+      const paths = deleteFolder ? collectPaths(ids) : [];
+      const folders = deleteFolder ? await seriesFoldersOf(paths) : [];
+      const result = await removeFiles(ids);
+      if (deleteFolder) {
+        mergeDeleteWorkResult(result, await removeSeriesFolders(folders, ids));
+      }
+      return publicDeleteResult(result);
+    },
+
     async unlinkExternal({ episodeFileId, animeId, language }) {
       // Risolvi solo le righe davvero `external`: la guardia sullo stato impedisce di toccare i
       // file scaricati dall'app (mai cancellati comunque: qui si azzera solo il collegamento).
@@ -1239,6 +1270,7 @@ export function createLibraryService(deps: LibraryServiceDeps): LibraryService {
       coordinator.runExclusive(() => unlocked.deleteEpisodeFile(episodeFileId)),
     deleteEntry: (input) => coordinator.runExclusive(() => unlocked.deleteEntry(input)),
     deleteSeries: (input) => coordinator.runExclusive(() => unlocked.deleteSeries(input)),
+    deleteAnimeFiles: (input) => coordinator.runExclusive(() => unlocked.deleteAnimeFiles(input)),
     deleteOrphans: (paths) => coordinator.runExclusive(() => unlocked.deleteOrphans(paths)),
     unlinkExternal: (input) => coordinator.runExclusive(() => unlocked.unlinkExternal(input)),
   };

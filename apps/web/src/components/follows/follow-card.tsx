@@ -36,6 +36,7 @@ export function FollowCard({ follow }: { follow: FollowWithAnime }) {
   const optimistic = useLibraryOptimisticCache();
   const [confirmDeleteFiles, setConfirmDeleteFiles] = useState(false);
   const [deleteFolder, setDeleteFolder] = useState(false);
+  const [confirmUnfollow, setConfirmUnfollow] = useState(false);
   // Cestino attivo: le eliminazioni spostano in `.trash` (recuperabile), quindi adattiamo la copy.
   const trashEnabled = trpc.config.getAll.useQuery(undefined, { staleTime: 60_000 }).data
     ?.trashEnabled;
@@ -51,6 +52,7 @@ export function FollowCard({ follow }: { follow: FollowWithAnime }) {
   const remove = trpc.follow.remove.useMutation({
     onSuccess: () => {
       toast.success('Rimosso dai seguiti');
+      setConfirmUnfollow(false);
       invalidate();
     },
     onError: (error) => toast.error(error.message),
@@ -205,7 +207,7 @@ export function FollowCard({ follow }: { follow: FollowWithAnime }) {
               ) : null}
               <DropdownMenuItem
                 className="text-destructive focus:text-destructive"
-                onClick={() => remove.mutate({ animeId: anime.id })}
+                onClick={() => setConfirmUnfollow(true)}
               >
                 Smetti di seguire
               </DropdownMenuItem>
@@ -234,6 +236,37 @@ export function FollowCard({ follow }: { follow: FollowWithAnime }) {
           {title}
         </Link>
       </div>
+
+      <Dialog open={confirmUnfollow} onOpenChange={setConfirmUnfollow}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Smettere di seguire?</DialogTitle>
+            <DialogDescription>
+              &laquo;{title}&raquo; uscirà dai Seguiti (e dai Preferiti del sito). I file già
+              scaricati <strong>restano nella libreria</strong> e non vengono cancellati: puoi
+              rimuoverli a parte con «Elimina file scaricati».
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="ghost"
+              onClick={() => setConfirmUnfollow(false)}
+              disabled={remove.isPending}
+            >
+              Annulla
+            </Button>
+            <Button
+              variant="destructive"
+              className="gap-2"
+              onClick={() => remove.mutate({ animeId: anime.id })}
+              disabled={remove.isPending}
+            >
+              <Trash2 className="h-4 w-4" />
+              Smetti di seguire
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={confirmDeleteFiles}

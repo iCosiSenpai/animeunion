@@ -2,6 +2,14 @@
 
 import { useSeasonGate } from '@/components/catalog/season-gate';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Switch } from '@/components/ui/switch';
 import { trpc } from '@/lib/trpc';
@@ -17,14 +25,16 @@ import {
   TriangleAlert,
 } from 'lucide-react';
 import Link from 'next/link';
+import { useState } from 'react';
 import { toast } from 'sonner';
 
 /**
- * Segui/gestisci una serie. Un solo bottone: "Segui" (un click) quando non seguita, "Seguito"/"In
- * pausa" con popover di controlli immediati quando seguita. Niente più i 5 tag di stato: le uniche
- * scelte che contano per un centro di download sono gli interruttori (auto-download, avvisi) + la
- * pausa. Lo stato interno resta l'enum esistente (Segui = watching, In pausa = on_hold, Smetti di
- * seguire = remove) così i record legacy (plan_to_watch/completed/dropped) si mappano senza migrazioni.
+ * Segui/gestisci una serie. Un solo bottone: "Segui e scarica" (un click: segue e apre il popup di
+ * download degli episodi) quando non seguita, "Seguito"/"In pausa" con popover di controlli immediati
+ * quando seguita. Niente più i 5 tag di stato: le uniche scelte che contano per un centro di download
+ * sono gli interruttori (auto-download, avvisi) + la pausa. Lo stato interno resta l'enum esistente
+ * (Segui = watching, In pausa = on_hold, Smetti di seguire = remove) così i record legacy
+ * (plan_to_watch/completed/dropped) si mappano senza migrazioni.
  */
 export function FollowButton({
   animeId,
@@ -40,11 +50,19 @@ export function FollowButton({
   const current = follows.data?.find((follow) => follow.animeId === animeId) ?? null;
   const isCompleted = animeStatus === 'COMPLETED';
 
+  const [confirmUnfollow, setConfirmUnfollow] = useState(false);
   const { ensureConfirmed, dialog: seasonDialog } = useSeasonGate(animeId);
 
   const invalidate = () => void utils.follow.list.invalidate();
   const onError = (e: { message?: string }) => toast.error(e.message || 'Operazione non riuscita');
 
+  const addAll = trpc.download.addAll.useMutation({
+    onSuccess: (res) => {
+      toast.success(`${res.enqueued} episodi accodati`);
+      void utils.download.queue.invalidate();
+    },
+    onError: (e) => toast.error(e.message || 'Impossibile accodare i download'),
+  });
   const add = trpc.follow.add.useMutation({
     onSuccess: () => {
       toast.success('Aggiunto ai Seguiti');
@@ -58,25 +76,24 @@ export function FollowButton({
   const remove = trpc.follow.remove.useMutation({
     onSuccess: () => {
       toast.success('Rimosso dai Seguiti');
+      setConfirmUnfollow(false);
       invalidate();
     },
     onError,
   });
-  const addAll = trpc.download.addAll.useMutation({
-    onSuccess: (res) => {
-      toast.success(`${res.enqueued} episodi accodati`);
-      void utils.download.queue.invalidate();
-    },
-    onError: (e) => toast.error(e.message || 'Impossibile accodare i download'),
-  });
 
-  // Non seguito: un solo click segue (watching + auto-download di default). L'auto è forward-only,
-  // quindi NON scarica il backlog già uscito — solo i nuovi episodi.
+  // Non seguito: "Segui e scarica" -> segue (watching + auto-download di default; forward-only, quindi
+  // gli episodi già usciti NON partono da soli) e apre subito il popup di download per il backlog.
   if (!current) {
     return (
       <>
         <Button
-          onClick={() => add.mutate({ animeId, status: 'watching' })}
+          onClick={() =>
+            add.mutate(
+              { animeId, status: 'watching' },
+              { onSuccess: () => ensureConfirmed(() => addAll.mutate({ animeId })) },
+            )
+          }
           disabled={add.isPending || follows.isLoading}
         >
           {add.isPending ? (
@@ -84,7 +101,7 @@ export function FollowButton({
           ) : (
             <Plus className="mr-2 h-4 w-4" />
           )}
-          Segui
+          Segui e scarica
         </Button>
         {seasonDialog}
       </>
@@ -96,6 +113,7 @@ export function FollowButton({
   const paused = current.status === 'on_hold' || current.status === 'dropped';
   const autoOn = current.autoDownload ?? current.status === 'watching';
   const notifyOn = current.notify ?? true;
+  const title = current.anime.titleIta ?? current.anime.title;
 
   return (
     <>
@@ -200,19 +218,45 @@ export function FollowButton({
               variant="ghost"
               size="sm"
               className="w-full justify-start gap-2 text-destructive hover:text-destructive"
-              disabled={remove.isPending}
-              onClick={() => remove.mutate({ animeId })}
+              onClick={() => setConfirmUnfollow(true)}
             >
-              {remove.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Trash2 className="h-4 w-4" />
-              )}
+              <Trash2 className="h-4 w-4" />
               Smetti di seguire
             </Button>
           </div>
         </PopoverContent>
       </Popover>
+
+      <Dialog open={confirmUnfollow} onOpenChange={setConfirmUnfollow}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Smettere di seguire?</DialogTitle>
+            <DialogDescription>
+              &laquo;{title}&raquo; uscirà dai Seguiti (e dai Preferiti del sito). I file già
+              scaricati <strong>restano nella libreria</strong> e non vengono cancellati: puoi
+              rimuoverli a parte dalla Libreria, se vuoi.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="ghost"
+              onClick={() => setConfirmUnfollow(false)}
+              disabled={remove.isPending}
+            >
+              Annulla
+            </Button>
+            <Button
+              variant="destructive"
+              className="gap-2"
+              onClick={() => remove.mutate({ animeId })}
+              disabled={remove.isPending}
+            >
+              {remove.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              Smetti di seguire
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {seasonDialog}
     </>

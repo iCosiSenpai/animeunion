@@ -7,6 +7,104 @@ e il progetto aderisce al [Semantic Versioning](https://semver.org/lang/it/).
 
 ## [Unreleased]
 
+Redesign dell'interfaccia in **centro di download per server** (branch `redesign/control-center`):
+dashboard operativa configurabile al posto della home a caroselli, shell console, superficie
+"Scopri", follow ripensato attorno al download invece che alla watchlist, tetto di banda aggregato e
+una passata di accessibilità. `main` e il NAS restano su v0.18.0 finché il batch non è collaudato.
+
+### Added
+- **Dashboard "centro di controllo" configurabile lato server:** la home mostra lo stato del server
+  a colpo d'occhio — KPI più widget per coda download, archiviazione (barra usato/libero con soglie
+  verde/ambra/rosso), worker neurale (job di upscale in corso con progresso), catalogo, diagnostica,
+  ultimi scaricati e attività recente — più bande di contenuti (seguiti, in onda oggi, prossimi
+  episodi, stagionali, più votati). Ordine, larghezza (1 o 2 colonne), visibilità e densità si
+  regolano in modalità "Personalizza" con drag & drop accessibile da tastiera (`@dnd-kit`) e vengono
+  salvati in `config.dashboardLayout`, quindi seguono l'utente tra dispositivi. `health.dirs` espone
+  `totalBytes` per la barra del disco. La barra di ricerca porta a `/catalog?q=` per classificare il
+  titolo prima di scaricarlo: nessun download o rinomina automatici.
+- **Shell console:** sidebar desktop raggruppata in Operazioni / Scoperta / Sistema (etichette da
+  espansa, divisori da compressa) e status bar sempre visibile con coda, spazio libero, stato del
+  worker neurale e versione, ognuno collegato alla propria pagina. Riusa le query della dashboard
+  (deduplicate da react-query), quindi nessun traffico aggiuntivo.
+- **Superficie "Scopri" (`/scopri`):** hero in evidenza e caroselli (ultimi episodi, continua a
+  guardare, in onda oggi, stagione in corso, più votati, ultimi aggiunti, news) erano già costruiti
+  ma non renderizzati da nessuna route. Ora hanno una pagina dedicata, mentre `/` resta il centro di
+  controllo: operare ed esplorare sono due usi diversi. Di conseguenza `config.homeLayout`, che era
+  configurabile dalle impostazioni ma consumato solo da quella vista, ha finalmente effetto.
+- **Limite di velocità complessivo dei download:** tetto di banda **aggregato** su tutti i download
+  in parallelo (`downloadSpeedLimitKbps`, 0 = illimitato e senza overhead), utile su connessioni
+  lente anche con il Premium. Token-bucket condiviso a scheduling virtuale nel worker, applicato
+  per-chunk tramite la backpressure della pipeline; rilegge la configurazione con cache ~1s, quindi
+  vale anche sui download già in corso. Due UI distinte: campo preciso in MB/s in Impostazioni ›
+  Download e controllo rapido (dropdown tachimetro con preset) nella pagina Download, che mostra
+  anche velocità complessiva live, ETA della coda e avanzamento totale.
+- **Follow ripensato per un centro di download:** al posto dei cinque tag di stato della watchlist
+  c'è un solo pulsante "Segui e scarica" — un click segue (con auto-download forward-only, quindi
+  senza backlog) e apre subito la scelta degli episodi già usciti — e, quando seguita, un popover di
+  interruttori immediati: scarica nuovi episodi, avvisi nuove stagioni, scarica gli episodi già
+  usciti, In pausa, Smetti di seguire. `/follows` filtra per comportamento (Tutti / Con
+  auto-download / In pausa). Backend additivo: colonna `follow.notify` con **migrazione 0021**
+  (opt-out degli avvisi per-serie), auto-download e season-watcher che escludono anche `on_hold`.
+  Nessuna migrazione forzata dei dati: gli stati legacy si mappano su "Seguito"/"In pausa" e i record
+  esistenti mantengono comportamento identico.
+- **Unfollow con eliminazione opzionale dei file:** smettere di seguire non è più immediato ma chiede
+  conferma, chiarendo che i file restano in libreria; una checkbox permette di eliminare anche i file
+  scaricati **di quella sola stagione** (tutte le lingue), senza toccare le altre stagioni della
+  serie né i file esterni collegati. Nuova operazione `library.deleteAnime`, che eredita
+  coordinatore, cestino e protezione degli external.
+
+### Changed
+- **Palette grafite:** neutri freddi a livelli (dark e light) più token semantici
+  `--success`/`--warning`/`--info`; il colore accent scelto dall'utente resta intatto e il verde
+  diventa anche colore di stato "OK". Downloads e Libreria sono stati riskinati sui primitivi
+  condivisi (`StatCard`, `StatusPill`, `SectionPanel`, numeri tabellari) **senza toccare handler,
+  query, stato, paginazione, aggiornamenti ottimistici o dialog**.
+- **Cartelle SUB ITA e DUB ITA separate come default imposto:** `config.set` rifiuta il salvataggio
+  di una cartella DUB uguale alla SUB (serie e film, in entrambe le direzioni, confronto via
+  `resolve()`), e il setup wizard precompila le DUB vuote con una sibling distinta "… - DUB ITA",
+  editabile. La risoluzione dei percorsi non cambia: la cartella condivisa con suffisso di lingua
+  resta come rete di sicurezza per le installazioni esistenti e i nomi dei file già scaricati non
+  vengono toccati.
+- **Interfaccia con "look da app":** il testo della chrome (label, pulsanti, navigazione, titoli,
+  badge, KPI, voci di menu) non è più selezionabile trascinando il mouse, con opt-in mirato dove
+  copiare serve davvero: percorsi file, messaggi d'errore, codice del login social, campi di input e
+  blocchi di codice.
+- **Impostazioni:** la sezione "Home" si chiama ora "Scopri" e il pannello dice dove finiscono le
+  sezioni riordinate, con link alla pagina (i deep-link `?section=home` continuano a funzionare).
+
+### Removed
+- **Indicatore download nel navbar:** era ridondante rispetto alla status bar su desktop, alla voce
+  "Download" nel dock su mobile e alla pagina Download con metriche live. Rimosso e componente
+  cancellato.
+
+### Fixed
+- **Renamer, numerazione dei cour spezzati:** l'offset usa il conteggio **reale** degli episodi
+  quando `anime.episodeCount` è 0 o nullo, invece di collassare a 0 con metadati stale o serie in
+  corso. Evitava il caso in cui il primo episodio della seconda parte sovrascriveva il primo della
+  prima parte sul disco. Comportamento invariato quando `episodeCount` è noto.
+- **Renamer, cartella del franchise stabile:** il suffisso di stagione ("Nth Season", "Season N",
+  numeri romani II–V; mai cifre nude, per non rovinare titoli come "Mob Psycho 100") viene rimosso
+  dal nome cartella quando `seasonNumber > 1`. Una stagione successiva scaricata senza la prima a
+  catalogo non crea più una cartella separata, che avrebbe spezzato la serie in due dentro Jellyfin.
+- **Accessibilità — rotazione automatica fermabile:** l'hero di Scopri avanzava ogni 6 secondi
+  fermandosi solo al passaggio del mouse, quindi da tastiera il link sotto il focus cambiava prima
+  dell'Invio e da touch non c'era modo di fermarlo (WCAG 2.2.2). Ora la rotazione si sospende anche
+  quando il focus entra nella regione, ha un pulsante play/pausa visibile a ogni breakpoint e per
+  default rispetta "riduci movimento" del sistema, restando comunque sovrascrivibile.
+- **Accessibilità — filtri del catalogo senza nome:** i sette menu di filtro avevano come unica
+  etichetta il placeholder, che sparisce appena si seleziona un valore: con uno screen reader si
+  sentiva "Azione" invece di "Genere: Azione". Aggiunte etichette esplicite, anche al campo di
+  ricerca. Il conteggio dei risultati è ora una live region che include il numero di pagina, così i
+  cambi di ricerca, filtro e pagina vengono annunciati pur non spostando il focus.
+- **Accessibilità — barre di avanzamento inesistenti per gli assistivi:** erano riscritte a mano in
+  cinque punti come `div` con una larghezza in percentuale, senza ruolo, valore né nome. Nuovo
+  primitivo `Progress` con `role="progressbar"`, valori ARIA completi ed etichetta obbligatoria per
+  costruzione, adottato in export neurale, dashboard (archiviazione e worker) e download (riepilogo
+  e card di gruppo). Etichetta aggiunta anche alla textarea di importazione configurazione.
+- **Dettagli dashboard e download:** risolte le chiavi React duplicate nelle bande (calendario e
+  seguiti potevano ripetere lo stesso anime), resa sempre visibile l'affordance dei titoli
+  cliccabili, e il controllo rapido del limite di velocità non spariva più a coda vuota.
+
 ## [0.17.0] - 2026-07-22
 
 Chiusura del batch "Nessun residuo morto": onboarding completabile, cancellazioni Libreria

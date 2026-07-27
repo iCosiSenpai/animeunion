@@ -10,6 +10,7 @@ import {
 import type { Db } from '../db';
 import { schema } from '../db';
 import { decryptSecret, encryptSecret } from '../lib/crypto';
+import { PreconditionError } from '../lib/errors';
 
 export type DownloadDirKey = 'seriesPathSub' | 'seriesPathDub' | 'moviePathSub' | 'moviePathDub';
 
@@ -140,6 +141,29 @@ export function createConfigService(deps: { db: Db; encryptKey?: string }): Conf
 
     set<K extends ConfigKey>(key: K, value: unknown): AppConfig[K] {
       const parsed = appConfigSchema.shape[key].parse(value) as AppConfig[K];
+      // Forzatura lingua: la cartella DUB ITA deve essere DIVERSA dalla SUB ITA (per serie e film).
+      // Jellyfin organizza meglio le lingue in librerie separate. Blocca il salvataggio di cartelle
+      // uguali per lo stesso tipo (in entrambe le direzioni). Se la DUB è lasciata vuota resta il
+      // fallback storico sulla cartella SUB (rete di sicurezza), ma non la si può impostare uguale.
+      const langCounterpart: Partial<Record<ConfigKey, ConfigKey>> = {
+        seriesPathSub: 'seriesPathDub',
+        seriesPathDub: 'seriesPathSub',
+        moviePathSub: 'moviePathDub',
+        moviePathDub: 'moviePathSub',
+      };
+      const otherKey = langCounterpart[key];
+      if (otherKey && typeof parsed === 'string' && parsed.trim() !== '') {
+        const other = getAll()[otherKey];
+        if (
+          typeof other === 'string' &&
+          other.trim() !== '' &&
+          resolve(parsed) === resolve(other)
+        ) {
+          throw new PreconditionError(
+            'Le cartelle SUB ITA e DUB ITA devono essere diverse: tienile separate per una libreria Jellyfin pulita.',
+          );
+        }
+      }
       // Cifra a riposo i segreti (Telegram/Jellyfin) se c'e' la chiave: cosi' non finiscono in chiaro
       // nel DB e nei backup. Restituisce comunque il valore in chiaro al chiamante.
       const toStore =

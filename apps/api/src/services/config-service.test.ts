@@ -192,6 +192,20 @@ describe('ConfigService', () => {
     expect(service.resolveDownloadRoot(true, 'SUB_ITA')).toBe('/media/Anime');
   });
 
+  it('forza cartelle SUB/DUB diverse: DUB uguale alla SUB viene rifiutato (serie e film)', () => {
+    const service = createConfigService({ db: createTestDb() });
+    service.set('seriesPathSub', '/media/Anime');
+    // Stessa cartella della SUB → rifiutato (le lingue vanno separate).
+    expect(() => service.set('seriesPathDub', '/media/Anime')).toThrow();
+    expect(() => service.set('seriesPathDub', '/media/Anime/')).toThrow(); // uguale dopo resolve
+    // Cartella diversa → accettata.
+    expect(service.set('seriesPathDub', '/media/Anime DUB')).toBe('/media/Anime DUB');
+    // Vale anche per i film.
+    service.set('moviePathSub', '/media/Film');
+    expect(() => service.set('moviePathDub', '/media/Film')).toThrow();
+    expect(service.set('moviePathDub', '/media/Film DUB')).toBe('/media/Film DUB');
+  });
+
   it('con encryptKey cifra i segreti a riposo ma get li restituisce in chiaro (B3)', () => {
     const db = createTestDb();
     const service = createConfigService({ db, encryptKey: 'chiave-test' });

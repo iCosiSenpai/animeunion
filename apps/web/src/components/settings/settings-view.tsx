@@ -70,12 +70,12 @@ const DIR_FIELDS: { key: PathKey; label: string; hint: string }[] = [
   {
     key: 'seriesPathSub',
     label: 'Serie · SUB ITA',
-    hint: 'Cartella base per le serie (SUB ITA). È anche il fallback per le altre se vuote.',
+    hint: 'Cartella base per le serie (SUB ITA). Le versioni DUB vanno in una cartella separata.',
   },
   {
     key: 'seriesPathDub',
     label: 'Serie · DUB ITA',
-    hint: 'Opzionale: cartella separata per le serie DUB ITA.',
+    hint: 'Serie DUB ITA — deve essere una cartella DIVERSA dalla SUB ITA. Se vuota, deriviamo "… - DUB ITA".',
   },
   {
     key: 'moviePathSub',
@@ -85,7 +85,7 @@ const DIR_FIELDS: { key: PathKey; label: string; hint: string }[] = [
   {
     key: 'moviePathDub',
     label: 'Film · DUB ITA',
-    hint: 'Opzionale: cartella separata per i film DUB ITA.',
+    hint: 'Film DUB ITA — cartella DIVERSA dalla SUB ITA. Se vuota, deriviamo "… - DUB ITA".',
   },
 ];
 

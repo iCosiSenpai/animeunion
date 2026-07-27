@@ -34,10 +34,14 @@ const DIR_FIELDS: { key: PathKey; label: string; hint: string; required?: boolea
   {
     key: 'seriesPathDub',
     label: 'Serie · DUB ITA',
-    hint: 'Opzionale: serie doppiate in italiano.',
+    hint: 'Serie doppiate: cartella SEPARATA dalla SUB ITA. Se la lasci vuota ne derivo una "… - DUB ITA".',
   },
   { key: 'moviePathSub', label: 'Film · SUB ITA', hint: 'Opzionale: film sottotitolati.' },
-  { key: 'moviePathDub', label: 'Film · DUB ITA', hint: 'Opzionale: film doppiati.' },
+  {
+    key: 'moviePathDub',
+    label: 'Film · DUB ITA',
+    hint: 'Film doppiati: cartella SEPARATA dalla SUB ITA. Se vuota ne derivo una "… - DUB ITA".',
+  },
 ];
 
 const STEPS: { label: string; description: string }[] = [
@@ -226,8 +230,22 @@ export function SetupWizard() {
       // Il marker viene scritto prima della cartella obbligatoria: l'invalidazione finale non può
       // far interpretare un setup ancora in corso come già completato e smontare il wizard.
       await setMutation.mutateAsync({ key: 'setupCompleted', value: false });
+      // Cartelle DUB separate per default: se lasciate vuote, deriva una sibling distinta dalla SUB
+      // ("… - DUB ITA"), così SUB e DUB nascono in librerie Jellyfin separate. Editabili poi dalle
+      // Impostazioni.
+      const dubSiblingOf = (p: string): string => {
+        const trimmed = p.trim().replace(/[\\/]+$/, '');
+        return trimmed ? `${trimmed} - DUB ITA` : '';
+      };
+      const resolvedPaths: Record<PathKey, string> = {
+        seriesPathSub: paths.seriesPathSub.trim(),
+        seriesPathDub: paths.seriesPathDub.trim() || dubSiblingOf(paths.seriesPathSub),
+        moviePathSub: paths.moviePathSub.trim(),
+        moviePathDub:
+          paths.moviePathDub.trim() || dubSiblingOf(paths.moviePathSub || paths.seriesPathSub),
+      };
       for (const field of DIR_FIELDS) {
-        await setMutation.mutateAsync({ key: field.key, value: paths[field.key].trim() });
+        await setMutation.mutateAsync({ key: field.key, value: resolvedPaths[field.key] });
       }
       await utils.config.getAll.invalidate();
       await utils.config.downloadDirs.invalidate();
@@ -423,8 +441,10 @@ export function SetupWizard() {
                   title="Cartelle di download"
                   description={
                     <>
-                      Usa percorsi sotto <code>/media</code>. “Serie · SUB ITA” è obbligatoria e fa
-                      da fallback alle destinazioni lasciate vuote.
+                      Usa percorsi sotto <code>/media</code>. “Serie · SUB ITA” è obbligatoria. Le
+                      versioni <strong>DUB ITA vanno in cartelle separate</strong> dalle SUB
+                      (Jellyfin tiene le lingue divise): se le lasci vuote ne deriviamo una “… - DUB
+                      ITA”.
                     </>
                   }
                 />
@@ -454,7 +474,11 @@ export function SetupWizard() {
                         <FolderInput
                           value={paths[field.key]}
                           placeholder={
-                            field.required ? '/media/Anime' : '(eredita da Serie · SUB ITA)'
+                            field.required
+                              ? '/media/Anime'
+                              : field.key.endsWith('Dub')
+                                ? '(default: "… - DUB ITA")'
+                                : '(eredita da Serie · SUB ITA)'
                           }
                           onChange={(path) => {
                             setPaths((previous) => ({ ...previous, [field.key]: path }));

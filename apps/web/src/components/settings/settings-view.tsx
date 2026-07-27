@@ -1422,6 +1422,8 @@ export function SettingsView() {
             value={importText}
             onChange={(e) => setImportText(e.target.value)}
             placeholder='{ "themeAccent": "blue", "language": "SUB_ITA" }'
+            aria-label="Contenuto JSON della configurazione da importare"
+            spellCheck={false}
             className="h-40 w-full resize-none rounded-md border bg-muted/40 p-2 font-mono text-xs"
           />
           <DialogFooter>

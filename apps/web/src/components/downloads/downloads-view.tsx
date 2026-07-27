@@ -16,6 +16,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Progress } from '@/components/ui/progress';
 import { QueryError } from '@/components/ui/query-error';
 import { trpc } from '@/lib/trpc';
 import { useDownloadSummary } from '@/lib/use-download-summary';
@@ -370,12 +371,11 @@ export function DownloadsView() {
             </div>
             <span className="tabular-nums text-muted-foreground">{overallPct}% completato</span>
           </div>
-          <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-            <div
-              className="h-full rounded-full bg-primary transition-all"
-              style={{ width: `${overallProgress * 100}%` }}
-            />
-          </div>
+          <Progress
+            value={overallProgress}
+            label="Avanzamento complessivo dei download"
+            className="h-2"
+          />
         </div>
       ) : null}
 

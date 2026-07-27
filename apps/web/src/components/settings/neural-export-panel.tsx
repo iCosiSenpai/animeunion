@@ -2,6 +2,7 @@
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Progress } from '@/components/ui/progress';
 import { trpc } from '@/lib/trpc';
 import { cn } from '@/lib/utils';
 import type { NeuralExportJobView } from '@animeunion/shared';
@@ -84,12 +85,11 @@ function JobRow({
         )}
       </div>
       {job.state === 'running' && (
-        <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted">
-          <div
-            className="h-full rounded-full bg-primary transition-all"
-            style={{ width: `${Math.round((job.progress ?? 0) * 100)}%` }}
-          />
-        </div>
+        <Progress
+          value={job.progress ?? 0}
+          label={`Avanzamento export ${job.animeTitle ?? 'episodio'}`}
+          className="mt-2"
+        />
       )}
       {job.state === 'error' && job.error && (
         <p className="mt-1.5 select-text text-xs text-destructive">{job.error}</p>

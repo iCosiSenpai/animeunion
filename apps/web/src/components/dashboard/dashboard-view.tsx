@@ -8,6 +8,7 @@ import { StatusPill } from '@/components/dashboard/status-pill';
 import { type StatusTone, TONES } from '@/components/dashboard/tone';
 import { CardCarousel, CardCarouselSkeleton } from '@/components/home/card-carousel';
 import { Button } from '@/components/ui/button';
+import { Progress } from '@/components/ui/progress';
 import { Switch } from '@/components/ui/switch';
 import { trpc } from '@/lib/trpc';
 import { useDownloadSummary } from '@/lib/use-download-summary';
@@ -546,12 +547,12 @@ export function DashboardView() {
                         </span>
                       </div>
                       {pct != null ? (
-                        <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                          <div
-                            className={cn('h-full rounded-full', barTone)}
-                            style={{ width: `${pct}%` }}
-                          />
-                        </div>
+                        <Progress
+                          value={pct / 100}
+                          label={`Spazio usato su ${d.label}`}
+                          valueText={`${pct}% usato, ${formatBytes(d.freeBytes)} liberi`}
+                          barClassName={barTone}
+                        />
                       ) : null}
                     </li>
                   );
@@ -583,12 +584,10 @@ export function DashboardView() {
                 </div>
                 {running ? (
                   <>
-                    <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                      <div
-                        className="h-full rounded-full bg-primary transition-[width]"
-                        style={{ width: `${Math.round((running.progress ?? 0) * 100)}%` }}
-                      />
-                    </div>
+                    <Progress
+                      value={running.progress ?? 0}
+                      label={`Avanzamento upscale ${running.animeTitle ?? 'episodio'}`}
+                    />
                     <p className="truncate text-xs text-muted-foreground">
                       {running.animeTitle ?? 'Episodio'}
                       {running.episodeNumber != null ? ` · Ep. ${running.episodeNumber}` : ''} ·{' '}

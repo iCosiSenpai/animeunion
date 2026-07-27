@@ -5,8 +5,9 @@ import { StatusPill } from '@/components/dashboard/status-pill';
 import type { StatusTone } from '@/components/dashboard/tone';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
 import { trpc } from '@/lib/trpc';
-import { formatBytes, formatDuration, formatSpeed, pad2 } from '@/lib/utils';
+import { cn, formatBytes, formatDuration, formatSpeed, pad2 } from '@/lib/utils';
 import type {
   DownloadFilter,
   DownloadGroupSummary,
@@ -53,13 +54,12 @@ const STATUS_TONE: Record<DownloadStatus, StatusTone> = {
 
 const ACTIVE: DownloadStatus[] = ['queued', 'downloading', 'processing'];
 
-function ProgressBar({ value, className }: { value: number; className?: string }) {
-  const pct = Math.max(0, Math.min(1, value)) * 100;
-  return (
-    <div className={`h-2 w-full overflow-hidden rounded-full bg-muted ${className ?? ''}`}>
-      <div className="h-full bg-primary transition-all" style={{ width: `${pct}%` }} />
-    </div>
-  );
+function ProgressBar({
+  value,
+  label,
+  className,
+}: { value: number; label: string; className?: string }) {
+  return <Progress value={value} label={label} className={cn('h-2', className)} />;
 }
 
 // Stato aggregato del gruppo dai soli conteggi (niente lista completa delle righe).
@@ -228,7 +228,7 @@ export function DownloadGroupCard({
           </div>
 
           <div className="flex items-center gap-2">
-            <ProgressBar value={overall} />
+            <ProgressBar value={overall} label={`Avanzamento download di ${group.animeTitle}`} />
             <span className="w-10 shrink-0 text-right text-xs font-medium tabular-nums">
               {Math.round(overall * 100)}%
             </span>
@@ -338,7 +338,11 @@ function EpisodeRow({
 
       {isActive ? (
         <div className="flex w-24 shrink-0 items-center gap-1.5 sm:w-40 sm:gap-2">
-          <ProgressBar value={item.progress} className="h-1.5" />
+          <ProgressBar
+            value={item.progress}
+            label={`Avanzamento ${item.episodeTitle ?? (hideNumber ? 'film' : `episodio ${item.episodeNumber}`)}`}
+            className="h-1.5"
+          />
           <span className="w-10 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
             {Math.round(item.progress * 100)}%
           </span>

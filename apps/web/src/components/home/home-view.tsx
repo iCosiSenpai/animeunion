@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { QueryError } from '@/components/ui/query-error';
 import { trpc } from '@/lib/trpc';
+import { useReducedMotion } from '@/lib/use-reduced-motion';
 import type {
   AnimeSummary,
   FeaturedAnime,
@@ -25,6 +26,7 @@ import {
   Clock,
   Compass,
   Newspaper,
+  Pause,
   Play,
   Sparkles,
   Star,
@@ -314,20 +316,34 @@ function HeroCarousel({
   isLoading: boolean;
 }) {
   const [index, setIndex] = useState(0);
-  const [paused, setPaused] = useState(false);
+  // Pausa transitoria: il puntatore è sopra l'hero o il focus è entrato da tastiera.
+  const [interacting, setInteracting] = useState(false);
+  // null = segui la preferenza di movimento; true/false = scelta esplicita fatta col bottone.
+  // Tenerlo come override (e non come stato iniziale) evita di "congelare" il valore prima che la
+  // config e il media query siano risolti.
+  const [playOverride, setPlayOverride] = useState<boolean | null>(null);
   const animationsOn = useAnimationsOn();
+  const reducedMotion = useReducedMotion();
   const touchStartX = useRef<number | null>(null);
 
   const goNext = () => setIndex((prev) => (prev + 1) % anime.length);
   const goPrev = () => setIndex((prev) => (prev - 1 + anime.length) % anime.length);
 
+  // L'hero si muove da solo, quindi serve un modo per fermarlo (WCAG 2.2.2). Di default rotiamo
+  // solo se il movimento è gradito: interruttore animazioni in-app ON e nessun "riduci movimento"
+  // di sistema. Il bottone play/pausa sovrascrive in entrambe le direzioni, così chi vuole la
+  // rotazione la riattiva comunque.
+  const motionWelcome = animationsOn && !reducedMotion;
+  const wantsPlay = playOverride ?? motionWelcome;
+  const autoplay = wantsPlay && !interacting && anime.length > 1;
+
   useEffect(() => {
-    if (anime.length <= 1 || paused) return;
+    if (!autoplay) return;
     const id = setInterval(() => {
       setIndex((prev) => (prev + 1) % anime.length);
     }, 6000);
     return () => clearInterval(id);
-  }, [anime.length, paused]);
+  }, [autoplay, anime.length]);
 
   if (isLoading) {
     return (
@@ -364,10 +380,15 @@ function HeroCarousel({
   if (!current) return null;
 
   return (
-    <div
+    <section
+      aria-label="Anime in evidenza"
       className="relative h-[26rem] touch-pan-y overflow-hidden rounded-2xl shadow-lg md:h-[32rem] lg:h-[36rem]"
-      onMouseEnter={() => setPaused(true)}
-      onMouseLeave={() => setPaused(false)}
+      onMouseEnter={() => setInteracting(true)}
+      onMouseLeave={() => setInteracting(false)}
+      // Pausa anche quando il focus entra da tastiera: chi naviga con Tab non deve vedere la slide
+      // cambiare (e il link sotto il focus diventare un altro) mentre sta per premere Invio.
+      onFocus={() => setInteracting(true)}
+      onBlur={() => setInteracting(false)}
       // Swipe orizzontale su mobile (le frecce restano per desktop): reagiamo solo a spostamenti
       // orizzontali netti, cosi' lo scroll verticale della pagina e i tap sui bottoni non si rompono.
       onTouchStart={(e) => {
@@ -519,22 +540,37 @@ function HeroCarousel({
           >
             <ChevronRight className="h-5 w-5" />
           </button>
-          <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 gap-2">
-            {anime.map((_, i) => (
-              <button
-                key={String(i)}
-                type="button"
-                onClick={() => setIndex(i)}
-                className={`h-2 rounded-full transition-all ${
-                  i === index ? 'w-6 bg-primary' : 'w-2 bg-white/60 hover:bg-white'
-                }`}
-                aria-label={`Vai a hero ${i + 1}`}
-              />
-            ))}
+          <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-3">
+            <div className="flex items-center gap-2">
+              {anime.map((_, i) => (
+                <button
+                  key={String(i)}
+                  type="button"
+                  onClick={() => setIndex(i)}
+                  aria-current={i === index}
+                  className={`h-2 rounded-full transition-all ${
+                    i === index ? 'w-6 bg-primary' : 'w-2 bg-white/60 hover:bg-white'
+                  }`}
+                  aria-label={`Vai a hero ${i + 1}`}
+                />
+              ))}
+            </div>
+            {/* Controllo esplicito: le frecce e l'hover-pause sono solo desktop, quindi da mobile
+                questo è l'unico modo per fermare la rotazione. Resta visibile a ogni breakpoint. */}
+            <button
+              type="button"
+              onClick={() => setPlayOverride(!wantsPlay)}
+              className="flex h-7 w-7 items-center justify-center rounded-full bg-black/40 text-white shadow-sm backdrop-blur-sm transition-colors hover:bg-black/60"
+              aria-label={
+                wantsPlay ? 'Ferma la rotazione automatica' : 'Avvia la rotazione automatica'
+              }
+            >
+              {wantsPlay ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+            </button>
           </div>
         </>
       ) : null}
-    </div>
+    </section>
   );
 }
 

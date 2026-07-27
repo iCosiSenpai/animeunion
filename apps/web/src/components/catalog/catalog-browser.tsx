@@ -3,6 +3,7 @@
 import { AnimeGrid, AnimeGridSkeleton } from '@/components/anime/anime-grid';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { PageHeader } from '@/components/ui/page-header';
 import { QueryError } from '@/components/ui/query-error';
@@ -25,7 +26,7 @@ import {
 } from '@/components/ui/sheet';
 import { trpc } from '@/lib/trpc';
 import type { AnimeStatus, AnimeType, Language, Season } from '@animeunion/shared';
-import { Filter, Search, X } from 'lucide-react';
+import { Filter, Search, SearchX, X } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { type FormEvent, useEffect, useMemo, useState } from 'react';
 
@@ -99,7 +100,9 @@ function FilterPanel({
         onValueChange={(value) => onChange('genre', value === ALL ? null : value)}
         disabled={isLoading}
       >
-        <SelectTrigger>
+        {/* Il placeholder sparisce appena c'è un valore selezionato: senza aria-label il trigger
+            resterebbe senza nome accessibile (si sentirebbe "Azione" e non "Genere: Azione"). */}
+        <SelectTrigger aria-label="Genere">
           <SelectValue placeholder="Genere" />
         </SelectTrigger>
         <SelectContent>
@@ -116,7 +119,7 @@ function FilterPanel({
         value={type || ALL}
         onValueChange={(value) => onChange('type', value === ALL ? null : value)}
       >
-        <SelectTrigger>
+        <SelectTrigger aria-label="Tipo">
           <SelectValue placeholder="Tipo" />
         </SelectTrigger>
         <SelectContent>
@@ -133,7 +136,7 @@ function FilterPanel({
         value={status || ALL}
         onValueChange={(value) => onChange('status', value === ALL ? null : value)}
       >
-        <SelectTrigger>
+        <SelectTrigger aria-label="Stato">
           <SelectValue placeholder="Stato" />
         </SelectTrigger>
         <SelectContent>
@@ -151,7 +154,7 @@ function FilterPanel({
         onValueChange={(value) => onChange('year', value === ALL ? null : value)}
         disabled={isLoading || years.length === 0}
       >
-        <SelectTrigger>
+        <SelectTrigger aria-label="Anno">
           <SelectValue placeholder="Anno" />
         </SelectTrigger>
         <SelectContent>
@@ -168,7 +171,7 @@ function FilterPanel({
         value={season || ALL}
         onValueChange={(value) => onChange('season', value === ALL ? null : value)}
       >
-        <SelectTrigger>
+        <SelectTrigger aria-label="Stagione">
           <SelectValue placeholder="Stagione" />
         </SelectTrigger>
         <SelectContent>
@@ -185,7 +188,7 @@ function FilterPanel({
         value={language || ALL}
         onValueChange={(value) => onChange('language', value === ALL ? null : value)}
       >
-        <SelectTrigger>
+        <SelectTrigger aria-label="Lingua">
           <SelectValue placeholder="Lingua" />
         </SelectTrigger>
         <SelectContent>
@@ -199,7 +202,7 @@ function FilterPanel({
       </Select>
 
       <Select value={sort || 'recent'} onValueChange={(value) => onChange('sort', value)}>
-        <SelectTrigger>
+        <SelectTrigger aria-label="Ordina per">
           <SelectValue placeholder="Ordina per" />
         </SelectTrigger>
         <SelectContent>
@@ -339,11 +342,15 @@ export function CatalogBrowser() {
       <div className="flex flex-col gap-3 rounded-lg border bg-card p-4 shadow-sm">
         <form onSubmit={onSearchSubmit} className="flex gap-2">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Search
+              className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+              aria-hidden="true"
+            />
             <Input
               value={queryInput}
               onChange={(event) => setQueryInput(event.target.value)}
               placeholder="Cerca per titolo..."
+              aria-label="Cerca un anime per titolo"
               className="pl-9"
             />
             {queryInput ? (
@@ -431,12 +438,14 @@ export function CatalogBrowser() {
         ) : null}
       </div>
 
-      <div className="flex items-center justify-between text-sm text-muted-foreground">
-        <span>
-          {browseQuery.isLoading && items.length === 0
-            ? 'Caricamento...'
-            : `${total} risultat${total === 1 ? 'o' : 'i'}`}
-        </span>
+      {/* Unica live region della pagina. Ricerca, filtri e cambio pagina riscrivono la griglia
+          senza spostare il focus: senza annuncio, con uno screen reader non si saprebbe che il
+          risultato è cambiato. Il numero di pagina sta qui invece di essere una seconda live
+          region in fondo, che si sarebbe sovrapposta a questa. */}
+      <div className="text-sm text-muted-foreground" aria-live="polite" aria-atomic="true">
+        {browseQuery.isLoading && items.length === 0
+          ? 'Caricamento…'
+          : `${total} risultat${total === 1 ? 'o' : 'i'}${page > 1 ? ` · pagina ${page}` : ''}`}
       </div>
 
       {browseQuery.isLoading && items.length === 0 ? (
@@ -447,13 +456,32 @@ export function CatalogBrowser() {
           title="Impossibile caricare il catalogo"
         />
       ) : items.length === 0 ? (
-        <div className="py-24 text-center text-muted-foreground">Nessun anime trovato.</div>
+        <EmptyState
+          icon={SearchX}
+          title="Nessun anime trovato"
+          description={
+            activeFilters.length > 0
+              ? 'Nessun titolo corrisponde ai filtri attivi. Prova ad allargare la ricerca.'
+              : 'Il catalogo è vuoto. Puoi sincronizzarlo da Impostazioni › Catalogo.'
+          }
+          action={
+            activeFilters.length > 0 ? (
+              <Button variant="outline" onClick={onReset} className="gap-1">
+                <X className="h-4 w-4" aria-hidden="true" />
+                Azzera i filtri
+              </Button>
+            ) : undefined
+          }
+        />
       ) : (
         <AnimeGrid anime={items} />
       )}
 
       {items.length > 0 ? (
-        <div className="flex items-center justify-center gap-4">
+        <nav
+          className="flex items-center justify-center gap-4"
+          aria-label="Paginazione dei risultati"
+        >
           <Button
             variant="outline"
             disabled={page <= 1}
@@ -469,7 +497,7 @@ export function CatalogBrowser() {
           >
             Successiva
           </Button>
-        </div>
+        </nav>
       ) : null}
     </div>
   );

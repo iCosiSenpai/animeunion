@@ -23,6 +23,7 @@ import {
   Library,
   MoreHorizontal,
   Settings,
+  Sparkles,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -30,6 +31,7 @@ import { useState } from 'react';
 
 const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   '/': LayoutDashboard,
+  '/scopri': Sparkles,
   '/catalog': Compass,
   '/follows': Heart,
   '/library': Library,

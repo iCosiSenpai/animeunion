@@ -106,7 +106,18 @@ export function CommandPalette() {
 
   const isPaused = paused.data?.paused === true;
   const actions: Entry[] = [
-    { id: 'home', label: 'Home', icon: <Home className="h-4 w-4" />, onSelect: () => go('/') },
+    {
+      id: 'dashboard',
+      label: 'Dashboard',
+      icon: <Home className="h-4 w-4" />,
+      onSelect: () => go('/'),
+    },
+    {
+      id: 'scopri',
+      label: 'Scopri',
+      icon: <Sparkles className="h-4 w-4" />,
+      onSelect: () => go('/scopri'),
+    },
     {
       id: 'catalog',
       label: 'Catalogo',

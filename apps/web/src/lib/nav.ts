@@ -13,6 +13,7 @@ export const navLinks: NavLink[] = [
   { href: '/', label: 'Dashboard', group: 'operazioni', primary: true },
   { href: '/downloads', label: 'Download', group: 'operazioni', primary: true },
   { href: '/library', label: 'Libreria', group: 'operazioni', primary: true },
+  { href: '/scopri', label: 'Scopri', group: 'scoperta' },
   { href: '/catalog', label: 'Catalogo', group: 'scoperta', primary: true },
   { href: '/follows', label: 'Seguiti', group: 'scoperta' },
   { href: '/calendar', label: 'Calendario', group: 'scoperta' },

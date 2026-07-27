@@ -8,6 +8,7 @@ import { trpc } from '@/lib/trpc';
 import { cn } from '@/lib/utils';
 import type { HomeSectionId, HomeSectionPref } from '@animeunion/shared';
 import { ChevronDown, ChevronUp, Eye, EyeOff } from 'lucide-react';
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -62,7 +63,7 @@ export function HomeLayoutSection() {
     try {
       await setMutation.mutateAsync({ key: 'homeLayout', value: draft });
       await utils.config.getAll.invalidate();
-      toast.success('Layout della home salvato.');
+      toast.success('Layout della pagina Scopri salvato.');
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Salvataggio non riuscito.');
     }
@@ -71,10 +72,13 @@ export function HomeLayoutSection() {
   return (
     <Card className="space-y-4 p-5">
       <div>
-        <h2 className="text-lg font-semibold">Personalizza la home</h2>
+        <h2 className="text-lg font-semibold">Personalizza la pagina Scopri</h2>
         <p className="text-xs text-muted-foreground">
-          Scegli quali sezioni mostrare e in che ordine. Le sezioni nascoste, o senza contenuti, non
-          appaiono nella home.
+          Scegli quali sezioni mostrare e in che ordine in{' '}
+          <Link href="/scopri" className="font-medium text-foreground underline underline-offset-4">
+            Scopri
+          </Link>
+          . Le sezioni nascoste, o senza contenuti, non appaiono.
         </p>
       </div>
       <Separator />

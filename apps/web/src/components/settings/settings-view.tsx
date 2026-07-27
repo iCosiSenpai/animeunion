@@ -243,7 +243,7 @@ const SECTIONS: { id: SectionId; label: string; icon: LucideIcon }[] = [
   { id: 'lingua', label: 'Lingua', icon: Languages },
   { id: 'notifiche', label: 'Notifiche', icon: Bell },
   { id: 'aspetto', label: 'Aspetto', icon: Palette },
-  { id: 'home', label: 'Home', icon: LayoutGrid },
+  { id: 'home', label: 'Scopri', icon: LayoutGrid },
   { id: 'sicurezza', label: 'Sicurezza', icon: Shield },
   { id: 'integrazioni', label: 'Integrazioni', icon: Webhook },
   { id: 'backup', label: 'Backup', icon: Database },

@@ -145,7 +145,7 @@ inferire la policy dal tier: un flag assente equivale a `false`.
 | Download simultanei | Gate locale su `premium.active`; non compare tra i flag | Implementata, ma la policy non è server-driven | Aggiungere `features.concurrentDownloads` o confermare esplicitamente il fallback su `premium.active` |
 | Assistenza prioritaria Telegram | Pubblicizzata per i tier Premium; nessun URL/flag nel contratto | Da esporre senza inventare un contatto | Aggiungere `features.prioritySupport` e un link autorevole, es. `support.telegramUrl` |
 | Calendario ICS | Pubblicizzato sul sito | L'app ha un calendario, ma nessun link ICS personale | Esporre un URL firmato/personale oppure un endpoint dedicato |
-| Temi esclusivi | Pubblicizzati sul sito | Nessun catalogo/entitlement di temi Premium | Aggiungere flag e manifest/endpoint asset prima di mostrarli come disponibili |
+| Temi esclusivi | Pubblicizzati sul sito ("Prossimamente") | Nessun catalogo/entitlement di temi Premium | `features.exclusiveThemes` + catalogo temi a token letto a runtime — **integrazione nativa richiesta**, vedi §D |
 | Watch Together / voce | Funzioni del sito con limiti per tier | Fuori scope dell'app self-hosted oggi | Eventuale deep-link o API solo se si vuole integrarli |
 | Ricerca per immagine | Quote differenziate sul sito | Nessun endpoint integration | Esporre endpoint e quota residua solo se la funzione deve entrare nell'app |
 | AI episodio / compagna AI | Funzioni dei tier superiori sul sito | Nessun contratto integration | Servono endpoint, quota/tokens e policy di privacy dedicati |
@@ -189,3 +189,75 @@ indipendentemente dal Premium. Fino a nuovi flag, la UI deve distinguere chiaram
 > community, quindi non vogliamo usarlo impropriamente come supporto. Puoi anche confermare se, fino
 > all'arrivo di `features.concurrentDownloads`, il gate su `premium.active` è accettabile oppure va
 > disabilitato?
+
+
+---
+
+## D. Stato della richiesta — inviata il 2026-07-26 (in attesa di risposta)
+
+> Messaggio inviato all'admin (Matt). **Nessuna di queste voci è bloccante**: l'app funziona già
+> oggi con `features.neuralExport` + fallback locali e tollera il 404 su tutto ciò che non è ancora
+> esposto (le sezioni restano vuote/nascoste, fail-closed).
+
+### Cosa abbiamo chiesto
+
+| # | Richiesta | Forma | Comportamento dell'app se assente |
+|---|---|---|---|
+| 1 | `features.concurrentDownloads` **oppure** conferma del fallback su `premium.active` | flag in `/me` | Funziona: gate locale su `premium.active`. È una funzione dell'app Docker, **non** un perk del sito |
+| 2 | `features.prioritySupport` + `support.telegramUrl` (link ufficiale, non il canale community) | flag + link in `/me` | Nessun contatto mostrato |
+| 3 | `features.calendarIcs` + `links.calendarIcsUrl` (URL ICS personale) | flag + link in `/me` | Nessun link ICS nel calendario |
+| 4 | `features.exclusiveThemes` + **catalogo temi** | flag in `/me` + manifest | Sezione "Temi Premium" vuota |
+
+### Decisione sui temi (rettifica rispetto alla prima stesura della sezione C)
+
+Posizione **cambiata**: non ci limitiamo a rimandare al sito. I **temi free restano i nostri**
+(chiaro/scuro + accent + wallpaper, per tutti) e i **temi Premium di AnimeUnion vengono integrati
+nativamente** nell'app per gli account con entitlement.
+
+Requisito non negoziabile: le modifiche future dell'admin devono riflettersi **da sole** sul
+container, senza release dell'app → serve un **endpoint/JSON letto a runtime**, non valori
+hardcodati. Ordine di preferenza comunicato: (1) `GET /integration/themes` (rispetta anche
+l'entitlement per-utente), (2) JSON statico su CDN con ETag/Last-Modified, (3) valori una volta
+sola via chat — sconsigliato, perché perde l'auto-aggiornamento.
+
+Shape minima richiesta, allineata a `AccentTheme` di `apps/web/src/lib/themes.ts`:
+
+```jsonc
+{
+  "id": "sakura",
+  "name": "Sakura",
+  "tier": "FAN",                    // o un semplice flag di entitlement
+  "primary": "330 80% 62%",         // HSL formato shadcn -> --primary / --ring
+  "primaryForeground": "0 0% 100%",
+  "swatch": "#F0529C",              // colore dello swatch nel selettore
+  "backgroundUrl": "https://...",   // opzionale (stessa meccanica di themeBackgroundUrl)
+  "mode": "dark"                    // opzionale: light | dark | both
+}
+```
+
+Token extra sono tollerati (ignoriamo quelli non ancora applicabili, senza rompere nulla).
+**Escluso** CSS/JS grezzo da iniettare: non validabile, a rischio di rompere il layout e di
+introdurre stili di terze parti nell'app. I token restano leggeri e renderizzabili nativi.
+
+Sul peso lato NAS: **nessun veto preventivo**. Il container gira con un limite di RAM dedicato,
+quindi è l'hardware a segnalare eventuali problemi — non è un motivo per tenere i temi fuori.
+
+### Impatto previsto lato app (task non ancora aperto, dipende dalla shape confermata)
+
+- `packages/shared/src/contracts/theme.ts`: `themeAccentSchema` è un **enum chiuso** (7 chiavi),
+  quindi un tema remoto non ci entra. Aggiungere un campo separato (es. `themePremiumId: string`,
+  default `''`) che sovrascrive i token quando valorizzato **e** l'entitlement è attivo; l'enum
+  free resta intatto (nessuna migrazione rischiosa sulla config esistente).
+- `apps/api`: metodo nel source client + sync con cache SQLite (stesso pattern di
+  `catalogSyncHours`) + route tRPC.
+- `apps/web`: gruppo "Temi Premium" in `AppearanceSection`/`AccentPicker`, bloccato dietro
+  `hasPremiumFeature('exclusiveThemes')`.
+
+### Contesto dalla pagina pubblica (verificata il 2026-07-26)
+
+`animeunion.tv/premium` risulta **"in arrivo, disponibile dal 1 agosto 2026"**. Tra i perk,
+**"Temi esclusivi" è marcato "Prossimamente"** (come "Niente attese sui download di serie"):
+oggi non c'è ancora nulla da integrare, quindi la richiesta non ha urgenza.
+
+Fuori scope dichiarato: Watch Together, ricerca per immagine, AI episodio / "Yura" — funzioni del
+sito, non dell'app self-hosted.

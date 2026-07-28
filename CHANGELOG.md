@@ -105,6 +105,51 @@ una passata di accessibilità. `main` e il NAS restano su v0.18.0 finché il bat
   seguiti potevano ripetere lo stesso anime), resa sempre visibile l'affordance dei titoli
   cliccabili, e il controllo rapido del limite di velocità non spariva più a coda vuota.
 
+## [0.18.0] - 2026-07-23
+
+Worker Neural Export come applicazione Windows: installazione, collegamento al NAS e diagnostica GPU
+senza riga di comando né configurazione manuale.
+
+### Added
+- **App desktop "AnimeUnion Worker" (Windows):** Electron + React con GUI di stato, icona nel tray,
+  istanza singola, avvio automatico, probe periodico della GPU e **ffmpeg con libplacebo imbarcato**.
+  Sostituisce il setup manuale del worker (clone del monorepo, Node, ffmpeg installato a mano, NSSM,
+  URL e token copiati a mano). Installer NSIS con auto-update da GitHub Releases e job CI dedicato
+  con typecheck dell'app. La distribuzione non è firmata: la guida per SmartScreen è in-app e nel
+  README.
+- **Collegamento automatico worker → NAS:** il PC individua AnimeUnion sulla rete (scan della /24 via
+  `health.identify`) e si collega da solo, senza codice di abbinamento né URL o token da digitare.
+  Nuovi `GET /identity` sul worker (pubblica, non espone segreti), `health.identify` esente dal lock
+  per permettere la discovery e `neuralExport.enroll`, che verifica `/health` del worker e salva
+  URL, token e nome abilitando la funzione. Nuova config `neuralWorkerName` (non segreta).
+- **Diagnostica GPU nell'app:** pulsante "Test GPU" che esegue un render Vulkan + libplacebo reale
+  con esito e log, sidebar dei log in tempo reale a comparsa, pulsante "Consenti sulla rete" che
+  applica la regola del Windows Firewall via UAC su click, più IP LAN e nome del worker in chiaro.
+
+### Changed
+- **Impostazioni › Download Neurale:** "Abilita download neurale" è un vero interruttore (nuovo
+  primitivo `Switch`) e al posto del codice di abbinamento c'è la card di stato del worker collegato
+  (nome, URL, raggiungibilità); non si incollano più URL e token a mano. Riscritta l'attribuzione
+  Anime4K come testo cliccabile invece di URL nudo. Contratti allineati: rimossi gli schemi del
+  pairing a codice, aggiunti `identity` ed `enroll`, stato del worker con nome e URL.
+- **Overlay di dialog e sheet** da `bg-black/80` a `bg-black/60`: backdrop meno annerito.
+
+### Fixed
+- **Dialog "Classifica" tagliato sul lato destro:** lo span del titolo della serie madre aveva
+  `truncate` senza `min-w-0`, quindi il suo min-content allargava la riga flex; essendo
+  `DialogContent` una griglia a colonna singola, la colonna cresceva oltre il modale e
+  `overflow-x-hidden` tagliava tipo, parte, percorso e il pulsante Salva. Corretto e reso sistemico
+  con `[&>*]:min-w-0` su `DialogContent`, così nessun figlio troppo largo può più gonfiare la griglia
+  in altri dialog. Sistema anche il pannello "Organizzazione file", che condivide gli stessi campi.
+- **`instanceof` affidabile sugli errori di dominio:** `NotFoundError` e `PreconditionError` usano un
+  brand globale (`Symbol.for`) con `Symbol.hasInstance`, così il controllo resta valido anche quando
+  il modulo viene caricato in più copie (il caso di vitest su Windows). Irrobustisce la mappatura
+  errori → codici tRPC.
+- **Packaging dell'installer:** `electronVersion` fissato in `electron-builder.yml` perché con i
+  workspace npm Electron è hoisted alla root e la versione non era deducibile dal range
+  (`Cannot compute electron version`), il che bloccava build locale e job di release; escluso
+  `ffmpeg-static`, transitivo e non referenziato, portando l'installer da 154 a 133 MB.
+
 ## [0.17.0] - 2026-07-22
 
 Chiusura del batch "Nessun residuo morto": onboarding completabile, cancellazioni Libreria

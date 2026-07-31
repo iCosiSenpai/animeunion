@@ -105,6 +105,23 @@ una passata di accessibilità. `main` e il NAS restano su v0.18.0 finché il bat
   seguiti potevano ripetere lo stesso anime), resa sempre visibile l'affordance dei titoli
   cliccabili, e il controllo rapido del limite di velocità non spariva più a coda vuota.
 
+### Security
+- **Advisory production da 13 a 3:** chiuse tutte le segnalazioni che non dipendevano da Next.
+  `find-my-way` 9.6.0 → 9.7.0 (DDoS con HTTP/2, transitiva di Fastify) e `electron-updater` 6.3.9 →
+  6.8.9 nel worker desktop, che porta `builder-util-runtime` a 9.7.0 e chiude la fuga di
+  `PRIVATE-TOKEN`/`Authorization` su redirect cross-origin nell'auto-update distribuito agli utenti;
+  entrambe correzioni in range, senza breaking change. Rimossa `archiver` da `apps/api`: era
+  dichiarata per una funzione "ZIP serie" mai implementata e non usata da alcun sorgente, quindi con
+  lei sparisce la catena `archiver-utils`/`zip-stream`/`readdir-glob`/`glob`/`minimatch`/
+  `brace-expansion` (DoS per espansione illimitata) e 28 pacchetti dal grafo. La `postcss` di root
+  passa a 8.5.25 e non è più segnalata.
+- **Eccezione residua aggiornata:** restano `postcss@8.4.31` e `sharp@0.34.5`, copie annidate di
+  Next 15.5.21. PostCSS è passata da Moderate a High con due advisory nuovi (lettura arbitraria di
+  file e path traversal via `sourceMappingURL`), quindi la soglia di chiusura si è alzata da 8.5.10 a
+  8.5.18. Gli override npm sono stati riprovati e confermati inefficaci sulle copie annidate; il
+  percorso di chiusura è l'aggiornamento a Next 16, che merita un batch dedicato. Dettaglio,
+  analisi di raggiungibilità e criterio di chiusura in `SECURITY.md`.
+
 ## [0.18.0] - 2026-07-23
 
 Worker Neural Export come applicazione Windows: installazione, collegamento al NAS e diagnostica GPU

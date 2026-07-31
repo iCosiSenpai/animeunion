@@ -7,10 +7,12 @@ e il progetto aderisce al [Semantic Versioning](https://semver.org/lang/it/).
 
 ## [Unreleased]
 
-Redesign dell'interfaccia in **centro di download per server** (branch `redesign/control-center`):
-dashboard operativa configurabile al posto della home a caroselli, shell console, superficie
-"Scopri", follow ripensato attorno al download invece che alla watchlist, tetto di banda aggregato e
-una passata di accessibilità. `main` e il NAS restano su v0.18.0 finché il batch non è collaudato.
+## [0.19.0] - 2026-07-31
+
+Redesign dell'interfaccia in **centro di download per server**: dashboard operativa configurabile al
+posto della home a caroselli, shell console, superficie "Scopri", follow ripensato attorno al
+download invece che alla watchlist, tetto di banda aggregato, una passata di accessibilità e la
+chiusura di tutti gli advisory di produzione non dipendenti da Next.
 
 ### Added
 - **Dashboard "centro di controllo" configurabile lato server:** la home mostra lo stato del server

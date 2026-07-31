@@ -51,6 +51,8 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 .idea/
+# Configurazione locale dell'agent (settings/LSP): non fa parte del progetto
+.kiro/
 
 # Script di debug e verifica live (es. token catturati, body di test)
 .scratch/

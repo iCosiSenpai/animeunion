@@ -6,6 +6,9 @@ name: Docker Publish
 # Guardia: il job parte solo se la repo variable DOCKER_PUBLISH_ENABLED == 'true'.
 # Il context di build è la ROOT del repo (monorepo npm workspaces); il Dockerfile
 # è in apps/<app>/Dockerfile.
+#
+# Tag pubblicati: sempre uno col nome del ref; `latest` SOLO dai tag di versione,
+# così un dispatch manuale da un branch non sposta il tag che i deploy scaricano.
 # ─────────────────────────────────────────────────────────────────────────────
 
 on:
@@ -44,6 +47,28 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # `latest` deve essere spostato SOLO da un tag di versione: con un workflow_dispatch da un
+      # branch, altrimenti, una build non rilasciata finirebbe sul tag che i deploy scaricano.
+      # Il nome del ref diventa comunque un tag, con gli slash sostituiti perché un tag Docker non
+      # li ammette (es. il branch `ci/foo` diventa `ci-foo`).
+      - name: Compose image tags
+        id: meta
+        env:
+          IMAGE: ghcr.io/icosisenpai/animeunion-${{ matrix.app }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          tags="${IMAGE}:${REF_NAME//\//-}"
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            tags="${tags}"$'\n'"${IMAGE}:latest"
+          fi
+          {
+            echo 'tags<<EOF'
+            echo "${tags}"
+            echo 'EOF'
+          } >> "${GITHUB_OUTPUT}"
+          echo "Tag da pubblicare:"
+          echo "${tags}"
+
       - name: Build and push
         uses: docker/build-push-action@v7
         with:
@@ -51,6 +76,4 @@ jobs:
           file: apps/${{ matrix.app }}/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: |
-            ghcr.io/icosisenpai/animeunion-${{ matrix.app }}:latest
-            ghcr.io/icosisenpai/animeunion-${{ matrix.app }}:${{ github.ref_name }}
+          tags: ${{ steps.meta.outputs.tags }}
